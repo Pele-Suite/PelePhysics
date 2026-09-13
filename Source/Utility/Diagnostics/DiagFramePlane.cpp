@@ -160,10 +160,12 @@ DiagFramePlane::prepare(
     int k0 = static_cast<int>(std::round(dist));
     dist -= static_cast<amrex::Real>(k0);
     if (m_interpType == Quadratic) {
-      // Quadratic interp. weights on k0-1, k0, k0+1
-      m_intwgt[lev][0] = 0.5 * (dist - 1.0) * (dist - 2.0);
-      m_intwgt[lev][1] = dist * (2.0 - dist);
-      m_intwgt[lev][2] = 0.5 * dist * (dist - 1.0);
+      // Quadratic interp. weights on k0-1, k0, k0+1: the Lagrange basis for
+      // nodes at -1, 0, +1 evaluated at dist in [-1/2, 1/2].  dist = 0 puts
+      // unit weight on k0, the cell whose centre is nearest the plane.
+      m_intwgt[lev][0] = 0.5 * dist * (dist - 1.0);
+      m_intwgt[lev][1] = 1.0 - dist * dist;
+      m_intwgt[lev][2] = 0.5 * dist * (dist + 1.0);
     } else if (m_interpType == Linear) {
       // linear interp. weights on k0-1, k0, k0+1
       if (dist > 0.0) {
