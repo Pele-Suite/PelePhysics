@@ -229,7 +229,7 @@ def production_rate(
                 beta = plog_beta
                 ae = (plog_ae * cc.ureg.joule / cc.ureg.kmol).to(aeuc)
             elif third_body and not falloff and plog:
-                # Case 5 third body PLOG
+                # Case 5 TB, PLOG
                 ctuc = cu.prefactor_units(cc.ureg("kmol/m**3"), -dim)
                 plog_pef, plog_beta, plog_ae = cu.evaluate_plog(
                     reaction.rate.rates, mechanism.P
@@ -306,14 +306,23 @@ def production_rate(
                 and len(reaction.third_body.efficiencies) == 1
                 and isclose(reaction.third_body.default_efficiency, 0.0)
             ):
+                # TB of A + B + C = AB + C
                 cw.writer(fstream, f"qf[{idx}] *= k_f;")
             elif not falloff:
                 alpha = enhancement_d_with_qss(mechanism, species_info, reaction)
                 cw.writer(fstream, f"Corr  = {alpha};")
                 cw.writer(fstream, f"qf[{idx}] *= Corr * k_f;")
             else:
+                # Falloff, TB
                 alpha = enhancement_d_with_qss(mechanism, species_info, reaction)
                 cw.writer(fstream, f"Corr  = {alpha};")
+                if (
+                    falloff
+                    and len(reaction.third_body.efficiencies) == 1
+                    and isclose(reaction.third_body.default_efficiency, 0.0)
+                ):
+                    # Avoid float point exception?
+                    cw.writer(fstream, f"Corr = std::max(Corr, 1e-20);")
                 cw.writer(
                     fstream,
                     "redP = Corr / k_f *"
@@ -622,7 +631,7 @@ def production_rate(
                 beta = plog_beta
                 ae = (plog_ae * cc.ureg.joule / cc.ureg.kmol).to(aeuc)
             elif third_body and not falloff and plog:
-                # Case 5 third body PLOG
+                # Case 5 TB, PLOG
                 ctuc = cu.prefactor_units(cc.ureg("kmol/m**3"), -dim)
                 plog_pef, plog_beta, plog_ae = cu.evaluate_plog(
                     reaction.rate.rates, mechanism.P
@@ -737,6 +746,13 @@ def production_rate(
                 )
                 cw.writer(fstream, f"amrex::Real Corr = {alpha};")
                 corr_smp = alpha_smp
+                if (
+                    falloff
+                    and len(reaction.third_body.efficiencies) == 1
+                    and isclose(reaction.third_body.default_efficiency, 0.0)
+                ):
+                    # Avoid float point exception?
+                    cw.writer(fstream, f"Corr = std::max(Corr, 1e-20);")
                 cw.writer(
                     fstream,
                     "const amrex::Real redP = Corr / k_f *"
@@ -1584,6 +1600,60 @@ def enhancement_d_with_qss(mechanism, species_info, reaction, syms=None):
             return f"sc[{species_info.ordered_idx_map[species]}]"
 
     efficiencies = reaction.third_body.efficiencies
+
+    if (
+        falloff
+        and len(reaction.third_body.efficiencies) == 1
+        and isclose(reaction.third_body.default_efficiency, 0.0)
+    ):
+        alpha = []
+        if record_symbolic_operations:
+            alpha_smp = []
+        symbol = list(efficiencies.keys())[0]
+        efficiency = efficiencies[symbol]
+        if symbol not in species_info.qssa_species_list:
+            factor = f"({efficiency:.15g})"
+            if record_symbolic_operations:
+                factor_smp = efficiency
+            conc = f"sc[{species_info.ordered_idx_map[symbol]}]"
+            if record_symbolic_operations:
+                conc_smp = syms.sc_smp[species_info.ordered_idx_map[symbol]]
+            if efficiency == 1:
+                alpha.append(f"{conc}")
+                if record_symbolic_operations:
+                    alpha_smp.append(conc_smp)
+            else:
+                alpha.append(f"{factor}*{conc}")
+                if record_symbolic_operations:
+                    alpha_smp.append(factor_smp * conc_smp)
+        else:
+            factor = f"({efficiency:.15g})"
+            if record_symbolic_operations:
+                factor_smp = efficiency
+            if (efficiency) != 0:
+                idx = species_info.ordered_idx_map[symbol] - species_info.n_species
+                conc = f"sc_qss[{idx}]"
+                if record_symbolic_operations:
+                    conc_smp = syms.sc_qss_smp[
+                        species_info.ordered_idx_map[symbol] - species_info.n_species
+                    ]
+                if (efficiency) == 1:
+                    alpha.append(f"{conc}")
+                    if record_symbolic_operations:
+                        alpha_smp.append(conc_smp)
+                else:
+                    alpha.append(f"{factor}*{conc}")
+                    if record_symbolic_operations:
+                        alpha_smp.append(factor_smp * conc_smp)
+    
+        if record_symbolic_operations:
+            alpha_val = alpha_smp[0]
+            enhancement_smp = 0.0 + alpha_val
+            return " + ".join(alpha).replace("+ -", "- "), enhancement_smp
+        else:
+            return " + ".join(alpha).replace("+ -", "- ") 
+        
+
     alpha = ["mixture"]
     if record_symbolic_operations:
         alpha_smp = [syms.mixture_smp]
