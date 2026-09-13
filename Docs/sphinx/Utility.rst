@@ -229,11 +229,14 @@ onto the grid.
 
 .. note:: Diagnostics that slice the precursor solution -- notably
           ``DiagFramePlane`` -- locate the requested ``center`` using the AMReX
-          geometry, which for a mapped run is the uniform computational grid.
-          Under a coordinate mapping ``center`` is therefore a *computational*
-          coordinate, not a physical one, and the written plane files carry no
-          mapping metadata; the mapping enters only through the generator's
-          input, as described above.
+          geometry, which for a mapped run is the uniform computational grid, so
+          by default ``center`` is a *computational* coordinate. Set
+          ``center_is_physical = 1`` to give a physical position instead; the
+          diagnostic reads the run's ``geometry.mesh_mapping`` block and
+          inverts the map (the conversion is printed, and recorded in the
+          plane's ``PlaneData`` file). The written plane files carry no
+          mapping metadata; the mapping enters the turbulence file only through
+          the generator's input, as described above.
 
 .. figure:: ./Visualization/TurbInflowData.png
 
@@ -311,9 +314,10 @@ The following provide examples for each diagnostic in PeleLMeX (in PeleC, all di
     peleLM.xnormP.type = DiagFramePlane                             # Diagnostic type
     peleLM.xnormP.file = xNorm5mm                                   # Output file prefix
     peleLM.xnormP.normal = 0                                        # Plane normal (0, 1 or 2 for x, y or z)
-    peleLM.xnormP.center = 0.005                                    # Coordinate in the normal direction
+    peleLM.xnormP.center = 0.005                                    # Coordinate in the normal direction (grid coordinate; Xi under a mesh mapping)
+    peleLM.xnormP.center_is_physical = 0                            # [OPT, DEF=0] take `center` as a physical position and convert it through geometry.mesh_mapping
     peleLM.xnormP.int    = 5                                        # Frequency (as step #) for performing the diagnostic
-    peleLM.xnormP.interpolation = Linear                            # [OPT, DEF=Linear] Interpolation type : Linear or Quadratic
+    peleLM.xnormP.interpolation = Linear                            # [OPT, DEF=Quadratic] Interpolation type : Linear or Quadratic
     peleLM.xnormP.field_names = x_velocity mag_vort density         # List of variables outputted to the 2D pltfile
     peleLM.xnormP.n_files = 2                                       # [OPT, DEF="min(256,NProcs)"] Number of files to write per level
     peleLM.xnormP.dump_ghost_if_OOB = 1                             # [OPT, DEF=false] if the specified coordinate is out-of-bounds, a plane of ghost cells in that direction will be dumped (for debugging purposes). If false, an error is raised if the requested plane is OOB.
