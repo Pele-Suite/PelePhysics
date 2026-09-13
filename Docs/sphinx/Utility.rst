@@ -234,9 +234,9 @@ onto the grid.
           ``center_is_physical = 1`` to give a physical position instead; the
           diagnostic reads the run's ``geometry.mesh_mapping`` block and
           inverts the map (the conversion is printed, and recorded in the
-          plane's ``PlaneData`` file). The written plane files carry no
-          mapping metadata; the mapping enters the turbulence file only through
-          the generator's input, as described above.
+          ``PlaneData`` records the requested and converted centers, but the full
+          mapping descriptor enters the turbulence file only through the generator's
+          input, as described above.
 
 .. figure:: ./Visualization/TurbInflowData.png
 
