@@ -281,9 +281,9 @@ wf[kmag > kmagc] = 0.0
 
 # ========================================================================
 # 3. inverse Fourier transform of the velocity fluctuations (Nk^3 grid)
-u = np.fft.irfftn(uf, s=(N, N, N))
-v = np.fft.irfftn(vf, s=(N, N, N))
-w = np.fft.irfftn(wf, s=(N, N, N))
+u = np.fft.irfftn(uf, s=(N, N, N), axes=(0, 1, 2))
+v = np.fft.irfftn(vf, s=(N, N, N), axes=(0, 1, 2))
+w = np.fft.irfftn(wf, s=(N, N, N), axes=(0, 1, 2))
 
 # Another energy content check
 print(
