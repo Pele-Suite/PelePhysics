@@ -1,0 +1,166 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Soot &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Utility" href="Utility.html" />
+    <link rel="prev" title="Spray" href="Spray.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Chemistry.html">Chemistry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Soot</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#soot-equations">Soot Equations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#soot-flags-and-inputs">Soot Flags and Inputs</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Soot</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/Soot.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="soot">
+<span id="id1"></span><h1>Soot<a class="headerlink" href="#soot" title="Link to this heading"></a></h1>
+<section id="soot-equations">
+<h2>Soot Equations<a class="headerlink" href="#soot-equations" title="Link to this heading"></a></h2>
+<p>Soot formation, growth, and oxidation is modeled using the hybrid-method of moments (HMOM) model developed by Mueller et al. <a class="footnote-reference brackets" href="#mueller" id="id2" role="doc-noteref"><span class="fn-bracket">[</span>1<span class="fn-bracket">]</span></a>. This approach combines the numerical ease of the method of moments with interpolative closure (MOMIC) with the ability to capture the bimodal nature of the soot number density function (NDF) provided by the direct quadrature method of moments (DQMOM). <span class="math notranslate nohighlight">\(M_{x,y}\)</span> is the moment of the soot NDF, where <span class="math notranslate nohighlight">\(x\)</span> is the order for volume and <span class="math notranslate nohighlight">\(y\)</span> for surface area; these terms are modeled according to</p>
+<div class="math notranslate nohighlight">
+\[M_{x,y} = N_0 V_0^x S_0^y + \exp{\left(\sum_{r=0}^R \sum_{k = 0}^r a_{r,k} x^k y^{r-k}\right)},\]</div>
+<p>where <span class="math notranslate nohighlight">\(R\)</span> is the order of the polynomial interpolation, <span class="math notranslate nohighlight">\(a_{r,k}\)</span> are the interpolation coefficients, <span class="math notranslate nohighlight">\(N_0\)</span> is the weight of the delta function, and <span class="math notranslate nohighlight">\(V_0\)</span> and <span class="math notranslate nohighlight">\(S_0\)</span> are the volume and surface area of the nucleated spherical soot particles, respectively. The location of the delta function is fixed at coordinates <span class="math notranslate nohighlight">\(V_0\)</span> and <span class="math notranslate nohighlight">\(S_0\)</span> and assumed to be equal to the nucleated particle size.
+The nucleated particle volume and surface area are fixed according to <span class="math notranslate nohighlight">\(V_0 = 2 W_C C_{\rm{dimer}} / \rho_{\rm{soot}}\)</span> and <span class="math notranslate nohighlight">\(S_0 = (36 \pi)^{1/3} V_0^{2/3}\)</span>, where <span class="math notranslate nohighlight">\(W_C\)</span> is the molar mass of carbon, <span class="math notranslate nohighlight">\(C_{\rm{dimer}}\)</span> is the average number of carbon atoms per dimer, and <span class="math notranslate nohighlight">\(\rho_{\rm{soot}}\)</span> is the density of soot (<span class="math notranslate nohighlight">\(\rho_{\rm{soot}} = 1800 {\text{ kg/m}}^3\)</span>). If the first-order polynomial interpolation of the moments (<span class="math notranslate nohighlight">\(R=1\)</span>) is used, the above equation reduces to</p>
+<div class="math notranslate nohighlight">
+\[M_{x,y} = N_0 V_0^x S_0^y + N_L V_L^x S_L^y,\]</div>
+<p>where <span class="math notranslate nohighlight">\(V_L\)</span> and <span class="math notranslate nohighlight">\(S_L\)</span> are the mean volume and surface area of the second mode (large particles). For first-order polynomial interpolation, four transport equations are solved: <span class="math notranslate nohighlight">\(M_{0,0}\)</span> (number density), <span class="math notranslate nohighlight">\(M_{1,0}\)</span> (volume fraction, also denoted as <span class="math notranslate nohighlight">\(f_v\)</span>), <span class="math notranslate nohighlight">\(M_{0,1}\)</span>, and <span class="math notranslate nohighlight">\(N_0\)</span>.
+The governing equations for the soot moments are <a class="footnote-reference brackets" href="#bisetti" id="id3" role="doc-noteref"><span class="fn-bracket">[</span>2<span class="fn-bracket">]</span></a></p>
+<div class="math notranslate nohighlight">
+\[\frac{\partial M_{x,y}}{\partial t} + \frac{\partial M_{x,y} \mathbf{u}_g}{\partial \mathbf{X}} = -\frac{\partial \boldsymbol{J}_{M}}{\partial \mathbf{X}} + \dot{M}_{x,y},\]</div>
+<p>where <span class="math notranslate nohighlight">\(\boldsymbol{J}_{M}\)</span> is the soot mass flux and <span class="math notranslate nohighlight">\(\dot{M}_{x,y}\)</span> is the soot source term.
+The current formulation ignores the molecular diffusion and thermophoretic effects of the soot, making the first term of the right-hand side zero.</p>
+<p>For more details regarding the HMOM model, users are encouraged to consult the references cited.</p>
+</section>
+<section id="soot-flags-and-inputs">
+<h2>Soot Flags and Inputs<a class="headerlink" href="#soot-flags-and-inputs" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>In the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code>, specify <code class="docutils literal notranslate"><span class="pre">USE_SOOT</span> <span class="pre">=</span> <span class="pre">TRUE</span></code> and <code class="docutils literal notranslate"><span class="pre">NUM_SOOT_MOMENTS</span> <span class="pre">=</span> <span class="pre">N</span></code> where <code class="docutils literal notranslate"><span class="pre">N</span></code> is the number of moments to be used in the solution, either 3 or 6.</p></li>
+<li><p>Depending on the gas phase solver, soot solving functionality can be turned on in the input file using <code class="docutils literal notranslate"><span class="pre">pelec.add_soot_src</span> <span class="pre">=</span> <span class="pre">1</span></code> or <code class="docutils literal notranslate"><span class="pre">peleLM.do_soot_solve</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p></li>
+<li><p>The chemistry model specified with <code class="docutils literal notranslate"><span class="pre">Chemistry_model</span> <span class="pre">=</span></code> in  <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code> must contain the PAH inception species, as well as <code class="docutils literal notranslate"><span class="pre">H2</span></code>, <code class="docutils literal notranslate"><span class="pre">H</span></code>, <code class="docutils literal notranslate"><span class="pre">OH</span></code>, <code class="docutils literal notranslate"><span class="pre">H2O</span></code>, <code class="docutils literal notranslate"><span class="pre">CO</span></code>, <code class="docutils literal notranslate"><span class="pre">C2H2</span></code>, and <code class="docutils literal notranslate"><span class="pre">O2</span></code>.</p></li>
+<li><p>A PAH inception species must be provided in the input file using <code class="docutils literal notranslate"><span class="pre">soot.incept_pah</span> <span class="pre">=</span></code>. Currently, only one of three inputs are accepted: <code class="docutils literal notranslate"><span class="pre">A2</span></code>, <code class="docutils literal notranslate"><span class="pre">A3</span></code>, or <code class="docutils literal notranslate"><span class="pre">A4</span></code>; which correspond to naphthalene (C10H8), phenathrene (C14H10), or pyrene (C16H10).</p>
+<ul>
+<li><p>If the inception species is named something other than <code class="docutils literal notranslate"><span class="pre">A#</span></code> in the chemistry model, a different name can be specified using <code class="docutils literal notranslate"><span class="pre">soot.pah_name</span> <span class="pre">=</span></code>. However, <code class="docutils literal notranslate"><span class="pre">soot.incept_pah</span></code> must be set to <code class="docutils literal notranslate"><span class="pre">A2</span></code>, <code class="docutils literal notranslate"><span class="pre">A3</span></code>, or <code class="docutils literal notranslate"><span class="pre">A4</span></code>.</p></li>
+</ul>
+</li>
+</ul>
+<aside class="footnote-list brackets">
+<aside class="footnote brackets" id="mueller" role="doc-footnote">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id2">1</a><span class="fn-bracket">]</span></span>
+<p>“Hybrid Method of Moments for modeling soot formation and growth”, M. E. Mueller and G. Blanquart and H. Pitsch, Comb. Flame, Vol. 156, No. 6, pp. 1143-1155 (2009)</p>
+</aside>
+<aside class="footnote brackets" id="bisetti" role="doc-footnote">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id3">2</a><span class="fn-bracket">]</span></span>
+<p>“On the formation and early evolution of soot in turbulent nonpremixed flames”, F. Bisetti and G. Blanquart and M. E. Mueller and H. Pitsch, Comb. Flame, Vol. 159, No. 1, pp. 317-335 (2012)</p>
+</aside>
+</aside>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Spray.html" class="btn btn-neutral float-left" title="Spray" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Utility.html" class="btn btn-neutral float-right" title="Utility" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,533 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Utility &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Support" href="Support.html" />
+    <link rel="prev" title="Soot" href="Soot.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Chemistry.html">Chemistry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Utility</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#premixed-flame-initialization">Premixed Flame Initialization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#generating-a-pmf-file">Generating a PMF file</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#turbulent-inflows">Turbulent Inflows</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#generating-a-turbulence-file">Generating a turbulence file</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#input-file-options">Input file options</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#turbinflow-implementation-details">TurbInflow Implementation Details</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#non-uniform-and-mapped-grids">Non-uniform and mapped grids</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#forced-turbulence">Forced Turbulence</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id1">Input file options</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#forced-turbulence-implementation-details">Forced Turbulence Implementation Details</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#plt-file-management">Plt File Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#diagnostics">Diagnostics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#filter">Filter</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#developing">Developing</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#utilities">Utilities</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Utility</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/Utility.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="utility">
+<span id="sec-utility"></span><h1>Utility<a class="headerlink" href="#utility" title="Link to this heading"></a></h1>
+<p>In addition to routines for evaluating chemical reactions, transport properties, and equation of state functions, PelePhysics includes other shared utilities that are utilized by both PeleC and PeleLM(eX). These utilities include support for:</p>
+<ul class="simple">
+<li><p>Premixed Flame (<code class="docutils literal notranslate"><span class="pre">PMF</span></code>) initialization from precomputed 1D flame profiles</p></li>
+<li><p>Turbulent inflows (<code class="docutils literal notranslate"><span class="pre">TurbInflow</span></code>) on domain boundaries from saved turbulence data</p></li>
+<li><p>Forced Turbulence (<code class="docutils literal notranslate"><span class="pre">TurbForce</span></code>) for maintained HIT</p></li>
+<li><p>Plt file management (<code class="docutils literal notranslate"><span class="pre">PltFileManager</span></code>)</p></li>
+<li><p>Output of runtime <code class="docutils literal notranslate"><span class="pre">Diagnostics</span></code></p></li>
+<li><p>Basic <code class="docutils literal notranslate"><span class="pre">Utilities</span></code>, including unit conversions</p></li>
+</ul>
+<p>This section provides relevant notes on using these utilities across the Pele family of codes. There may be additional subtleties based on the code-specific implementation of these capabilities, in which case it will be necessary to refer to the documentation of the code of interest.</p>
+<section id="premixed-flame-initialization">
+<h2>Premixed Flame Initialization<a class="headerlink" href="#premixed-flame-initialization" title="Link to this heading"></a></h2>
+<p>Pre-computed profiles from 1D freely propagating premixed flames are used to initialize a wrinkled <a class="reference external" href="https://Pele-Suite.github.io/PeleLMeX/manual/html/Tutorials_FlameSheet.html">flamesheet</a> in PeleLMeX, among other problems. Right now, this capability is not used in PeleC, but similar code that accomplishes the same task using data files of the same format is applied in PeleC. The code has two parts, a data container defined in <code class="docutils literal notranslate"><span class="pre">PMFData.{H,cpp}</span></code> that loads and stores data from the pre-computed profile, and a function defined in <code class="docutils literal notranslate"><span class="pre">PMF.H</span></code> that, when provided this data structure and the bounds of a cell of interest, returns temperature, velocity, and mole fractions from that location.</p>
+<p>This code has two runtime parameters that may be set in the input file:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>pmf.datafile = pmf.dat
+pmf.do_cellAverage = 1
+</pre></div>
+</div>
+<p>The first parameter specifies the path to the PMF data file. This file contains a two-line header followed by whitespace-delimited data columns in the order: position (cm), temperature (K), velocity (cm/s), density(g/cm3), species mole fractions. Sample files are provided in the relevant PeleLMeX (and PeleC) examples, and the procedure to generate these files with a provided script is described below. The second parameter specifies whether the PMF code does a finite volume-style integral over the queried cell (<code class="docutils literal notranslate"><span class="pre">pmf.do_cellAverage</span> <span class="pre">=</span> <span class="pre">1</span></code>) or whether the code finds an interpolated value at the midpoint of the queried cell (<code class="docutils literal notranslate"><span class="pre">pmf.do_cellAverage</span> <span class="pre">=</span> <span class="pre">0</span></code>)</p>
+<section id="generating-a-pmf-file">
+<h3>Generating a PMF file<a class="headerlink" href="#generating-a-pmf-file" title="Link to this heading"></a></h3>
+<p>The script <code class="docutils literal notranslate"><span class="pre">cantera_pmf_generator.py</span></code> solves a 1D unstrained premixed flame using <a class="reference external" href="https://doi.org/10.5281/zenodo.6387882">Cantera</a> and saves it in the appropriate file format for use by the Pele codes. To use this script, first follow the <a class="reference internal" href="Ceptr.html#sec-ceptr-software"><span class="std std-ref">CEPTR instructions</span></a> for setting up <code class="docutils literal notranslate"><span class="pre">poetry</span></code>. Then return to the <code class="docutils literal notranslate"><span class="pre">Utility/PMF/</span></code> directory and run the script:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>poetry -C ../../../Support/ceptr/ run python cantera_pmf_generator.py -m dodecane_lu -f NC12H26 -d 0.01 -o ./
+</pre></div>
+</div>
+<p>This example computes a dodecane/air flame using the <code class="docutils literal notranslate"><span class="pre">dodecane_lu</span></code> mechanism on a 0.01 m domain, and saves the resulting file to the present directory. It is also possible to pass all arguments via an input file, for example <code class="docutils literal notranslate"><span class="pre">pmf_input.txt</span></code>:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>-m
+dodecane_lu
+-f
+NC12H26
+-d
+0.01
+-o
+./
+</pre></div>
+</div>
+<p>Then running the script with:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>poetry -C ../../../Support/ceptr/ run python cantera_pmf_generator.py @pmf_input.txt
+</pre></div>
+</div>
+<p>You may choose any mechanism included with PelePhysics, as the Cantera <code class="docutils literal notranslate"><span class="pre">.yaml</span></code> format is included for all mechanisms. If you choose a reduced mechanism with QSS species, the 1D solution will be obtained using the skeletal version of the mechanism without QSS species being remove, as Cantera does not support QSS by default. In this case, the script will also save a data file with QSS species removed (ending in <code class="docutils literal notranslate"><span class="pre">-qssa-removed.dat</span></code>) that is suitable for use with the QSS mechanisms in Pele. A range of additional conditions may be specified at the command line. To see the full set of options, use the help feature:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>poetry -C ../../../Support/ceptr/ run python cantera_pmf_generator.py --help
+</pre></div>
+</div>
+<p>Note that when running Cantera, you may need to adjust the domain size to be appropriate for your conditions in order for the solver to converge. At times, you may also need to adjust the solver tolerances and other parameters that are specified within the script.</p>
+<p>An additional script is provided to allow plotting of the PMF solutions. This script is used as follows (if no variable index is specified, temperature is plotted by default):</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>poetry -C ../../../Support/ceptr/ run python plotPMF.py &lt;pmf-file&gt; &lt;variable-index&gt;
+</pre></div>
+</div>
+</section>
+</section>
+<section id="turbulent-inflows">
+<span id="sec-turbinflow"></span><h2>Turbulent Inflows<a class="headerlink" href="#turbulent-inflows" title="Link to this heading"></a></h2>
+<p>PelePhysics supports the capability of the flow solvers to have spatially and temporally varying inflow conditions based on precomputed planes of
+turbulence data (3 components of velocity fluctuations). To reduce memory requirements, a fixed number of planes in the third dimension are read
+at a time and then replaced when exhausted. This number of planes can be specified at runtime to balance I/O and memory requirements. Multiple
+turbulent inflow patches can be applied on any domain boundary or on multiple domain boundaries. If multiple patches overlap on the same face, the
+data from each overlapping patch are superimposed and added together.</p>
+<p>This PelePhysics utility provides the machinery to load the data files and interpolate in space and time onto rectangular boundary patches,
+which may or may not cover an entire boundary. Additional code within PeleC and PeleLMeX is required to drive this functionality, and the
+documentation for the
+relevant code should be consulted to fully understand the necessary steps. Typically, the TurbInflow capability provides velocity fluctuations,
+and the mean inflow velocity must be provided through another means. For each code, an example test case for the capability is provided
+in <cite>Exec/RegTests/TurbInflow</cite>. Inputs are available as part of this utility to rescale the data as needed. If differently shaped inlet patches
+are required, this must be done by masking undesired parts of the patch on the PeleC or PeleLMeX side of the implementation.</p>
+<section id="generating-a-turbulence-file">
+<h3>Generating a turbulence file<a class="headerlink" href="#generating-a-turbulence-file" title="Link to this heading"></a></h3>
+<p>The relevant data files are generated using the tools in <code class="docutils literal notranslate"><span class="pre">Support/TurbInflowGenerator</span></code>
+and usage instructions are available in the <a class="reference internal" href="Support.html#sec-turbfile"><span class="std std-ref">documentation</span></a> on these tools.</p>
+</section>
+<section id="input-file-options">
+<h3>Input file options<a class="headerlink" href="#input-file-options" title="Link to this heading"></a></h3>
+<p>The input file options that drive this utility (and thus are inherited by PeleC and PeleLMeX) are
+provided below.</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>turbinflows=low high                                    # Names of injections (can provide any number)
+
+turbinflow.low.turb_file      = TurbFileHIT/TurbTEST    # Path to directory created in previous step
+turbinflow.low.dir            = 1                       # Boundary normal direction (0,1, or 2) for patch
+turbinflow.low.side           = "low"                   # Boundary side (low or high) for patch
+turbinflow.low.turb_scale_loc = 633.151                 # Factor by which to scale the spatial coordinate between the data file and simulation
+turbinflow.low.turb_scale_vel = 1.0                     # Factor by which to scale the velocity between the data file and simulation
+turbinflow.low.turb_center    = 0.005 0.005             # Center point where turbulence patch will be applied
+turbinflow.low.turb_conv_vel  = 5.                      # Velocity to move through the 3rd dimension to simulate time evolution
+turbinflow.low.turb_nplane    = 32                      # Number of planes to read and store at a time
+turbinflow.low.time_offset    = 0.0                     # Offset in time for reading through the 3rd dimension
+turbinflow.low.verbose        = 0                       # Verbosity level
+turbinflow.low.extrap_nonperiodic = 0                   # Allow interpolation near edges of inflow patch where stencil may touch ghost cells
+turbinflow.low.tile_periodic  = 0                       # Cover the entire inflow face by periodically repeating/tiling the inflow patch
+turbinflow.low.interp_type    = quadratic               # Either quadratic (default) or linear (required if there are nonperiodic directions)
+turbinflow.low.time_periodic  = 0                       # Specify if the turbinflow data should be repeated in time, only valid for time varying turbinflow of type "istimeplanes"
+
+turbinflow.high.turb_file      = TurbFileHIT/TurbTEST   # All same as above, but for second injection patch
+turbinflow.high.dir            = 1
+turbinflow.high.side           = "high"
+turbinflow.high.turb_scale_loc = 633.151
+turbinflow.high.turb_scale_vel = 1.0
+turbinflow.high.turb_center    = 0.005 0.005
+turbinflow.high.turb_conv_vel  = 5.
+turbinflow.high.turb_nplane    = 32
+turbinflow.high.time_offset    = 0.0006
+turbinflow.high.verbose        = 2
+</pre></div>
+</div>
+</section>
+<section id="turbinflow-implementation-details">
+<h3>TurbInflow Implementation Details<a class="headerlink" href="#turbinflow-implementation-details" title="Link to this heading"></a></h3>
+<p>To facilitate application of inflows generated from precursor Pele simulations, the data in the inflow files is now always interpreted as
+cell-centered, which is a departure from legacy implementations designed to use fully-periodic data originating from solvers with nodal data.
+However, some aspects of the implementation are still influenced by the legacy implementation. A main consideration in the current implementation
+is that an inflow generated from a precursor simulation (using either of the <code class="docutils literal notranslate"><span class="pre">periodic_plt</span></code> or <code class="docutils literal notranslate"><span class="pre">diag_frame_plane</span></code> generation options) can
+be directly applied as an inflow to a second simulation on the same grid without interpolation or data shifting.</p>
+<p>Each TurbInflow plane contains a valid box corresponding to the physical domain used to generate the inflow plane,
+plus one ghost cell on the low side and two ghost cells on the high side. But the dimensions listed
+in the <code class="docutils literal notranslate"><span class="pre">HDR</span></code> correspond to the size of valid domain in the tangential directions plus two grid cell sizes. The normal direction dimension is just
+the valid domain size. The behavior of the utility depends on the periodicity of the data. If the data is periodic in the normal direction, it is
+treated as spatial data, the normal direction is traversed based on the specified <code class="docutils literal notranslate"><span class="pre">turb_conv_vel</span></code>, and the inflow data can be recycled to allow
+arbitrarily long simulations. If the data is not periodic in the normal direction, a list of time stamps for each plane is provided at the end of
+the <code class="docutils literal notranslate"><span class="pre">HDR</span></code> file. The inflow is only valid from the first time stamp through, but not including, the 2nd last time stamp (the final plane
+is necessary for interpolation).</p>
+<p>For tangential directions, periodicity influences the type of interpolation that may be applied. For periodic tangential dimensions, quadratic
+interpolation with a three point stencil is used by default, but linear interpolation is also available. The quadratic stencil is asymmetric,
+using one point to the left and two to the right. Periodic directions may be tiled to cover the full face of the inflow using the <cite>tile_periodic</cite>
+option, but by default they cover any cell of the simulation that has its center within the valid domain of the inflow. For nonperiodic
+directions, linear interpolation is required. Because interpolation the outer 1/2 cell perimeter of a nonperiodic valid domain would
+require an interpolation stencil that uses a ghost cell, and ghost cells may not be meaningfully populated (they are currently filled by
+first order extrapolation), by default an error is raised if the TurbInflow utility is asked to populate a cell center in this region. This
+error can be disabled with the <code class="docutils literal notranslate"><span class="pre">extrap_nonperiodic</span></code> option. In general, for nonperiodic directions, it is recommended to generate an inflow
+that matches the grid from the finest level of the simulation using the inflow. The figure below demonstrates the structure of the turb
+inflow plane data and interpolation approaches for periodic and nonperiodic tangential directions.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The TurbInflow capability was not designed with embedded boundaries in mind. It can be applied for simulations using EB, but care should
+be take. Inflows should not be generated from simulations where EBs intersect the inflow plane.</p>
+</div>
+</section>
+<section id="non-uniform-and-mapped-grids">
+<h3>Non-uniform and mapped grids<a class="headerlink" href="#non-uniform-and-mapped-grids" title="Link to this heading"></a></h3>
+<p>The inflow data is always uniformly spaced <em>in some coordinate</em>: the <code class="docutils literal notranslate"><span class="pre">HDR</span></code>
+carries only <code class="docutils literal notranslate"><span class="pre">npts</span></code> and <code class="docutils literal notranslate"><span class="pre">probsize</span></code> per direction, and the coordinate-to-index
+conversion in the interpolator is a single affine expression. Which coordinate
+that is depends on how the file was made. Synthetic (<code class="docutils literal notranslate"><span class="pre">turb_box</span></code>) data and data
+extracted from a uniform-mesh precursor are uniform in physical position. Data
+extracted with <code class="docutils literal notranslate"><span class="pre">diag_frame_planes</span></code> or <code class="docutils literal notranslate"><span class="pre">periodic_plt</span></code> from a precursor that
+ran with a coordinate mapping (for example PeleLMeX’s <code class="docutils literal notranslate"><span class="pre">geometry.mesh_mapping</span></code>)
+is uniform in that run’s <em>computational</em> (<span class="math notranslate nohighlight">\(\xi\)</span>) coordinate, because the
+plane files and plotfiles carry the computational geometry with physical
+velocity values.</p>
+<p>Such a file is tagged by an optional <code class="docutils literal notranslate"><span class="pre">MESHMAP_V2</span></code> trailer at the end of the
+<code class="docutils literal notranslate"><span class="pre">HDR</span></code>, placed after everything a legacy reader consumes (the plane times, or
+the plane offsets when there are no times) so that older readers never see it.
+It has one line per transverse direction, in the file’s own transverse order:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>MESHMAP_V2
+<span class="nt">&lt;kind&gt;</span> &lt;p&gt; &lt;p2&gt; &lt;p3&gt; &lt;q&gt; &lt;xi_lo&gt; &lt;xi_hi&gt;
+<span class="nt">&lt;kind&gt;</span> &lt;p&gt; &lt;p2&gt; &lt;p3&gt; &lt;q&gt; &lt;xi_lo&gt; &lt;xi_hi&gt;
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">kind</span></code>/<code class="docutils literal notranslate"><span class="pre">p</span></code>/<code class="docutils literal notranslate"><span class="pre">p2</span></code>/<code class="docutils literal notranslate"><span class="pre">p3</span></code>/<code class="docutils literal notranslate"><span class="pre">q</span></code> are the per-axis payload of
+<code class="docutils literal notranslate"><span class="pre">pele::physics::MeshMapEvaluator</span></code> (<code class="docutils literal notranslate"><span class="pre">Source/Utility/MeshMap</span></code>, the same
+descriptor PeleLMeX uses for its mapping: 0 identity, 1 constant, 2 exponential
+stretch, 3 tanh stretch, 4 interior stretch), and <code class="docutils literal notranslate"><span class="pre">xi_lo</span></code>/<code class="docutils literal notranslate"><span class="pre">xi_hi</span></code> are the
+precursor’s computational-domain bounds along that axis. The generators write
+the trailer when their input carries the precursor’s <code class="docutils literal notranslate"><span class="pre">geometry.mesh_mapping</span></code>
+block (copy those lines verbatim; see <code class="docutils literal notranslate"><span class="pre">Support/TurbInflowGenerator/README.md</span></code>),
+and write nothing otherwise. A file <em>without</em> the trailer is, by declaration,
+uniform in physical position. (An earlier <code class="docutils literal notranslate"><span class="pre">MESHMAP_V1</span></code> form, <code class="docutils literal notranslate"><span class="pre">kind</span> <span class="pre">p</span> <span class="pre">q</span> <span class="pre">xi_lo</span>
+<span class="pre">xi_hi</span></code>, is still read.)</p>
+<p><code class="docutils literal notranslate"><span class="pre">TurbInflow</span></code> handles both kinds of file with one rule: the physical position
+of each target cell is converted to the file’s own coordinate, and the
+interpolation then proceeds unchanged. For a physically-uniform file the
+conversion is the identity; for a mapped file it is the inverse of the file’s
+map, so the interpolation happens in the precursor’s <span class="math notranslate nohighlight">\(\xi\)</span>. This is the
+standard mapped-grid argument – for a smooth map the interpolant’s error is
+the same order in <span class="math notranslate nohighlight">\(\Delta\xi\)</span> as it would be in <span class="math notranslate nohighlight">\(\Delta x\)</span> – and it
+covers every combination of uniform or mapped file and uniform or mapped target.
+When the target’s map and computational grid coincide with the file’s, the
+conversion lands on file cell centres and the file is reproduced exactly (the
+same-grid guarantee above, now also for mapped meshes). With <code class="docutils literal notranslate"><span class="pre">tile_periodic</span></code>
+the position is wrapped into the file’s physical period before the inverse.</p>
+<p>For a mapped file <code class="docutils literal notranslate"><span class="pre">turb_center</span></code> is optional: by default the file is placed
+where the precursor had it. If given, it is in the file’s <span class="math notranslate nohighlight">\(\xi\)</span> units,
+must lie within <code class="docutils literal notranslate"><span class="pre">[xi_lo,</span> <span class="pre">xi_hi]</span></code>, and the equivalent physical position is
+printed. The availability of this sampling support is advertised by the
+<code class="docutils literal notranslate"><span class="pre">PELEPHYSICS_TURBINFLOW_SAMPLES_MESHMAP</span></code> macro (the trailer reader alone by
+<code class="docutils literal notranslate"><span class="pre">PELEPHYSICS_TURBINFLOW_HAS_MESHMAP_HDR</span></code>); <code class="docutils literal notranslate"><span class="pre">TurbInflow::file_has_map()</span></code>
+and <code class="docutils literal notranslate"><span class="pre">file_map()</span></code> expose the file’s descriptor so a solver can report whether
+its own map matches.</p>
+<p>A run <em>consuming</em> the data may itself be on a non-uniform grid. The turbulence
+file is indexed by physical position, so a solver whose AMReX grid is a uniform
+computational grid carrying a coordinate mapping must not use the
+<code class="docutils literal notranslate"><span class="pre">amrex::Geometry</span></code> overload of <code class="docutils literal notranslate"><span class="pre">TurbInflow::add_turb()</span></code>, which would sample
+the file at computational rather than physical coordinates. Such solvers pass
+the physical cell-centre positions of the injection face explicitly, using the
+overload taking <code class="docutils literal notranslate"><span class="pre">x_phys</span></code> / <code class="docutils literal notranslate"><span class="pre">y_phys</span></code> vectors; the ordering of the two
+transverse directions is given by <code class="docutils literal notranslate"><span class="pre">TurbInflow::transverseDirs()</span></code>. The presence
+of that overload is advertised by the <code class="docutils literal notranslate"><span class="pre">PELEPHYSICS_TURBINFLOW_HAS_COORD_ADDTURB</span></code>
+macro.</p>
+<p>Whichever entry point is used, the physically meaningful constraint is the ratio
+of the target grid’s local spacing on the injection face to the file’s spacing.
+<code class="docutils literal notranslate"><span class="pre">TurbInflow::file_transverse_dx()</span></code> reports the latter in case units (the mean
+for a mapped file, whose physical spacing varies; <code class="docutils literal notranslate"><span class="pre">file_transverse_dx_range()</span></code>
+gives its extremes; both are also printed at <code class="docutils literal notranslate"><span class="pre">verbose</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>) so that a solver
+can check the ratio: substantially above one and the file cannot fill the scales
+the grid resolves; substantially below one and the injected field is aliased
+onto the grid.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Diagnostics that slice the precursor solution – notably
+<code class="docutils literal notranslate"><span class="pre">DiagFramePlane</span></code> – locate the requested <code class="docutils literal notranslate"><span class="pre">center</span></code> using the AMReX
+geometry, which for a mapped run is the uniform computational grid, so
+by default <code class="docutils literal notranslate"><span class="pre">center</span></code> is a <em>computational</em> coordinate. Set
+<code class="docutils literal notranslate"><span class="pre">center_is_physical</span> <span class="pre">=</span> <span class="pre">1</span></code> to give a physical position instead; the
+diagnostic reads the run’s <code class="docutils literal notranslate"><span class="pre">geometry.mesh_mapping</span></code> block and
+inverts the map (the conversion is printed, and recorded in the
+<code class="docutils literal notranslate"><span class="pre">PlaneData</span></code> records the requested and converted centers, but the full
+mapping descriptor enters the turbulence file only through the generator’s
+input, as described above.</p>
+</div>
+<figure class="align-default">
+<img alt="_images/TurbInflowData.png" src="_images/TurbInflowData.png" />
+</figure>
+</section>
+</section>
+<section id="forced-turbulence">
+<span id="sec-turbforce"></span><h2>Forced Turbulence<a class="headerlink" href="#forced-turbulence" title="Link to this heading"></a></h2>
+<p>PelePhysics supports the capability for maintained homogeneous isotropic turbulence.  A source term in the momentum equation injects energy at
+large scales, which naturally cascades to form (maintained) homogeneous isotropic turbulence.</p>
+<section id="id1">
+<h3>Input file options<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<p>The input file options that drive this utility (and thus are inherited by PeleC and PeleLMeX) are
+provided below.</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>turbforce.v                   = 0                       # Verbosity level
+turbforce.urms                = [Must be User Defined]  # Target urms
+turbforce.time_offset         = 0.0                     # Offset of the forcing function.
+turbforce.hack_lz             = 0                       # Allow periodic reproduction in z.
+turbforce.force_scale_fudge   = 1.0                     # Used for fine scale tuning of the forcing function.
+
+turbforce.ff_factor           = 4                       # Fast force coarsening factor.
+turbforce.nmodes              = 4                       # Largest mode to force.
+turbforce.forcing_epsilon     = 0.1                     # Reduce amplitude of modes used for breaking symmetry.
+turbforce.spectrum_type       = 2                       # Shape of the spectrum of the forcing.
+turbforce.moderate_zero_modes = 1                       # Reduce the impact of any zero mode.
+turbforce.mode_start          = 0                       # Starting mode
+</pre></div>
+</div>
+<p>For ff_factor, nmodes, forcing_epsilon, spectrum_type and moderate_zero_modes, it is best to leave these as defaults unless you are confident on
+the consiquences.</p>
+</section>
+<section id="forced-turbulence-implementation-details">
+<h3>Forced Turbulence Implementation Details<a class="headerlink" href="#forced-turbulence-implementation-details" title="Link to this heading"></a></h3>
+<p>The strategy is to inject energy into the large scales using a source term in the momentum equation; the turbulence then develops naturally through the Richardson-Kolmogorov cascade.  The original description is in <a class="reference external" href="https://doi.org/10.2140/camcos.2008.3.103">Aspden et al.</a>; a few modifications (e.g. tweaking the amplitudes of the modes through the random seed, which reduced the temporal variation in u_rms) and explicitly using a divergence-free form (see <a class="reference external" href="https://doi.org/10.1137/110829386">Almgren et al.</a>). We typically run in a cube, or 4:1 box; larger boxes can achieved using the hack_lz option, which uses a periodic reproduction of the forcing in the z direction.  As the source term is a superposition of a substantial number of fourier modes, the direct evaluation is computationally expensive.  The resulting field is smooth (as we’re forcing the large scales), so for computational efficiency, the source term is evaluated on a coarser box (by ff_factor, usually 4), and interpolated onto the required resolution; this is substantially faster, and indistinguishable from the direct approach.</p>
+</section>
+</section>
+<section id="plt-file-management">
+<h2>Plt File Management<a class="headerlink" href="#plt-file-management" title="Link to this heading"></a></h2>
+<p>This code contains data structures used to handle data read from plt files that is utilized by the routines that allow the code to be restarted based on data from plt files.</p>
+</section>
+<section id="diagnostics">
+<span id="sec-diagnostics"></span><h2>Diagnostics<a class="headerlink" href="#diagnostics" title="Link to this heading"></a></h2>
+<p>Analysing the data a-posteriori can become extremely cumbersome when dealing with extreme datasets.
+PelePhysics supports shared capability for diagnostics available at runtime during PeleC and PeleLMeX simulation
+and more are under development.
+Currently, the list of diagnostic contains:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">DiagFramePlane</span></code> : extract a plane aligned in the ‘x’,’y’ or ‘z’ direction across the AMR hierarchy, writing
+a 2D plotfile compatible with Amrvis, Paraview or yt. Only available for 3D simulations.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">DiagPDF</span></code> : extract the PDF of a given variable and write it to an ASCII file.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">DiagConditional</span></code> : extract statistics (average and standard deviation, integral or sum) of a
+set of variables conditioned on the value of given variable and write it to an ASCII file.</p></li>
+</ul>
+<p>When using <cite>DiagPDF</cite> or <cite>DiagConditional</cite>, it is possible to narrow down the diagnostic to a region of interest
+by specifying a set of filters, defining a range of interest for a variable. Note also that for these two diagnostics,
+fine-covered regions are masked. An arbitrary number of diagnostics can be named in a list with the <code class="docutils literal notranslate"><span class="pre">diagnostics</span></code>
+keyword, then each diagnostic name in the list becomes a keyword allowing the type and specific options for
+that diagnostic to be specified.
+The following provide examples for each diagnostic in PeleLMeX (in PeleC, all diagnostics would be prefixed with
+<cite>pelec</cite> instead of <cite>peleLM</cite>:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>#--------------------------DIAGNOSTICS------------------------
+
+peleLM.diagnostics = xnormP condT pdfTest
+
+peleLM.xnormP.type = DiagFramePlane                             # Diagnostic type
+peleLM.xnormP.file = xNorm5mm                                   # Output file prefix
+peleLM.xnormP.normal = 0                                        # Plane normal (0, 1 or 2 for x, y or z)
+peleLM.xnormP.center = 0.005                                    # Coordinate in the normal direction (grid coordinate; Xi under a mesh mapping)
+peleLM.xnormP.center_is_physical = 0                            # [OPT, DEF=0] take <span class="nv">`center`</span> as a physical position and convert it through geometry.mesh_mapping
+peleLM.xnormP.int    = 5                                        # Frequency (as step #) for performing the diagnostic
+peleLM.xnormP.interpolation = Linear                            # [OPT, DEF=Quadratic] Interpolation type : Linear or Quadratic
+peleLM.xnormP.field_names = x_velocity mag_vort density         # List of variables outputted to the 2D pltfile
+peleLM.xnormP.n_files = 2                                       # [OPT, DEF="min(256,NProcs)"] Number of files to write per level
+peleLM.xnormP.dump_ghost_if_OOB = 1                             # [OPT, DEF=false] if the specified coordinate is out-of-bounds, a plane of ghost cells in that direction will be dumped (for debugging purposes). If false, an error is raised if the requested plane is OOB.
+peleLM.xNormP.dump_flat_3D_plotfile                             # instead of a 2D plotfile, dump a 2D plotfile with 1 cell in the z-direction
+
+peleLM.condT.type = DiagConditional                             # Diagnostic type
+peleLM.condT.file = condTest                                    # Output file prefix
+peleLM.condT.int  = 5                                           # Frequency (as step #) for performing the diagnostic
+peleLM.condT.filters = xHigh stoich                             # [OPT, DEF=None] List of filters
+peleLM.condT.xHigh.field_name = x                               # Filter field
+peleLM.condT.xHigh.value_greater = 0.006                        # Filter definition : value_greater, value_less, value_inrange
+peleLM.condT.stoich.field_name = mixture_fraction               # Filter field
+peleLM.condT.stoich.value_inrange = 0.053 0.055                 # Filter definition : value_greater, value_less, value_inrange
+peleLM.condT.conditional_type = Average                         # Conditional type : Average, Integral or Sum
+peleLM.condT.nBins = 50                                         # Number of bins for the conditioning variable
+peleLM.condT.condition_field_name = temp                        # Conditioning variable name
+peleLM.condT.field_names = HeatRelease I_R(CH4) I_R(H2)         # List of variables to be treated
+
+peleLM.pdfTest.type = DiagPDF                                   # Diagnostic type
+peleLM.pdfTest.file = PDFTest                                   # Output file prefix
+peleLM.pdfTest.int  = 5                                         # Frequency (as step #) for performing the diagnostic
+peleLM.pdfTest.filters = innerFlame                             # [OPT, DEF=None] List of filters
+peleLM.pdfTest.innerFlame.field_name = temp                     # Filter field
+peleLM.pdfTest.innerFlame.value_inrange = 450.0 1500.0          # Filter definition : value_greater, value_less, value_inrange
+peleLM.pdfTest.nBins = 50                                       # Number of bins for the PDF
+peleLM.pdfTest.normalized = 1                                   # [OPT, DEF=1] PDF is normalized (i.e. integral is unity) ?
+peleLM.pdfTest.volume_weighted = 1                              # [OPT, DEF=1] Computation of the PDF is volume weighted ?
+peleLM.pdfTest.range = 0.0 2.0                                  # [OPT, DEF=data min/max] Specify the range of the PDF
+peleLM.pdfTest.field_name = x_velocity                          # Variable of interest
+</pre></div>
+</div>
+</section>
+<section id="filter">
+<h2>Filter<a class="headerlink" href="#filter" title="Link to this heading"></a></h2>
+<p>A utility for filtering data stored in AMReX data structures. When initializing the <code class="docutils literal notranslate"><span class="pre">Filter</span></code> class, the filter type
+and filter width to grid ratio are specified. A variety of filter types are supported:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">0</span></code>: no filtering</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">1</span></code>: standard box filter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">2</span></code>: standard Gaussian filter</p></li>
+</ul>
+<p>We have also implemented a set of filters defined in Sagaut &amp; Grohens (1999) Int. J. Num. Meth. Fluids:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">3</span></code>: 3 point box filter approximation (Eq. 26)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">4</span></code>: 5 point box filter approximation (Eq. 27)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">5</span></code>: 3 point box filter optimized approximation (Table 1)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">6</span></code>: 5 point box filter optimized approximation (Table 1)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">7</span></code>: 3 point Gaussian filter approximation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">8</span></code>: 5 point Gaussian filter approximation (Eq. 29)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">9</span></code>: 3 point Gaussian filter optimized approximation (Table 1)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span> <span class="pre">=</span> <span class="pre">10</span></code>: 5 point Gaussian filter optimized approximation (Table 1)</p></li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>This utility is not aware of EB or domain boundaries. If the filter stencil extends across these boundaries,
+the boundary cells are treated as if they are fluid cells.
+It is up to the user to ensure an adequate number of ghost cells in the arrays are appropriately populated,
+using the <code class="docutils literal notranslate"><span class="pre">get_filter_ngrow()</span></code> member function of the class to determine the required number of ghost cells.</p>
+</div>
+<section id="developing">
+<h3>Developing<a class="headerlink" href="#developing" title="Link to this heading"></a></h3>
+<p>The weights for these filters are set in <code class="docutils literal notranslate"><span class="pre">Filter.cpp</span></code>. To add a
+filter type, one needs to add an enum to the <code class="docutils literal notranslate"><span class="pre">filter_types</span></code> and
+define a corresponding <code class="docutils literal notranslate"><span class="pre">set_NAME_weights</span></code> function to be called at
+initialization.</p>
+<p>The application of a filter can be done on a Fab or MultiFab. The loop nesting
+ordering was chosen to be performant on existing HPC architectures and
+discussed in PeleC milestone reports. An example call to the filtering operation is</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span><span class="gh">les_filter = Filter(les_filter_type, les_filter_fgr);</span>
+<span class="gh">...</span>
+les_filter.apply_filter(bxtmp, flux[i], filtered_flux[i], Density, NUM_STATE);
+</pre></div>
+</div>
+<p>The user must ensure that the correct number of grow cells is present in the Fab or MultiFab.</p>
+</section>
+</section>
+<section id="utilities">
+<h2>Utilities<a class="headerlink" href="#utilities" title="Link to this heading"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">utilities</span></code> namespace contains some functions that may be useful to users when writing problem-specific source code.</p>
+<p>This includes unit conversions, which are particularly useful for PeleLM(eX) users working with mixed unit systems. The following aliases, defined in a file header, enable straightforward conversions between MKS and CGS units for use in equation of state (<code class="docutils literal notranslate"><span class="pre">eos</span></code>) function calls:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>namespace m2c = pele::physics::utilities::mks2cgs;
+namespace c2m = pele::physics::utilities::cgs2mks;
+</pre></div>
+</div>
+<p>For example, users can call <code class="docutils literal notranslate"><span class="pre">eos.PYT2R</span></code> as follows:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>auto eos = pele::physics::PhysicsType::eos();
+amrex::Real P_mean = 101325.0_rt; // Pressure in Pa (MKS)
+amrex::Real massfrac[NUM_SPECIES]; // Mass fractions tracked by PeleLM(eX)
+amrex::Real Temp = 300.0_rt; // Temp in K
+amrex::Real rho_cgs = 0.0_rt; // Density in g/cm^3 (CGS)
+
+// Calculate density in CGS units, then convert to MKS
+eos.PYT2R(m2c::P(P_mean), massfrac, Temp, rho_cgs);
+amrex::Real rho = c2m::Rho(rho_cgs); // Convert eos density to MKS
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">utilities</span></code> namespace also contains some other useful functions: <code class="docutils literal notranslate"><span class="pre">locate</span></code> to find the nearby indices of a value in an array for interpolation
+and <code class="docutils literal notranslate"><span class="pre">rectangle_circle_intersection_area</span></code> to find the area of the intersections between rectangles and circles.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Soot.html" class="btn btn-neutral float-left" title="Soot" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Support.html" class="btn btn-neutral float-right" title="Support" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

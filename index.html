@@ -1,0 +1,218 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PelePhysics &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="PelePhysics Quickstart" href="GettingStarted.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Chemistry.html">Chemistry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">PelePhysics</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pelephysics">
+<h1>PelePhysics<a class="headerlink" href="#pelephysics" title="Link to this heading"></a></h1>
+<p><cite>PelePhysics</cite> is a repository of physics databases and implementation code for use within the other <cite>Pele</cite> codes. In particular, the choice of chemistry and transport models as well as associated functions and capabilities are managed in <cite>PelePhysics</cite>.  <cite>PelePhysics</cite> has an official project <a class="reference external" href="https://Pele-Suite.github.io/">homepage</a>, and can be obtained via
+<a class="reference external" href="https://github.com/Pele-Suite/PelePhysics">GitHub</a>.  The documentation pages appearing here are distributed with the code in the <code class="docutils literal notranslate"><span class="pre">Docs/sphinx</span></code> folder as “restructured text” files.
+The html is built automatically with certain pushes to the <cite>PelePhysics</cite> GibHub repository.  A local version can also be built as follows</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>cd ${PELE_PHYSICS_DIR}/build
+sphinx-build -M html ../Docs/sphinx .
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">PELE_PHYSICS_DIR</span></code> is the location of your clone of the <cite>PelePhysics</cite> repository.  To view the local pages,
+point your web browser at the file <code class="docutils literal notranslate"><span class="pre">${PELE_PHYSICS_DIR}/build/html/index.html</span></code>.</p>
+<table class="docutils align-center">
+<tbody>
+<tr class="row-odd"><td><p><img alt="a" src="_images/PeleSuite.png" /></p></td>
+</tr>
+</tbody>
+</table>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="GettingStarted.html#obtaining-pelephysics">Obtaining <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="GettingStarted.html#dependencies">Dependencies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="GettingStarted.html#building-and-running-test-cases">Building and Running Test Cases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Introduction.html#objectives-and-state-of-the-art">Objectives and State-Of-The-Art</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Introduction.html#how-to-naviguate-this-documentation">How to naviguate this documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Chemistry.html">Chemistry</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="IntroductionToCvode.html">A brief introduction to CVODE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html">CVODE implementation in <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#cvode-implementation-in-pelephysics-on-gpu">CVODE implementation in <cite>PelePhysics</cite> on GPU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html">Analytically reduced chemistry via quasi-steady state (QSS) assumption in <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="Ceptr.html">CEPTR: Chemistry Evaluation for Pele Through Recasting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Transport.html#constant">Constant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Transport.html#sutherland">Sutherland</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Transport.html#simple">Simple</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="EOS.html#gammalaw">GammaLaw</a></li>
+<li class="toctree-l2"><a class="reference internal" href="EOS.html#fuego">Fuego</a></li>
+<li class="toctree-l2"><a class="reference internal" href="EOS.html#soave-redlich-kwong-srk">Soave-Redlich-Kwong (SRK)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Spray.html#spray-equations">Spray Equations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Spray.html#spray-equations-with-manifold-models">Spray Equations with Manifold Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Spray.html#spray-flags-and-inputs">Spray Flags and Inputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Spray.html#spray-validation">Spray Validation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Soot.html#soot-equations">Soot Equations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Soot.html#soot-flags-and-inputs">Soot Flags and Inputs</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Utility.html#premixed-flame-initialization">Premixed Flame Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Utility.html#turbulent-inflows">Turbulent Inflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Utility.html#forced-turbulence">Forced Turbulence</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Utility.html#plt-file-management">Plt File Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Utility.html#diagnostics">Diagnostics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Utility.html#filter">Filter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Utility.html#utilities">Utilities</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Support.html#ceptr">ceptr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Support.html#turbfilegenerator">TurbFileGenerator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Support.html#mechanismpah">MechanismPAH</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Support.html#liquidprop">liquidProp</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Tutorials.html#tutorial-1-generating-nc12h26-qss-mechanism-with-analytical-jacobian">Tutorial 1 - Generating NC12H26 QSS mechanism with analytical Jacobian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Tutorials.html#tutorial-2-generating-nc12h26-qss-mechanism-without-analytical-jacobian">Tutorial 2 - Generating NC12H26 QSS mechanism without analytical Jacobian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Tutorials.html#tutorial-3-generating-nc12h26-skeletal-mechanism">Tutorial 3 - Generating NC12H26 Skeletal mechanism</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperGuide.html#c-code">C++ Code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperGuide.html#python">Python</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<section id="indices-and-tables">
+<h2>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="GettingStarted.html" class="btn btn-neutral float-right" title="PelePhysics Quickstart" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
