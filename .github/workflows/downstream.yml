@@ -4,23 +4,39 @@ on:
    workflow_dispatch:
    push:
      branches: [development]
-     paths-ignore:
-       - '**.rst'
-       - 'Docs/**'
-       - 'Source/Utility/**/*.py'
    pull_request:
      branches: [development]
-     paths-ignore:
-       - '**.rst'
-       - 'Docs/**'
-       - 'Source/Utility/**/*.py'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  Detect-Changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has-source-changes: ${{ steps.changes.outputs.src }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            src:
+              - '**'
+              - '!**/*.rst'
+              - '!Docs/**'
+              - '!Source/Utility/**/*.py'
+              - '!README.md'
+              - '!CONTRIBUTING.md'
+              - '!.codespell*'
+              - '!.gitignore'
+
   PeleLMeX-FlameSheet:
+    needs: Detect-Changes
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     name: PeleLMeX GNU MPI Run [FlameSheet]
     runs-on: ubuntu-latest
     env:
@@ -67,6 +83,8 @@ jobs:
           mpirun -n 2 ./PeleLMeX2d.gnu.MPI.drm19.ex input.2d-regt amr.max_step=2 amr.plot_int=-1 amr.check_int=-1 amrex.abort_on_unused_inputs=1 amr.n_cell=32 64
 
   PeleC-PMF:
+    needs: Detect-Changes
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     name: PeleC GNU MPI Run [PMF]
     runs-on: ubuntu-latest
     env:

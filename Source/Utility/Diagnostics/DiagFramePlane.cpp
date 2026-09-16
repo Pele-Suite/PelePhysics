@@ -1,4 +1,7 @@
 #include "DiagFramePlane.H"
+// Relative to this file so that a build which lists Diagnostics but not
+// Source/Utility/MeshMap among its include directories still compiles.
+#include "../MeshMap/MeshMapEvaluatorInputs.H"
 #include <AMReX_VisMF.H>
 #include <AMReX_FPC.H>
 #include <AMReX_PlotFileUtil.H>
@@ -66,7 +69,11 @@ DiagFramePlane::init(const std::string& a_prefix, std::string_view a_diagName)
   pp.get("normal", m_normal);
   AMREX_ASSERT(m_normal >= 0 && m_normal < AMREX_SPACEDIM);
 
-  // Plane center
+  // Plane center (transverse components are informational only; zero them
+  // so that a single-value `center` does not leave them uninitialised)
+  for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
+    m_center[idim] = 0.0;
+  }
   amrex::Vector<amrex::Real> center;
   pp.getarr("center", center, 0, pp.countval("center"));
   if (center.size() == AMREX_SPACEDIM) {
@@ -76,6 +83,13 @@ DiagFramePlane::init(const std::string& a_prefix, std::string_view a_diagName)
   } else if (center.size() == 1) {
     m_center[m_normal] = center[0];
   }
+  // Under a mesh mapping the AMReX grid is the computational (Xi) grid, so
+  // `center` is by default a Xi coordinate.  center_is_physical takes it as
+  // a physical position instead and inverts the run's map (read from the
+  // same geometry.mesh_mapping block the solver reads) once the domain is
+  // known, in prepare().
+  pp.query("center_is_physical", m_center_is_physical);
+  m_center_phys = m_center;
   m_dump_ghost_if_OOB = false;
   pp.query("dump_ghost_if_OOB", m_dump_ghost_if_OOB);
   m_dump_flat_3D_plotfile = false;
@@ -132,6 +146,27 @@ DiagFramePlane::prepare(
       initDomain, initRealBox, a_geoms[0].Coord(),
       amrex::Array<int, AMREX_SPACEDIM>({AMREX_D_DECL(0, 0, 0)}));
 
+    if (m_center_is_physical) {
+      const auto mmap =
+        pele::physics::make_evaluator_from_inputs(a_geoms[0].ProbDomain());
+      m_map_kind = static_cast<int>(mmap.m_kind);
+      const auto gd = a_geoms[0].data();
+      for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        m_center[idim] = mmap.xi_from_x_phys(idim, m_center_phys[idim], gd);
+      }
+      if (m_map_kind == 0) {
+        amrex::Print() << " DiagFramePlane " << m_diagfile
+                       << ": center_is_physical set but no "
+                          "geometry.mesh_mapping -- center taken as is\n";
+      } else {
+        amrex::Print() << " DiagFramePlane " << m_diagfile
+                       << ": physical center " << m_center_phys[m_normal]
+                       << " along normal " << m_normal << " -> Xi "
+                       << m_center[m_normal] << " (map kind " << m_map_kind
+                       << ")\n";
+      }
+    }
+
     int nOutFields = static_cast<int>(m_fieldIndices_d.size());
     amrex::Vector<int> m_fieldIndices(nOutFields, 0);
     for (int f{0}; f < nOutFields; ++f) {
@@ -160,10 +195,12 @@ DiagFramePlane::prepare(
     int k0 = static_cast<int>(std::round(dist));
     dist -= static_cast<amrex::Real>(k0);
     if (m_interpType == Quadratic) {
-      // Quadratic interp. weights on k0-1, k0, k0+1
-      m_intwgt[lev][0] = 0.5 * (dist - 1.0) * (dist - 2.0);
-      m_intwgt[lev][1] = dist * (2.0 - dist);
-      m_intwgt[lev][2] = 0.5 * dist * (dist - 1.0);
+      // Quadratic interp. weights on k0-1, k0, k0+1: the Lagrange basis for
+      // nodes at -1, 0, +1 evaluated at dist in [-1/2, 1/2].  dist = 0 puts
+      // unit weight on k0, the cell whose centre is nearest the plane.
+      m_intwgt[lev][0] = 0.5 * dist * (dist - 1.0);
+      m_intwgt[lev][1] = 1.0 - dist * dist;
+      m_intwgt[lev][2] = 0.5 * dist * (dist + 1.0);
     } else if (m_interpType == Linear) {
       // linear interp. weights on k0-1, k0, k0+1
       if (dist > 0.0) {
@@ -412,6 +449,15 @@ DiagFramePlane::Write2DMultiLevelPlotfile(
     PlaneFile << AMREX_D_TERM(
                    m_center[0], << " " << m_center[1], << " " << m_center[2])
               << "\n";
+    if (m_center_is_physical) {
+      // The lines above are the grid (Xi) coordinates the plane was
+      // located with; record what the user asked for and the map used.
+      PlaneFile << "center_is_physical " << m_map_kind << "\n";
+      PlaneFile << AMREX_D_TERM(
+                     m_center_phys[0], << " " << m_center_phys[1],
+                                       << " " << m_center_phys[2])
+                << "\n";
+    }
 
     PlaneFile.flush();
     PlaneFile.close();

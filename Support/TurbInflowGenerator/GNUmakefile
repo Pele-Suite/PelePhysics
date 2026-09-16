@@ -22,7 +22,7 @@ Pdirs   := Base Boundary Extern/amrdata AmrCore
 Bpack   += $(foreach dir, $(Pdirs), $(AMREX_HOME)/Src/$(dir)/Make.package)
 Blocs   += $(foreach dir, $(Pdirs), $(AMREX_HOME)/Src/$(dir))
 
-PPdirs  := Utility/PltFileManager
+PPdirs  := Utility/PltFileManager Utility/MeshMap
 Bpack   += $(foreach dir, $(PPdirs), $(PELE_PHYSICS_HOME)/Source/$(dir)/Make.package)
 Blocs   += $(foreach dir, $(PPdirs), $(PELE_PHYSICS_HOME)/Source/$(dir))
 

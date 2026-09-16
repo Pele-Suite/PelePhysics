@@ -151,6 +151,93 @@ inflow plane data and interpolation approaches for periodic and nonperiodic tang
 .. note:: The TurbInflow capability was not designed with embedded boundaries in mind. It can be applied for simulations using EB, but care should
           be take. Inflows should not be generated from simulations where EBs intersect the inflow plane.
 
+Non-uniform and mapped grids
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The inflow data is always uniformly spaced *in some coordinate*: the ``HDR``
+carries only ``npts`` and ``probsize`` per direction, and the coordinate-to-index
+conversion in the interpolator is a single affine expression. Which coordinate
+that is depends on how the file was made. Synthetic (``turb_box``) data and data
+extracted from a uniform-mesh precursor are uniform in physical position. Data
+extracted with ``diag_frame_planes`` or ``periodic_plt`` from a precursor that
+ran with a coordinate mapping (for example PeleLMeX's ``geometry.mesh_mapping``)
+is uniform in that run's *computational* (:math:`\xi`) coordinate, because the
+plane files and plotfiles carry the computational geometry with physical
+velocity values.
+
+Such a file is tagged by an optional ``MESHMAP_V2`` trailer at the end of the
+``HDR``, placed after everything a legacy reader consumes (the plane times, or
+the plane offsets when there are no times) so that older readers never see it.
+It has one line per transverse direction, in the file's own transverse order::
+
+  MESHMAP_V2
+  <kind> <p> <p2> <p3> <q> <xi_lo> <xi_hi>
+  <kind> <p> <p2> <p3> <q> <xi_lo> <xi_hi>
+
+``kind``/``p``/``p2``/``p3``/``q`` are the per-axis payload of
+``pele::physics::MeshMapEvaluator`` (``Source/Utility/MeshMap``, the same
+descriptor PeleLMeX uses for its mapping: 0 identity, 1 constant, 2 exponential
+stretch, 3 tanh stretch, 4 interior stretch), and ``xi_lo``/``xi_hi`` are the
+precursor's computational-domain bounds along that axis. The generators write
+the trailer when their input carries the precursor's ``geometry.mesh_mapping``
+block (copy those lines verbatim; see ``Support/TurbInflowGenerator/README.md``),
+and write nothing otherwise. A file *without* the trailer is, by declaration,
+uniform in physical position. (An earlier ``MESHMAP_V1`` form, ``kind p q xi_lo
+xi_hi``, is still read.)
+
+``TurbInflow`` handles both kinds of file with one rule: the physical position
+of each target cell is converted to the file's own coordinate, and the
+interpolation then proceeds unchanged. For a physically-uniform file the
+conversion is the identity; for a mapped file it is the inverse of the file's
+map, so the interpolation happens in the precursor's :math:`\xi`. This is the
+standard mapped-grid argument -- for a smooth map the interpolant's error is
+the same order in :math:`\Delta\xi` as it would be in :math:`\Delta x` -- and it
+covers every combination of uniform or mapped file and uniform or mapped target.
+When the target's map and computational grid coincide with the file's, the
+conversion lands on file cell centres and the file is reproduced exactly (the
+same-grid guarantee above, now also for mapped meshes). With ``tile_periodic``
+the position is wrapped into the file's physical period before the inverse.
+
+For a mapped file ``turb_center`` is optional: by default the file is placed
+where the precursor had it. If given, it is in the file's :math:`\xi` units,
+must lie within ``[xi_lo, xi_hi]``, and the equivalent physical position is
+printed. The availability of this sampling support is advertised by the
+``PELEPHYSICS_TURBINFLOW_SAMPLES_MESHMAP`` macro (the trailer reader alone by
+``PELEPHYSICS_TURBINFLOW_HAS_MESHMAP_HDR``); ``TurbInflow::file_has_map()``
+and ``file_map()`` expose the file's descriptor so a solver can report whether
+its own map matches.
+
+A run *consuming* the data may itself be on a non-uniform grid. The turbulence
+file is indexed by physical position, so a solver whose AMReX grid is a uniform
+computational grid carrying a coordinate mapping must not use the
+``amrex::Geometry`` overload of ``TurbInflow::add_turb()``, which would sample
+the file at computational rather than physical coordinates. Such solvers pass
+the physical cell-centre positions of the injection face explicitly, using the
+overload taking ``x_phys`` / ``y_phys`` vectors; the ordering of the two
+transverse directions is given by ``TurbInflow::transverseDirs()``. The presence
+of that overload is advertised by the ``PELEPHYSICS_TURBINFLOW_HAS_COORD_ADDTURB``
+macro.
+
+Whichever entry point is used, the physically meaningful constraint is the ratio
+of the target grid's local spacing on the injection face to the file's spacing.
+``TurbInflow::file_transverse_dx()`` reports the latter in case units (the mean
+for a mapped file, whose physical spacing varies; ``file_transverse_dx_range()``
+gives its extremes; both are also printed at ``verbose > 0``) so that a solver
+can check the ratio: substantially above one and the file cannot fill the scales
+the grid resolves; substantially below one and the injected field is aliased
+onto the grid.
+
+.. note:: Diagnostics that slice the precursor solution -- notably
+          ``DiagFramePlane`` -- locate the requested ``center`` using the AMReX
+          geometry, which for a mapped run is the uniform computational grid, so
+          by default ``center`` is a *computational* coordinate. Set
+          ``center_is_physical = 1`` to give a physical position instead; the
+          diagnostic reads the run's ``geometry.mesh_mapping`` block and
+          inverts the map (the conversion is printed, and recorded in the
+          ``PlaneData`` records the requested and converted centers, but the full
+          mapping descriptor enters the turbulence file only through the generator's
+          input, as described above.
+
 .. figure:: ./Visualization/TurbInflowData.png
 
 .. _sec_turbforce:
@@ -227,9 +314,10 @@ The following provide examples for each diagnostic in PeleLMeX (in PeleC, all di
     peleLM.xnormP.type = DiagFramePlane                             # Diagnostic type
     peleLM.xnormP.file = xNorm5mm                                   # Output file prefix
     peleLM.xnormP.normal = 0                                        # Plane normal (0, 1 or 2 for x, y or z)
-    peleLM.xnormP.center = 0.005                                    # Coordinate in the normal direction
+    peleLM.xnormP.center = 0.005                                    # Coordinate in the normal direction (grid coordinate; Xi under a mesh mapping)
+    peleLM.xnormP.center_is_physical = 0                            # [OPT, DEF=0] take `center` as a physical position and convert it through geometry.mesh_mapping
     peleLM.xnormP.int    = 5                                        # Frequency (as step #) for performing the diagnostic
-    peleLM.xnormP.interpolation = Linear                            # [OPT, DEF=Linear] Interpolation type : Linear or Quadratic
+    peleLM.xnormP.interpolation = Linear                            # [OPT, DEF=Quadratic] Interpolation type : Linear or Quadratic
     peleLM.xnormP.field_names = x_velocity mag_vort density         # List of variables outputted to the 2D pltfile
     peleLM.xnormP.n_files = 2                                       # [OPT, DEF="min(256,NProcs)"] Number of files to write per level
     peleLM.xnormP.dump_ghost_if_OOB = 1                             # [OPT, DEF=false] if the specified coordinate is out-of-bounds, a plane of ghost cells in that direction will be dumped (for debugging purposes). If false, an error is raised if the requested plane is OOB.

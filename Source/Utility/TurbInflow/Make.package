@@ -3,3 +3,5 @@ CEXE_sources += turbinflow.cpp
 
 VPATH_LOCATIONS += $(PELE_PHYSICS_HOME)/Source/Utility/TurbInflow
 INCLUDE_LOCATIONS += $(PELE_PHYSICS_HOME)/Source/Utility/TurbInflow
+# turbinflow.H includes the header-only MeshMapEvaluator
+INCLUDE_LOCATIONS += $(PELE_PHYSICS_HOME)/Source/Utility/MeshMap

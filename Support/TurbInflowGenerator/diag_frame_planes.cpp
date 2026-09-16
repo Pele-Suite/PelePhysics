@@ -91,8 +91,10 @@ turbinflow_from_diag_frame_planes(std::ofstream& ifsd, std::ofstream& ifsh)
 
   dx[0] = planeSize[0] / bg[0];
   dx[1] = planeSize[1] / bg[1];
-  ifsh << planeSize[0] + 2 * dx[0] << ' ' << planeSize[1] + 2 * dx[1] << ' '
-       << nf << '\n';
+  // Full precision: TurbInflow derives the file's spacing from these, and
+  // for a mesh-mapped file they must agree with the trailer's Xi bounds.
+  ifsh << std::setprecision(17) << planeSize[0] + 2 * dx[0] << ' '
+       << planeSize[1] + 2 * dx[1] << ' ' << nf << '\n';
 
   ifsh << perio[0] << ' ' << perio[1] << ' ' << 0 << '\n';
 
@@ -139,6 +141,9 @@ turbinflow_from_diag_frame_planes(std::ofstream& ifsd, std::ofstream& ifsh)
   }
   // Write plane times
   for (int k = 0; k < nf; ++k) {
-    ifsh << fileTimes[k] << std::endl;
+    ifsh << std::setprecision(17) << fileTimes[k] << std::endl;
   }
+
+  // Optional mesh-mapping trailer; must come after the plane times.
+  write_meshmap_trailer(ifsh, probDomain, dim_map);
 }

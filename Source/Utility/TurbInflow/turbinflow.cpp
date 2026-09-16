@@ -1,5 +1,7 @@
 #include <turbinflow.H>
 
+#include <algorithm>
+
 namespace pele::physics::turbinflow {
 void
 TurbInflow::init(amrex::Geometry const& /*geom*/)
@@ -58,14 +60,16 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
                        << tp[n].turb_scale_vel << ") \n";
       }
 
-      // Get the turbcenter on the injection face
+      // Get the turbcenter on the injection face.  Required for a file that
+      // is uniform in physical position; optional for a mesh-mapped file
+      // (see the MESHMAP trailer below), whose default centre follows from
+      // the trailer.
       amrex::Vector<amrex::Real> turb_center(AMREX_SPACEDIM - 1, 0);
-      pp.getarr("turb_center", turb_center);
-      AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-        turb_center.size() == AMREX_SPACEDIM - 1,
-        "turb_center must have AMREX_SPACEDIM-1 elements");
-      for (amrex::Real& tc : turb_center) {
-        tc *= tp[n].turb_scale_loc;
+      const bool has_turb_center = pp.queryarr("turb_center", turb_center) != 0;
+      if (has_turb_center) {
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+          turb_center.size() == AMREX_SPACEDIM - 1,
+          "turb_center must have AMREX_SPACEDIM-1 elements");
       }
 
       pp.query("turb_nplane", tp[n].nplane);
@@ -117,11 +121,11 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
         tp[n].npboxcells[0] = npts[0] - 3;, tp[n].npboxcells[1] = npts[1] - 3;
         , tp[n].npboxcells[2] = npts[2];)
 
-      // Center the turbulence
-      AMREX_D_TERM(
-        tp[n].pboxlo[0] = turb_center[0] - 0.5 * tp[n].pboxsize[0];
-        , tp[n].pboxlo[1] = turb_center[1] - 0.5 * tp[n].pboxsize[1];
-        , tp[n].pboxlo[2] = 0.0;)
+      if (tp[n].turb_scale_loc == 0.0) {
+        amrex::Abort(
+          "TurbInflow::init(): turb_scale_loc must be non-zero for " +
+          tp_list[n]);
+      }
 
       // Swirl type: we can't load more planes than are available
       if (tp[n].istimeplanes) {
@@ -150,10 +154,299 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
           is >> tp[n].planeTimes[i]; // Time for each plane
         }
       }
+
+      // Optional trailer.  Everything a legacy reader consumes ends with the
+      // plane times, so anything appended after them is invisible to older
+      // code and a file without it is, by declaration, uniform in physical
+      // position.  Format (one line per transverse direction, in the file's
+      // own transverse order):
+      //
+      //   MESHMAP_V2
+      //   <kind> <p> <p2> <p3> <q> <xi_lo> <xi_hi>
+      //   <kind> <p> <p2> <p3> <q> <xi_lo> <xi_hi>
+      //
+      // kind/p/p2/p3/q are the MeshMapEvaluator payload for that axis
+      // (0 identity, 1 constant, 2 exp stretch, 3 tanh stretch, 4 interior
+      // stretch); xi_lo/xi_hi are the precursor's computational-domain
+      // bounds along that axis, which the inverse map needs.  The earlier
+      // MESHMAP_V1 form, <kind> <p> <q> <xi_lo> <xi_hi>, is read with
+      // p2 = p3 = 0.  A trailer marks the file as uniform in the precursor's
+      // Xi coordinate rather than in physical position; add_turb() inverts
+      // the map before indexing the file.
+      std::string token;
+      if ((is >> token) && (token == "MESHMAP_V1" || token == "MESHMAP_V2")) {
+        const bool v2 = (token == "MESHMAP_V2");
+        int kind[2] = {0, 0};
+        for (int idim = 0; idim < 2; ++idim) {
+          amrex::Real p = 0.0;
+          amrex::Real p2 = 0.0;
+          amrex::Real p3 = 0.0;
+          int q = -1;
+          if (v2) {
+            is >> kind[idim] >> p >> p2 >> p3 >> q;
+          } else {
+            is >> kind[idim] >> p >> q;
+          }
+          is >> tp[n].map_xi_lo[idim] >> tp[n].map_xi_hi[idim];
+          tp[n].map.m_p[idim] = p;
+          tp[n].map.m_p2[idim] = p2;
+          tp[n].map.m_p3[idim] = p3;
+          tp[n].map.m_q[idim] = q;
+        }
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+          is.good(), "TurbInflow::init(): malformed " + token + " trailer in " +
+                       turb_header);
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+          kind[0] == kind[1],
+          "TurbInflow::init(): " + token + " trailer in " + turb_header +
+            " names two different map kinds; a precursor has one map");
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+          kind[0] >= static_cast<int>(MeshMapEvaluator::Kind::Identity) &&
+            kind[0] <=
+              static_cast<int>(MeshMapEvaluator::Kind::InteriorStretch),
+          "TurbInflow::init(): unknown map kind in " + token + " trailer of " +
+            turb_header);
+        for (int idim = 0; idim < 2; ++idim) {
+          AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+            tp[n].map_xi_hi[idim] > tp[n].map_xi_lo[idim],
+            "TurbInflow::init(): " + token + " trailer in " + turb_header +
+              " has xi_hi <= xi_lo");
+        }
+        tp[n].map.m_kind = static_cast<MeshMapEvaluator::Kind>(kind[0]);
+        tp[n].has_map = true;
+        // The trailer's Xi bounds are exact while the header's probsize may
+        // have been written with limited precision; derive the file's Xi
+        // spacing from the trailer so that the inverse map and the index
+        // lookup agree to round-off, after checking the two are consistent.
+        for (int idim = 0; idim < 2; ++idim) {
+          const amrex::Real L = tp[n].map_xi_hi[idim] - tp[n].map_xi_lo[idim];
+          const amrex::Real dx_tr =
+            L / static_cast<amrex::Real>(tp[n].npboxcells[idim]);
+          AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+            std::abs(dx_tr - tp[n].dx[idim]) <= 1.0e-5 * tp[n].dx[idim],
+            "TurbInflow::init(): " + token + " trailer of " + turb_header +
+              " gives a Xi extent inconsistent with the header's probsize");
+          tp[n].dx[idim] = dx_tr;
+          tp[n].dxinv[idim] = 1.0 / dx_tr;
+          tp[n].pboxsize[idim] = L;
+        }
+        if (tp[n].verbose > 0) {
+          amrex::Print() << "   " << tp_list[n] << " carries a " << token
+                         << " trailer: file is uniform in the precursor's Xi "
+                            "coordinate (map kind "
+                         << kind[0] << ")\n";
+        }
+      } else if (!token.empty() && !is.eof()) {
+        amrex::Print() << "TurbInflow: WARNING ignoring unrecognised trailing "
+                          "content in "
+                       << turb_header << " starting at '" << token << "'\n";
+      }
+
+      // Center the turbulence.  For a physically-uniform file turb_center
+      // is in case units and the file is placed around it.  For a
+      // mesh-mapped file the sampling coordinate is the precursor's Xi
+      // (add_turb() inverts the map), so the natural placement is the
+      // precursor's own: pboxlo = xi_lo, i.e. turb_center = (xi_lo+xi_hi)/2
+      // in the file's Xi units, and that is the default; a supplied
+      // turb_center is taken in those same Xi units (unscaled) and shifts
+      // the pattern within the plane.
+      if (tp[n].has_map) {
+        for (int idim = 0; idim < 2; ++idim) {
+          const amrex::Real xi_mid =
+            0.5 * (tp[n].map_xi_lo[idim] + tp[n].map_xi_hi[idim]);
+          if (!has_turb_center) {
+            turb_center[idim] = xi_mid;
+          } else {
+            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+              turb_center[idim] >= tp[n].map_xi_lo[idim] &&
+                turb_center[idim] <= tp[n].map_xi_hi[idim],
+              "TurbInflow::init(): turb_center for a mesh-mapped turbulence "
+              "file is in the file's Xi units and must lie within "
+              "[xi_lo, xi_hi] of its MESHMAP trailer");
+          }
+        }
+        if (tp[n].verbose > 0) {
+          amrex::Print() << "   turb_center of " << tp_list[n]
+                         << " in file Xi units: " << turb_center[0] << " "
+                         << turb_center[1]
+                         << (has_turb_center ? "" : " (default)")
+                         << ", physical (case units): "
+                         << tp[n].map.x_phys_from_xi(
+                              0, turb_center[0], tp[n].map_xi_lo[0],
+                              tp[n].map_xi_hi[0]) /
+                              tp[n].turb_scale_loc
+                         << " "
+                         << tp[n].map.x_phys_from_xi(
+                              1, turb_center[1], tp[n].map_xi_lo[1],
+                              tp[n].map_xi_hi[1]) /
+                              tp[n].turb_scale_loc
+                         << "\n";
+        }
+      } else {
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+          has_turb_center,
+          "turbinflow." + tp_list[n] +
+            ".turb_center is required for a turbulence file that is uniform "
+            "in physical position (no MESHMAP trailer)");
+        for (amrex::Real& tc : turb_center) {
+          tc *= tp[n].turb_scale_loc;
+        }
+      }
+      AMREX_D_TERM(
+        tp[n].pboxlo[0] = turb_center[0] - 0.5 * tp[n].pboxsize[0];
+        , tp[n].pboxlo[1] = turb_center[1] - 0.5 * tp[n].pboxsize[1];
+        , tp[n].pboxlo[2] = 0.0;)
+
+      if (tp[n].verbose > 0) {
+        // Report the file's transverse spacing in case units so that it can
+        // be compared against the target grid's spacing on the injection
+        // face -- see PeleLMeX's turbInflow resolution check.  A
+        // mesh-mapped file is uniform in Xi only, so give its physical
+        // range.
+        amrex::Real dmin[2] = {0.0, 0.0};
+        amrex::Real dmax[2] = {0.0, 0.0};
+        transverse_dx_range(tp[n], dmin, dmax);
+        amrex::Print() << "   transverse spacing of " << tp_list[n]
+                       << " in case units: ";
+        for (int idim = 0; idim < 2; ++idim) {
+          if (tp[n].has_map) {
+            amrex::Print() << "[" << dmin[idim] << ", " << dmax[idim] << "]";
+          } else {
+            amrex::Print() << dmin[idim];
+          }
+          amrex::Print() << (idim == 0 ? " x " : "\n");
+        }
+      }
       is.close();
     }
     turbinflow_initialized = true;
   }
+}
+
+bool
+TurbInflow::file_has_map(
+  const int dir, const amrex::Orientation::Side& side) const
+{
+  bool found = false;
+  bool any_has_map = false;
+  for (const auto& tpn : tp) {
+    if (tpn.dir == dir && tpn.side == side) {
+      found = true;
+      any_has_map = any_has_map || tpn.has_map;
+    }
+  }
+  return found ? any_has_map : false;
+}
+
+void
+TurbInflow::transverse_dx_range(
+  const TurbParm& a_tp, amrex::Real dx_min[2], amrex::Real dx_max[2])
+{
+  // tp.dx lives in turb-file units; queried coordinates are multiplied by
+  // turb_scale_loc before the lookup, so the equivalent spacing in case
+  // units is dx / turb_scale_loc.  A mesh-mapped file is uniform in Xi:
+  // difference the physical face positions of each interior cell instead.
+  for (int idim = 0; idim < 2; ++idim) {
+    if (!a_tp.has_map) {
+      dx_min[idim] = a_tp.dx[idim] / a_tp.turb_scale_loc;
+      dx_max[idim] = dx_min[idim];
+      continue;
+    }
+    amrex::Real dmin = std::numeric_limits<amrex::Real>::max();
+    amrex::Real dmax = 0.0;
+    for (int i = 0; i < a_tp.npboxcells[idim]; ++i) {
+      const amrex::Real d = a_tp.map.dx_phys_cc(
+        idim, i, a_tp.map_xi_lo[idim], a_tp.map_xi_hi[idim], a_tp.dx[idim]);
+      dmin = amrex::min(dmin, d);
+      dmax = amrex::max(dmax, d);
+    }
+    dx_min[idim] = dmin / a_tp.turb_scale_loc;
+    dx_max[idim] = dmax / a_tp.turb_scale_loc;
+  }
+}
+
+bool
+TurbInflow::file_transverse_dx(
+  const int dir,
+  const amrex::Orientation::Side& side,
+  amrex::Real& dx_tdir1,
+  amrex::Real& dx_tdir2) const
+{
+  const TurbParm* tpn = find_turbparm(dir, side);
+  if (tpn == nullptr) {
+    return false;
+  }
+  if (!tpn->has_map) {
+    // tp.dx lives in turb-file units; queried coordinates are multiplied
+    // by turb_scale_loc before the lookup, so the equivalent spacing in
+    // case units is dx / turb_scale_loc.
+    dx_tdir1 = tpn->dx[0] / tpn->turb_scale_loc;
+    dx_tdir2 = tpn->dx[1] / tpn->turb_scale_loc;
+    return true;
+  }
+  // Mean physical spacing: the file's physical transverse extent over its
+  // interior cell count.
+  amrex::Real mean[2];
+  for (int idim = 0; idim < 2; ++idim) {
+    const amrex::Real xlo = tpn->map.x_phys_from_xi(
+      idim, tpn->map_xi_lo[idim], tpn->map_xi_lo[idim], tpn->map_xi_hi[idim]);
+    const amrex::Real xhi = tpn->map.x_phys_from_xi(
+      idim, tpn->map_xi_hi[idim], tpn->map_xi_lo[idim], tpn->map_xi_hi[idim]);
+    mean[idim] = (xhi - xlo) / static_cast<amrex::Real>(tpn->npboxcells[idim]) /
+                 tpn->turb_scale_loc;
+  }
+  dx_tdir1 = mean[0];
+  dx_tdir2 = mean[1];
+  return true;
+}
+
+const TurbParm*
+TurbInflow::find_turbparm(
+  const int dir, const amrex::Orientation::Side& side) const
+{
+  auto it =
+    std::find_if(tp.begin(), tp.end(), [dir, side](const TurbParm& tpn) {
+      return tpn.dir == dir && tpn.side == side;
+    });
+  return (it != tp.end()) ? &(*it) : nullptr;
+}
+
+bool
+TurbInflow::file_transverse_dx_range(
+  const int dir,
+  const amrex::Orientation::Side& side,
+  amrex::Real dx_min[2],
+  amrex::Real dx_max[2]) const
+{
+  const TurbParm* tpn = find_turbparm(dir, side);
+  if (tpn == nullptr) {
+    return false;
+  }
+  transverse_dx_range(*tpn, dx_min, dx_max);
+  return true;
+}
+
+int
+TurbInflow::file_map(
+  const int dir,
+  const amrex::Orientation::Side& side,
+  pele::physics::MeshMapEvaluator& map,
+  amrex::Real xi_lo[2],
+  amrex::Real xi_hi[2]) const
+{
+  const TurbParm* tpn = find_turbparm(dir, side);
+  if (tpn == nullptr) {
+    return -1;
+  }
+  if (!tpn->has_map) {
+    return 0;
+  }
+  map = tpn->map;
+  xi_lo[0] = tpn->map_xi_lo[0];
+  xi_lo[1] = tpn->map_xi_lo[1];
+  xi_hi[0] = tpn->map_xi_hi[0];
+  xi_hi[1] = tpn->map_xi_hi[1];
+  return 1;
 }
 
 void
@@ -168,18 +461,61 @@ TurbInflow::add_turb(
 {
   AMREX_ALWAYS_ASSERT(turbinflow_initialized);
 
+  // Uniform grid: cell-centre positions are affine in the index.  Build
+  // them and defer to the coordinate-based overload so that there is only
+  // one copy of the interpolation logic.
+  int tdir1 = 0;
+  int tdir2 = 0;
+  transverseDirs(dir, tdir1, tdir2);
+
+  amrex::Vector<amrex::Real> x(bx.length(tdir1));
+  amrex::Vector<amrex::Real> y(bx.length(tdir2));
+  for (int i = 0; i < static_cast<int>(x.size()); ++i) {
+    const int idx = bx.smallEnd(tdir1) + i;
+    x[i] = geom.ProbLo()[tdir1] +
+           (static_cast<amrex::Real>(idx) + 0.5) * geom.CellSize(tdir1);
+  }
+  for (int j = 0; j < static_cast<int>(y.size()); ++j) {
+    const int idx = bx.smallEnd(tdir2) + j;
+    y[j] = geom.ProbLo()[tdir2] +
+           (static_cast<amrex::Real>(idx) + 0.5) * geom.CellSize(tdir2);
+  }
+
+  add_turb(bx, data, dcomp, geom.Domain(), x, y, time, dir, side);
+}
+
+void
+TurbInflow::add_turb(
+  amrex::Box const& bx,
+  amrex::FArrayBox& data,
+  const int dcomp,
+  amrex::Box const& domain,
+  const amrex::Vector<amrex::Real>& x_phys,
+  const amrex::Vector<amrex::Real>& y_phys,
+  const amrex::Real time,
+  const int dir,
+  const amrex::Orientation::Side& side)
+{
+  AMREX_ALWAYS_ASSERT(turbinflow_initialized);
+
   // Box on which we will access data
   amrex::Box bvalsBox = bx;
   int planeLoc =
-    (side == amrex::Orientation::low ? geom.Domain().smallEnd()[dir] - 1
-                                     : geom.Domain().bigEnd()[dir] + 1);
+    (side == amrex::Orientation::low ? domain.smallEnd()[dir] - 1
+                                     : domain.bigEnd()[dir] + 1);
   bvalsBox.setSmall(dir, planeLoc);
   bvalsBox.setBig(dir, planeLoc);
 
   // Define box that we will fill with turb: need to be z-normal
   // Get transverse directions
-  int tdir1 = (dir != 0) ? 0 : 1;
-  int tdir2 = (dir != 0) ? ((dir == 2) ? 1 : 2) : 2;
+  int tdir1 = 0;
+  int tdir2 = 0;
+  transverseDirs(dir, tdir1, tdir2);
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+    static_cast<int>(x_phys.size()) == bvalsBox.length(tdir1) &&
+      static_cast<int>(y_phys.size()) == bvalsBox.length(tdir2),
+    "TurbInflow::add_turb(): supplied coordinate vectors must span the "
+    "transverse extents of bx");
   int tr1Lo = bvalsBox.smallEnd()[tdir1];
   int tr1Hi = bvalsBox.bigEnd()[tdir1];
   int tr2Lo = bvalsBox.smallEnd()[tdir2];
@@ -195,17 +531,17 @@ TurbInflow::add_turb(
 
     if (tpn.dir == dir && tpn.side == side) {
 
-      // 0 and 1 are the two transverse directions
+      // 0 and 1 are the two transverse directions.  turb_scale_loc is a
+      // per-TurbParm quantity, so the scaling is applied here rather than
+      // once by the caller.  For a mesh-mapped file the scaled physical
+      // position is then inverted through the file's map into the
+      // precursor's Xi coordinate, which is what indexes the file.
       amrex::Vector<amrex::Real> x(turbBox.size()[0]), y(turbBox.size()[1]);
-      for (int i = turbBox.smallEnd()[0]; i <= turbBox.bigEnd()[0]; ++i) {
-        x[i - turbBox.smallEnd()[0]] =
-          (geom.ProbLo()[tdir1] + (i + 0.5) * geom.CellSize(tdir1)) *
-          tpn.turb_scale_loc;
+      for (int i = 0; i < static_cast<int>(x.size()); ++i) {
+        x[i] = file_coordinate(tpn, 0, x_phys[i] * tpn.turb_scale_loc);
       }
-      for (int j = turbBox.smallEnd()[1]; j <= turbBox.bigEnd()[1]; ++j) {
-        y[j - turbBox.smallEnd()[1]] =
-          (geom.ProbLo()[tdir2] + (j + 0.5) * geom.CellSize(tdir2)) *
-          tpn.turb_scale_loc;
+      for (int j = 0; j < static_cast<int>(y.size()); ++j) {
+        y[j] = file_coordinate(tpn, 1, y_phys[j] * tpn.turb_scale_loc);
       }
 
       // Get the turbulence
@@ -225,6 +561,50 @@ TurbInflow::add_turb(
 
   // Moving it into data
   set_turb(dir, tdir1, tdir2, v, data, dcomp);
+}
+
+amrex::Real
+TurbInflow::file_coordinate(
+  const TurbParm& a_tp, int idim, amrex::Real x_file_phys)
+{
+  if (!a_tp.has_map) {
+    return x_file_phys;
+  }
+  const amrex::Real xi_lo = a_tp.map_xi_lo[idim];
+  const amrex::Real xi_hi = a_tp.map_xi_hi[idim];
+  const amrex::Real x_lo = a_tp.map.x_phys_from_xi(idim, xi_lo, xi_lo, xi_hi);
+  const amrex::Real x_hi = a_tp.map.x_phys_from_xi(idim, xi_hi, xi_lo, xi_hi);
+
+  amrex::Real x = x_file_phys;
+  if (a_tp.tile_periodic && a_tp.periodicity[idim] != 0) {
+    // Tiled: bring x into the file's physical period before inverting.
+    // The inverse clamps to [x_lo, x_hi], which would otherwise collapse
+    // every tiled copy onto the edge of the file.
+    const amrex::Real period = x_hi - x_lo;
+    x -= std::floor((x - x_lo) / period) * period;
+  } else if (x < x_lo || x >= x_hi) {
+    // Outside the file's physical extent.  A physically-uniform file leaves
+    // such positions unfilled (fill_turb_plane's range test); keep that
+    // behaviour rather than let the clamped inverse pin them to the edge
+    // row, by returning a Xi coordinate that is outside the box whatever
+    // turb_center shifted pboxlo to (|shift| <= pboxsize/2).
+    const amrex::Real away = a_tp.pboxsize[idim];
+    return (x < x_lo) ? xi_lo - away : xi_hi + away;
+  }
+
+  amrex::Real xi = a_tp.map.xi_from_x_phys(idim, x, xi_lo, xi_hi);
+
+  // When the target's map and Xi grid coincide with the file's, xi lands on
+  // a file cell centre up to the round-off of the inverse (log/atanh, or
+  // the Newton tolerance for InteriorStretch).  Snap it so that the
+  // interpolation weights collapse exactly and the same-map case
+  // reproduces the file bit for bit.
+  const amrex::Real idx = (xi - a_tp.pboxlo[idim]) * a_tp.dxinv[idim] + 0.5;
+  const amrex::Real idx_round = std::round(idx);
+  if (std::abs(idx - idx_round) < amrex::Real(1.0e-8)) {
+    xi = a_tp.pboxlo[idim] + (idx_round - 0.5) * a_tp.dx[idim];
+  }
+  return xi;
 }
 
 void

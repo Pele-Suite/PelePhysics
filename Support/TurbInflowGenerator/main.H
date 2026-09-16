@@ -2,12 +2,14 @@
 #define _MAIN_H
 #include <string>
 #include <iostream>
+#include <iomanip>
 
 #include "AMReX_ParmParse.H"
 #include <AMReX_ParallelDescriptor.H>
 #include <AMReX_FArrayBox.H>
 
 #include "PltFileManager.H"
+#include <MeshMapEvaluatorInputs.H>
 
 AMREX_ENUM(InputType, turb_box, diag_frame_planes, periodic_plt);
 
@@ -17,6 +19,20 @@ turbinflow_from_diag_frame_planes(std::ofstream& ifsd, std::ofstream& ifsh);
 void turbinflow_from_periodic_plt(std::ofstream& ifsd, std::ofstream& ifsh);
 
 void turbinflow_from_turb_box(std::ofstream& ifsd, std::ofstream& ifsh);
+
+/**
+ * Append the MESHMAP_V2 trailer to HDR when the inputs carry a
+ * geometry.mesh_mapping block (the precursor's, copied verbatim), so that
+ * the file is tagged as uniform in the precursor's computational (Xi)
+ * coordinate.  \p probDomain is the plotfile's (Xi-space) problem domain and
+ * \p dim_map the plotfile axes that become the file's transverse directions
+ * 0 and 1 and its normal 2.  Writes nothing without a mapping.  Must be the
+ * last thing written to HDR.
+ */
+void write_meshmap_trailer(
+  std::ofstream& ifsh,
+  const amrex::RealBox& probDomain,
+  const amrex::IntVect& dim_map);
 
 amrex::IntVect index_mapper(
   const amrex::IntVect& idx_in,

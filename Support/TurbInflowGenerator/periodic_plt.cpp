@@ -95,8 +95,10 @@ turbinflow_from_periodic_plt(std::ofstream& ifsd, std::ofstream& ifsh)
   dx[0] = planeSize[0] / bg[0];
   dx[1] = planeSize[1] / bg[1];
   dx[2] = planeSize[2] / bg[2];
-  ifsh << planeSize[0] + 2 * dx[0] << ' ' << planeSize[1] + 2 * dx[1] << ' '
-       << planeSize[2] << '\n';
+  // Full precision: TurbInflow derives the file's spacing from these, and
+  // for a mesh-mapped file they must agree with the trailer's Xi bounds.
+  ifsh << std::setprecision(17) << planeSize[0] + 2 * dx[0] << ' '
+       << planeSize[1] + 2 * dx[1] << ' ' << planeSize[2] << '\n';
   ifsh << perio[dim_map[0]] << ' ' << perio[dim_map[1]] << ' ' << 1 << '\n';
 
   IntVect periodicity{perio[0], perio[1], perio[2]};
@@ -134,4 +136,8 @@ turbinflow_from_periodic_plt(std::ofstream& ifsd, std::ofstream& ifsh)
     }
     std::cout << "done" << std::endl;
   }
+
+  // Optional mesh-mapping trailer; must come after the plane offsets (this
+  // mode writes no plane times).
+  write_meshmap_trailer(ifsh, probDomain, dim_map);
 }
