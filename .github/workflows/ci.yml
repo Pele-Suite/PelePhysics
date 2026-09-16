@@ -100,10 +100,38 @@ jobs:
         run: poetry run flake8 .
       - name: Run tests
         run: poetry run pytest
-      - name: Convert air mechanism
-        run: poetry run convert -f ${{github.workspace}}/Mechanisms/air/mechanism.yaml
-      - name: Convert LiDryer mechanism
-        run: poetry run convert -f ${{github.workspace}}/Mechanisms/LiDryer/mechanism.yaml
+      - name: Convert regular mechanisms
+        continue-on-error: true
+        run: |
+          if [ "${{matrix.python-version}}" == '3.10' ]; then
+            poetry run convert -l ${{github.workspace}}/Mechanisms/list_mech
+            # Fail if there are diffs to the committed mechanisms
+            git diff --exit-code
+            # Also fail if there are any uncommitted or untracked changes
+            if [ -n "$(git status --porcelain=v1)" ]; then
+              echo "Uncommitted changes (including untracked files) detected after mechanism conversion:"
+              git status
+              exit 1
+            fi
+          else
+            poetry run convert -f ${{github.workspace}}/Mechanisms/air/mechanism.yaml
+            poetry run convert -f ${{github.workspace}}/Mechanisms/LiDryer/mechanism.yaml
+          fi
+      - name: Convert QSS mechanisms
+        continue-on-error: true
+        run: |
+          if [ "${{matrix.python-version}}" == '3.10' ]; then
+            poetry run qssa -lq ${{github.workspace}}/Mechanisms/list_qss_mech
+            poetry run convert -lq ${{github.workspace}}/Mechanisms/list_qss_mech
+            # Fail if there are diffs to the committed mechanisms
+            git diff --exit-code
+            # Also fail if there are any uncommitted or untracked changes
+            if [ -n "$(git status --porcelain=v1)" ]; then
+              echo "Uncommitted changes (including untracked files) detected after mechanism conversion:"
+              git status
+              exit 1
+            fi
+          fi
 
   Transport-EOS-Reactions:
     needs: Detect-Changes
