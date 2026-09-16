@@ -98,7 +98,7 @@ class Converter:
                 raise ValueError("Provided plog_pressure too low.")
 
             # Now, create the pressure-specific folder
-            plog_folder = f"{plog_pressure/cc.Patm_pa:0.3f}atm".replace(".", "_")
+            plog_folder = f"{plog_pressure / cc.Patm_pa:0.3f}atm".replace(".", "_")
             if not os.path.isdir(self.mechpath.parents[0] / plog_folder):
                 os.makedirs(self.mechpath.parents[0] / plog_folder)
                 # Copy the Make.package file into the new folder
@@ -751,7 +751,7 @@ class Converter:
             all_species_list += self.interface.species_names
             for elem in self.interface.element_names:
                 if elem not in self.mechanism.element_names:
-                    cw.writer(fstream, f"{n_hom_b_elem+n_het_b_elem}  {elem}")
+                    cw.writer(fstream, f"{n_hom_b_elem + n_het_b_elem}  {elem}")
                     n_het_b_elem += 1
         cw.writer(fstream, "*/")
         cw.writer(fstream)

@@ -4,8 +4,8 @@ import pathlib
 
 import cantera as ct
 
-import ceptr.converter as converter
 from ceptr import __version__
+import ceptr.converter as converter
 
 
 def mechanism_path(mname):
@@ -52,5 +52,17 @@ def test_dodecane_lu():
     interface = None
     chemistry = "homogeneous"
     conv = converter.Converter(mechanism, interface, chemistry)
+    conv.writer()
+    conv.formatter()
+
+
+def test_polimi2020():
+    """Test mechanism generation of POLIMI2020 at 1 atm."""
+    mech_path = mechanism_path("POLIMI2020")
+    fname = mech_path / "mechanism.yaml"
+    mechanism = ct.Solution(fname)
+    interface = None
+    chemistry = "homogeneous"
+    conv = converter.Converter(mechanism, interface, chemistry, plog_pressure=101325.0)
     conv.writer()
     conv.formatter()

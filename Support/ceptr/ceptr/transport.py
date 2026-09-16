@@ -421,9 +421,9 @@ def viscosity(fstream, mechanism, species_info, species_transport, ntfit):
             cv_trans_r = 3.0 / 2.0
             f_trans = 5.0 / 2.0 * (1.0 - 2.0 / np.pi * a / b * cv_rot_r / cv_trans_r)
             if int(species_transport[spec][0]) == 0:
-                cond = ((visc * ru / spec.weight)) * (5.0 / 2.0) * cv_trans_r
+                cond = (visc * ru / spec.weight) * (5.0 / 2.0) * cv_trans_r
             else:
-                cond = ((visc * ru / spec.weight)) * (
+                cond = (visc * ru / spec.weight) * (
                     f_trans * cv_trans_r + f_rot * cv_rot_r + f_vib * cv_vib_r
                 )
 
@@ -578,7 +578,7 @@ def diffcoefs(fstream, species_info, species_transport, ntfit):
             for k in range(4):
                 cw.writer(
                     fstream,
-                    f"{'COFD'}[{int(4 * (i*(i + 1)/2 + j) + k)}]"
+                    f"{'COFD'}[{int(4 * (i * (i + 1) / 2 + j) + k)}]"
                     f" = {cofd[i][j][3 - k]:.8E};",
                 )
 
@@ -1578,8 +1578,8 @@ def f_corr(t, eps_k):
     return (
         1
         + np.pi ** (thtwo) / 2.0 * np.sqrt((eps_k / t))
-        + (np.pi**2 / 4.0 + 2.0) * ((eps_k / t))
-        + ((np.pi * eps_k / t)) ** (thtwo)
+        + (np.pi**2 / 4.0 + 2.0) * (eps_k / t)
+        + (np.pi * eps_k / t) ** (thtwo)
     )
 
 

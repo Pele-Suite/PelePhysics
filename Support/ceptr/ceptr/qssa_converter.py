@@ -1,7 +1,7 @@
 """QSSA functions needed for conversion."""
 
-import copy
 from collections import Counter, OrderedDict, defaultdict
+import copy
 from math import isclose
 
 import numpy as np
@@ -1639,7 +1639,7 @@ def qssa_coeff_functions(fstream, mechanism, species_info, reaction_info, syms):
             cw.writer(
                 fstream,
                 f"const amrex::Real redP = Corr / k_f[{idx}] *"
-                f" {10 ** (-dim * 6) * low_pef.m * 10 ** 3 ** dim:.15g} ",
+                f" {10 ** (-dim * 6) * low_pef.m * 10**3**dim:.15g} ",
             )
             coeff = 10 ** (-dim * 6) * low_pef.m * 10 ** (3**dim)
             redp_smp = corr_smp / syms.kf_qss_smp[idx] * coeff
@@ -2056,7 +2056,7 @@ def qssa_component_functions(
                     f" exp(-({(1.0 / cc.Rc / cc.ureg.kelvin * ae).m:.15g}) *"
                     " invT);",
                 )
-                coeff = (((1.0 / cc.Rc / cc.ureg.kelvin)) * ae).magnitude
+                coeff = ((1.0 / cc.Rc / cc.ureg.kelvin) * ae).magnitude
                 syms.kf_qss_smp_tmp[index] *= sme.exp(-coeff * syms.invT_smp)
 
             else:
@@ -2065,7 +2065,7 @@ def qssa_component_functions(
                     f"           * exp(({beta:.15g}) * logT -"
                     f" ({(1.0 / cc.Rc / cc.ureg.kelvin * ae).m:.15g}) * invT);",
                 )
-                coeff = (((1.0 / cc.Rc / cc.ureg.kelvin)) * ae).magnitude
+                coeff = ((1.0 / cc.Rc / cc.ureg.kelvin) * ae).magnitude
                 syms.kf_qss_smp_tmp[index] *= sme.exp(
                     beta * syms.logT_smp - coeff * syms.invT_smp
                 )
@@ -2139,7 +2139,7 @@ def qssa_component_functions(
                         cw.writer(
                             fstream,
                             "                   "
-                            f" {' '.join(long_line_elements[kk:kk + 7])};",
+                            f" {' '.join(long_line_elements[kk : kk + 7])};",
                         )
                     # if there are 7 elems we are ...
                     else:
@@ -2148,14 +2148,14 @@ def qssa_component_functions(
                             cw.writer(
                                 fstream,
                                 "                   "
-                                f" {' '.join(long_line_elements[kk:kk + 7])}",
+                                f" {' '.join(long_line_elements[kk : kk + 7])}",
                             )
                         # or at the end but list number was a multiple of 7
                         else:
                             cw.writer(
                                 fstream,
                                 "                   "
-                                f" {' '.join(long_line_elements[kk:kk + 7])};",
+                                f" {' '.join(long_line_elements[kk : kk + 7])};",
                             )
             # if we have less than 7 elements just write them
             else:
@@ -2249,7 +2249,7 @@ def qssa_component_functions(
                             cw.writer(
                                 fstream,
                                 "                   "
-                                f" {' '.join(long_line_elements[kk:kk + 7])};",
+                                f" {' '.join(long_line_elements[kk : kk + 7])};",
                             )
                         # if there are 7 elems we are ...
                         else:
@@ -2258,14 +2258,14 @@ def qssa_component_functions(
                                 cw.writer(
                                     fstream,
                                     "                   "
-                                    f" {' '.join(long_line_elements[kk:kk + 7])}",
+                                    f" {' '.join(long_line_elements[kk : kk + 7])}",
                                 )
                             # or at the end but list number was a multiple of 7
                             else:
                                 cw.writer(
                                     fstream,
                                     "                   "
-                                    f" {' '.join(long_line_elements[kk:kk + 7])};",
+                                    f" {' '.join(long_line_elements[kk : kk + 7])};",
                                 )
                 # if we have less than 7 elements just write them
                 else:
@@ -2297,7 +2297,7 @@ def qssa_component_functions(
                             cw.writer(
                                 fstream,
                                 "                   "
-                                f" {' '.join(long_line_elements[kk:kk + 7])};",
+                                f" {' '.join(long_line_elements[kk : kk + 7])};",
                             )
                         # if there are 7 elems we are ...
                         else:
@@ -2306,14 +2306,14 @@ def qssa_component_functions(
                                 cw.writer(
                                     fstream,
                                     "                   "
-                                    f" {' '.join(long_line_elements[kk:kk + 7])}",
+                                    f" {' '.join(long_line_elements[kk : kk + 7])}",
                                 )
                             # or at the end but list number was a multiple of 7
                             else:
                                 cw.writer(
                                     fstream,
                                     "                   "
-                                    f" {' '.join(long_line_elements[kk:kk + 7])};",
+                                    f" {' '.join(long_line_elements[kk : kk + 7])};",
                                 )
                 # if we have less than 7 elements just write them
                 else:
@@ -2466,7 +2466,7 @@ def qssa_component_functions(
                             cw.writer(
                                 fstream,
                                 "                   "
-                                f" {' '.join(long_line_elements[kk:kk + 4])};",
+                                f" {' '.join(long_line_elements[kk : kk + 4])};",
                             )
                         # if there are 4 elems we are ...
                         else:
@@ -2475,14 +2475,14 @@ def qssa_component_functions(
                                 cw.writer(
                                     fstream,
                                     "                   "
-                                    f" {' '.join(long_line_elements[kk:kk + 4])}",
+                                    f" {' '.join(long_line_elements[kk : kk + 4])}",
                                 )
                             # or at the end but list number was a multiple of 4
                             else:
                                 cw.writer(
                                     fstream,
                                     "                   "
-                                    f" {' '.join(long_line_elements[kk:kk + 4])};",
+                                    f" {' '.join(long_line_elements[kk : kk + 4])};",
                                 )
                 # if we have less than 4 elements just write them
                 else:

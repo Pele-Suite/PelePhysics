@@ -1,7 +1,7 @@
 """Symbolic math for symbolic differentiation."""
 
-import re
 from collections import OrderedDict
+import re
 
 import pandas as pd
 import symengine as sme
@@ -457,7 +457,9 @@ class SymbolicMath:
         final_expr_symbols = [expr.free_symbols for expr in final_expr]
 
         # Replacement loop
-        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs)):
+        for i, (lhs, rhs) in enumerate(
+            zip(common_expr_lhs, common_expr_rhs, strict=False)
+        ):
             op_count = sme.count_ops(rhs)
             is_float = True
             is_single_symbol = True
@@ -508,7 +510,9 @@ class SymbolicMath:
         final_expr_symbols = [expr.free_symbols for expr in final_expr]
 
         # Replacement loop
-        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs)):
+        for i, (lhs, rhs) in enumerate(
+            zip(common_expr_lhs, common_expr_rhs, strict=False)
+        ):
             op_count = sme.count_ops(rhs)
             # count how many times the expression is used later
             ind_rhs = [j + i for j, s in enumerate(common_expr_symbols[i:]) if lhs in s]
@@ -566,7 +570,9 @@ class SymbolicMath:
         final_expr_symbols = [expr.free_symbols for expr in final_expr]
 
         # Replacement loop
-        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs)):
+        for i, (lhs, rhs) in enumerate(
+            zip(common_expr_lhs, common_expr_rhs, strict=False)
+        ):
             op_count = sme.count_ops(rhs)
             is_float = True
             try:
@@ -614,7 +620,7 @@ class SymbolicMath:
 
         # Replacement loop
         for i, (lhs, rhs) in reversed(
-            list(enumerate(zip(common_expr_lhs, common_expr_rhs)))
+            list(enumerate(zip(common_expr_lhs, common_expr_rhs, strict=False)))
         ):
             op_count = sme.count_ops(rhs)
             is_float = True
@@ -813,13 +819,13 @@ class SymbolicMath:
                     scqssdepnum = self.syms_to_specnum(scqss_dep)
                     chain_string.append(
                         f"""dscqss{item["number"]}dscqss{scqssdepnum} * """
-                        f"""dscqss_dsc[{species_info.n_species*scqssdepnum + scnum}]"""
+                        f"""dscqss_dsc[{species_info.n_species * scqssdepnum + scnum}]"""
                     )
 
                 if chain_string:
                     final_string = f"{start_string} + {chain_string[0]}"
                     for ics in range(len(chain_string) - 1):
-                        final_string += f" + {chain_string[ics+1]}"
+                        final_string += f" + {chain_string[ics + 1]}"
                 else:
                     final_string = start_string
 
@@ -943,13 +949,13 @@ class SymbolicMath:
                     scqssdepnum = self.syms_to_specnum(scqss_dep)
                     chain_string.append(
                         f"""dscqss{item["number"]}dscqss{scqssdepnum} * """
-                        f"""dscqss_dsc[{species_info.n_species*scqssdepnum + scnum}]"""
+                        f"""dscqss_dsc[{species_info.n_species * scqssdepnum + scnum}]"""
                     )
 
                 if chain_string:
                     final_string = f"{start_string} + {chain_string[0]}"
                     for ics in range(len(chain_string) - 1):
-                        final_string += f" + {chain_string[ics+1]}"
+                        final_string += f" + {chain_string[ics + 1]}"
                 else:
                     final_string = start_string
 
@@ -969,12 +975,12 @@ class SymbolicMath:
                 for scqssnum in species_info.scqss_df["number"]:
                     chain_string.append(
                         f"""dwdot{idx}dscqss{scqssnum} * """
-                        f"""dscqss_dsc[{species_info.n_species*scqssnum + scnum}]"""
+                        f"""dscqss_dsc[{species_info.n_species * scqssnum + scnum}]"""
                     )
 
                 final_string = f"{start_string} + {chain_string[0]}"
                 for ics in range(len(chain_string) - 1):
-                    final_string += f" + {chain_string[ics+1]}"
+                    final_string += f" + {chain_string[ics + 1]}"
 
                 cw.writer(
                     fstream,
@@ -1103,7 +1109,7 @@ class SymbolicMath:
                 if chain_string:
                     final_string = f"""{start_string} + {chain_string[0]}"""
                     for ics in range(len(chain_string) - 1):
-                        final_string += f""" + {chain_string[ics+1]}"""
+                        final_string += f""" + {chain_string[ics + 1]}"""
                 else:
                     final_string = start_string
                 dscqss_dsc[dscqss_dsc_idx] = final_string
@@ -1143,7 +1149,7 @@ class SymbolicMath:
                 if chain_string:
                     final_string = f"""{start_string}+{chain_string[0]}"""
                     for ics in range(len(chain_string) - 1):
-                        final_string += f"""+{chain_string[ics+1]}"""
+                        final_string += f"""+{chain_string[ics + 1]}"""
                 else:
                     final_string = start_string
 

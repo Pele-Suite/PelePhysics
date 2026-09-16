@@ -317,7 +317,7 @@ def production_rate(
                 cw.writer(
                     fstream,
                     "redP = Corr / k_f *"
-                    f" {10 ** (-dim * 6) * low_pef.m * 10 ** 3 ** dim:.15g} ",
+                    f" {10 ** (-dim * 6) * low_pef.m * 10**3**dim:.15g} ",
                 )
                 if (low_beta == 0) and (low_ae.m == 0):
                     cw.writer(
@@ -691,7 +691,7 @@ def production_rate(
                         f" exp(-({(1.0 / cc.Rc / cc.ureg.kelvin * ae).m:.15g})"
                         " * invT);",
                     )
-                    coeff = (((1.0 / cc.Rc / cc.ureg.kelvin)) * ae).magnitude
+                    coeff = ((1.0 / cc.Rc / cc.ureg.kelvin) * ae).magnitude
                     k_f_smp *= sme.exp(-coeff * syms.invT_smp)
                 else:
                     cw.writer(
@@ -700,7 +700,7 @@ def production_rate(
                         f" ({(1.0 / cc.Rc / cc.ureg.kelvin * ae).m:.15g})"
                         " * invT);",
                     )
-                    coeff = ((1.0 / cc.Rc / cc.ureg.kelvin)) * ae
+                    coeff = (1.0 / cc.Rc / cc.ureg.kelvin) * ae
                     k_f_smp *= sme.exp(beta * syms.logT_smp - coeff * syms.invT_smp)
 
             alpha = None
@@ -740,7 +740,7 @@ def production_rate(
                 cw.writer(
                     fstream,
                     "const amrex::Real redP = Corr / k_f *"
-                    f" {10 ** (-dim * 6) * low_pef.m * 10 ** 3 ** dim:.15g} ",
+                    f" {10 ** (-dim * 6) * low_pef.m * 10**3**dim:.15g} ",
                 )
                 redp_smp = (
                     corr_smp / k_f_smp * (10 ** (-dim * 6) * low_pef.m * 10 ** (3**dim))
@@ -983,9 +983,9 @@ def production_rate(
                 key=lambda v, dict_species=dict_species: dict_species[v[0]],
             )
             # Check for duplicates
-            assert len(agents) == len(
-                set(agents)
-            ), f"Reaction {reaction} contains duplicate agents"
+            assert len(agents) == len(set(agents)), (
+                f"Reaction {reaction} contains duplicate agents"
+            )
             # note that a species might appear as both reactant and product
             # a species might also appear twice or more on on each side
             # agents is a set that contains unique (symbol, coefficient)
@@ -999,9 +999,9 @@ def production_rate(
                                 f"wdot[{species_info.ordered_idx_map[symbol]}]"
                                 " -= qdot;",
                             )
-                            syms.wdot_smp[
-                                species_info.ordered_idx_map[symbol]
-                            ] -= qdot_smp
+                            syms.wdot_smp[species_info.ordered_idx_map[symbol]] -= (
+                                qdot_smp
+                            )
                         else:
                             cw.writer(
                                 fstream,
@@ -1020,9 +1020,9 @@ def production_rate(
                                 f"wdot[{species_info.ordered_idx_map[symbol]}]"
                                 " += qdot;",
                             )
-                            syms.wdot_smp[
-                                species_info.ordered_idx_map[symbol]
-                            ] += qdot_smp
+                            syms.wdot_smp[species_info.ordered_idx_map[symbol]] += (
+                                qdot_smp
+                            )
                         else:
                             cw.writer(
                                 fstream,
@@ -1285,7 +1285,7 @@ def production_rate_light(fstream, mechanism, species_info, reaction_info):
                 cw.writer(
                     fstream,
                     "const amrex::Real redP = Corr / k_f *"
-                    f" {10 ** (-dim * 6) * low_pef.m * 10 ** 3 ** dim:.15g} ",
+                    f" {10 ** (-dim * 6) * low_pef.m * 10**3**dim:.15g} ",
                 )
                 cw.writer(
                     fstream,
@@ -1444,9 +1444,9 @@ def production_rate_light(fstream, mechanism, species_info, reaction_info):
                 key=lambda v, dict_species=dict_species: dict_species[v[0]],
             )
             # Check for duplicates
-            assert len(agents) == len(
-                set(agents)
-            ), f"Reaction {reaction} contains duplicate agents"
+            assert len(agents) == len(set(agents)), (
+                f"Reaction {reaction} contains duplicate agents"
+            )
             # note that a species might appear as both reactant and product
             # a species might also appear twice or more on on each side
             # agents is a set that contains unique (symbol, coefficient)
