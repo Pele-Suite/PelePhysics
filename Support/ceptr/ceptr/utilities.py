@@ -35,20 +35,22 @@ def qss_sorted_phase_space(mechanism, species_info, reaction, reagents, syms=Non
     if reaction.third_body:
         if len(reaction.third_body.efficiencies) == 1:
             if isclose(reaction.third_body.default_efficiency, 0.0):
-                reagents = copy.deepcopy(
-                    dict(
-                        sum(
-                            (
-                                Counter(x)
-                                for x in [
-                                    reagents,
-                                    reaction.third_body.efficiencies,
-                                ]
-                            ),
-                            Counter(),
+                if not (reaction.rate.type == "falloff"):
+                    # Skip for third-body falloff reactions with single M
+                    reagents = copy.deepcopy(
+                        dict(
+                            sum(
+                                (
+                                    Counter(x)
+                                    for x in [
+                                        reagents,
+                                        reaction.third_body.efficiencies,
+                                    ]
+                                ),
+                                Counter(),
+                            )
                         )
                     )
-                )
     phi = []
     if record_symbolic_operations:
         phi_smp = []
@@ -416,6 +418,42 @@ def enhancement_d(mechanism, species_info, reaction, syms=None):
             return f"sc[{species_info.ordered_idx_map[species]}]"
 
     efficiencies = reaction.third_body.efficiencies
+
+    if (
+        falloff
+        and len(reaction.third_body.efficiencies) == 1
+        and isclose(reaction.third_body.default_efficiency, 0.0)
+    ):
+        alpha = []
+        if record_symbolic_operations:
+            alpha_smp = []
+        symbol = list(efficiencies.keys())[0]
+        efficiency = efficiencies[symbol]
+        if symbol not in species_info.qssa_species_list:
+            factor = f"( {efficiency:.15g})"
+            if record_symbolic_operations:
+                factor_smp = efficiency
+            if (efficiency) != 0:
+                conc = f"sc[{species_info.ordered_idx_map[symbol]}]"
+                if record_symbolic_operations:
+                    conc_smp = syms.sc_smp[species_info.ordered_idx_map[symbol]]
+                if (efficiency) == 1:
+                    alpha.append(f"{conc}")
+                    if record_symbolic_operations:
+                        alpha_smp.append(conc_smp)
+                else:
+                    alpha.append(f"{factor}*{conc}")
+                    if record_symbolic_operations:
+                        factor_smp = syms.convert_symb_to_int(factor_smp)
+                        alpha_smp.append(factor_smp * conc_smp)
+
+        if record_symbolic_operations:
+            enhancement_smp = 0.0 + alpha_smp[0]
+            enhancement_smp = syms.convert_symb_to_int(enhancement_smp)
+            return " + ".join(alpha).replace("+ -", "- "), enhancement_smp
+        else:
+            return " + ".join(alpha).replace("+ -", "- ")
+
     alpha = ["mixture"]
     if record_symbolic_operations:
         alpha_smp = [syms.mixture_smp]

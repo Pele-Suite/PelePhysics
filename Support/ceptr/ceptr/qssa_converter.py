@@ -2830,20 +2830,22 @@ def qssa_return_coeff(mechanism, species_info, reaction, reagents, syms):
     if reaction.third_body:
         if len(reaction.third_body.efficiencies) == 1:
             if isclose(reaction.third_body.default_efficiency, 0.0):
-                reagents = copy.deepcopy(
-                    dict(
-                        sum(
-                            (
-                                Counter(x)
-                                for x in [
-                                    reagents,
-                                    reaction.third_body.efficiencies,
-                                ]
-                            ),
-                            Counter(),
+                if not (reaction.rate.type == "falloff"):
+                    # Skip for third-body falloff reactions with single M
+                    reagents = copy.deepcopy(
+                        dict(
+                            sum(
+                                (
+                                    Counter(x)
+                                    for x in [
+                                        reagents,
+                                        reaction.third_body.efficiencies,
+                                    ]
+                                ),
+                                Counter(),
+                            )
                         )
                     )
-                )
 
     phi = []
     phi_smp = []

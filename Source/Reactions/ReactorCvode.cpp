@@ -1560,7 +1560,7 @@ ReactorCvode::react(
   BL_PROFILE_VAR_STOP(AsyncCopy);
 
 #ifdef AMREX_USE_OMP
-  Gpu::Device::streamSynchronize();
+  amrex::Gpu::Device::streamSynchronize();
 #endif
 
   // Setup tolerances with typical values
@@ -1583,7 +1583,7 @@ ReactorCvode::react(
 #endif
 
 #ifdef AMREX_USE_OMP
-  Gpu::Device::streamSynchronize();
+  amrex::Gpu::Device::streamSynchronize();
 #endif
 
   // Get the result back
