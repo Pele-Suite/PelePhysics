@@ -198,11 +198,22 @@ jobs:
       - name: Configure
         working-directory: PeleLMeX
         run: |
+          # clang-tidy only needs the compiler frontend (parsing/AST) to run;
+          # it never executes optimized code. Building at -O3 (the default
+          # under CMAKE_BUILD_TYPE=Release) has been observed to crash the
+          # clang++ 18.1.3 frontend (SIGSEGV, exit 139) inside LLVM's
+          # InstCombine pass on some AMReX submodule files (e.g.
+          # AMReX_EB_STL_utils.cpp, AMReX_EB2_Level_STL.cpp). Forcing -O0
+          # avoids invoking the optimizer entirely, sidestepping the crash,
+          # while CMAKE_BUILD_TYPE=Release is kept so NDEBUG/asserts stay
+          # consistent with the rest of the build.
           cmake -B"${{ github.workspace }}/build-clang-tidy-lmex" \
           -DCMAKE_BUILD_TYPE:STRING=Release \
           -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
           -DCMAKE_CXX_COMPILER:STRING=clang++ \
           -DCMAKE_C_COMPILER:STRING=clang \
+          -DCMAKE_C_FLAGS_RELEASE:STRING="-O0 -DNDEBUG" \
+          -DCMAKE_CXX_FLAGS_RELEASE:STRING="-O0 -DNDEBUG" \
           -DPELE_ENABLE_EB:BOOL=OFF \
           -DPELE_ENABLE_MPI:BOOL=OFF \
           -DPELE_ENABLE_FCOMPARE_FOR_TESTS:BOOL=OFF \
@@ -300,11 +311,21 @@ jobs:
       - name: Configure
         working-directory: PeleC
         run: |
+          # clang-tidy only needs the compiler frontend (parsing/AST) to run;
+          # it never executes optimized code. Building at -O3 (the default
+          # under CMAKE_BUILD_TYPE=Release) has been observed to crash the
+          # clang++ 18.1.3 frontend (SIGSEGV, exit 139) inside LLVM's
+          # InstCombine pass on some AMReX submodule files (e.g.
+          # AMReX_EB_STL_utils.cpp, AMReX_EB2_Level_STL.cpp). Forcing -O0
+          # avoids invoking the optimizer entirely, sidestepping the crash,
+          # while CMAKE_BUILD_TYPE=Release is kept so NDEBUG/asserts stay
+          # consistent with the rest of the build.
           cmake -B"${{ github.workspace }}/build-clang-tidy-c" \
           -DCMAKE_BUILD_TYPE:STRING=Release \
           -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
           -DCMAKE_CXX_COMPILER:STRING=clang++ \
           -DCMAKE_C_COMPILER:STRING=clang \
+          -DCMAKE_CXX_FLAGS:STRING=-O0 \
           -DPELE_ENABLE_MPI:BOOL=OFF \
           -DPELE_ENABLE_FCOMPARE_FOR_TESTS:BOOL=OFF \
           -DPELE_ENABLE_MASA:BOOL=OFF \
