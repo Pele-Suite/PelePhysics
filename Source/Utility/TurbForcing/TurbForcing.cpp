@@ -477,8 +477,9 @@ TurbForcing::addTurbVelForces(
   AMREX_ALWAYS_ASSERT(m_turbforcing_initialized);
 
   if (a_incompressible != 0 && a_rho_incompressible <= 0.0) {
-    amrex::Abort("rho_incompressible must be greater than 0 when "
-                 "incompressible\n");
+    amrex::Abort(
+      "rho_incompressible must be greater than 0 when "
+      "incompressible\n");
   }
 
   constexpr amrex::Real Pi = 3.14159265358979323846264338327950288;
