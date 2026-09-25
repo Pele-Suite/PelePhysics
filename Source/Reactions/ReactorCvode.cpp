@@ -317,7 +317,7 @@ ReactorCvode::initCvode(
     a_A = SUNSparseMatrix(
       neq_tot, neq_tot, (a_udata->NNZ) * a_udata->ncells, CSC_MAT,
       *amrex::sundials::The_Sundials_Context());
-    if (utils::check_flag(static_cast<void*>(A), "SUNSparseMatrix", 0))
+    if (utils::check_flag(static_cast<void*>(a_A), "SUNSparseMatrix", 0))
       return (1);
 
     // Create KLU solver object for use by CVode
@@ -397,20 +397,9 @@ ReactorCvode::initCvode(
     amrex::Abort("Wrong choice of linear solver");
   }
 
-  // Analytical Jac. data for direct solver
-  if (a_udata->analytical_jacobian == 1) {
-#ifdef PELE_CVODE_FORCE_YCORDER
-    if (a_udata->solve_type == cvode::denseDirect) {
-      // Set the user-supplied Jacobian routine Jac
-      flag = CVodeSetJacFn(a_cvode_mem, cvode::cJac);
-      if (utils::check_flag(&flag, "CVodeSetJacFn", 1) != 0) {
-        return (1);
-      }
-    }
-#else
-    amrex::Abort("analytical_jacobian only available with YCOrder");
-#endif
-  } else if (a_udata->solve_type == cvode::sparseDirect) {
+  // Analytical Jac. data for direct solver. The sparse solvers always use
+  // their analytical Jacobian, so check them before analytical_jacobian.
+  if (a_udata->solve_type == cvode::sparseDirect) {
 #if defined(PELE_USE_KLU) && defined(PELE_CVODE_FORCE_YCORDER)
     // Set the user-supplied KLU Jacobian routine Jac
     flag = CVodeSetJacFn(a_cvode_mem, cvode::cJac_KLU);
@@ -429,6 +418,18 @@ ReactorCvode::initCvode(
     }
 #else
     amrex::Abort("solve_type=custom_direct only available with YCOrder");
+#endif
+  } else if (a_udata->analytical_jacobian == 1) {
+#ifdef PELE_CVODE_FORCE_YCORDER
+    if (a_udata->solve_type == cvode::denseDirect) {
+      // Set the user-supplied Jacobian routine Jac
+      flag = CVodeSetJacFn(a_cvode_mem, cvode::cJac);
+      if (utils::check_flag(&flag, "CVodeSetJacFn", 1) != 0) {
+        return (1);
+      }
+    }
+#else
+    amrex::Abort("analytical_jacobian only available with YCOrder");
 #endif
   }
 
@@ -1776,7 +1777,6 @@ ReactorCvode::freeUserData(CVODEUserData* data_wk)
     delete[] data_wk->colPtrs;
     delete[] data_wk->rowVals;
     delete[] data_wk->Jdata;
-    SUNMatDestroy(A);
     SUNMatDestroy((data_wk->PS)[0]);
     delete[] (data_wk->PS);
 #endif
