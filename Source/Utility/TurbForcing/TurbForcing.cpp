@@ -622,8 +622,7 @@ TurbForcing::addTurbVelForces(
   amrex::Box ffbx(
     amrex::IntVect(AMREX_D_DECL(ff_ilo, ff_jlo, ff_klo)),
     amrex::IntVect(AMREX_D_DECL(ff_ihi, ff_jhi, ff_khi)));
-  // not sure if want elixir, gpu::sync, or async_arena here...
-  amrex::FArrayBox ff_force(ffbx, AMREX_SPACEDIM);
+  amrex::FArrayBox ff_force(ffbx, AMREX_SPACEDIM, amrex::The_Async_Arena());
   const auto& ffarr = ff_force.array();
 
   // Construct node-based coarse forcing
@@ -773,7 +772,7 @@ TurbForcing::addTurbVelForces(
     amrex::ParallelFor(
       bx, AMREX_SPACEDIM,
       [=, ff_factor = m_tfp.m_ff_factor,
-       rho =
+       a_rho =
          a_rho_incompressible] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
         const int ff_k = k / ff_factor;
         const int ff_j = j / ff_factor;
@@ -799,7 +798,7 @@ TurbForcing::addTurbVelForces(
         const amrex::Real ff = (ff00 * (1. - yd) + ff10 * yd) * (1. - zd) +
                                (ff01 * (1. - yd) + ff11 * yd) * zd;
 
-        force(i, j, k, n) += rho * ff;
+        force(i, j, k, n) += a_rho * ff;
       });
   }
 }
