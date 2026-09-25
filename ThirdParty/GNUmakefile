@@ -258,7 +258,7 @@ $(ONE_MAGMA_LIB_FILE): $(ONE_MAGMA_SRC_FILE)
         cmake --build $(MAGMA_BUILD_DIR) --parallel 10 && \
         cmake --install $(MAGMA_BUILD_DIR)
 
-$(ONE_MAGMA_SRC_FILE): $(MAGMA_DIST_DIR)/$(MAGMA_DIST_FILE)
+$(ONE_MAGMA_SRC_FILE): $(MAGMA_DIST_DIR)/$(MAGMA_DIST_FILE) $(MAGMA_PATCH_FILE)
 	@cd $(MAGMA_DIST_DIR)/..; tar xf $(MAGMA_DIST_DIR)/$(MAGMA_DIST_FILE)
 	$(if $(MAGMA_PATCH_FILE),cd $(MAGMA_SOURCE_DIR) && patch -p1 < $(MAGMA_PATCH_FILE))
 	@find $(MAGMA_SOURCE_DIR) -type f -exec touch {} +
