@@ -1127,11 +1127,10 @@ ReactorCvode::allocUserData(
       udata->csr_col_index_h, udata->csr_row_count_h, &HP, 1);
 
     amrex::Gpu::htod_memcpy(
-      &udata->csr_col_index_d, &udata->csr_col_index_h,
-      sizeof(udata->NNZ * sizeof(int)));
+      udata->csr_col_index_d, udata->csr_col_index_h, udata->NNZ * sizeof(int));
     amrex::Gpu::htod_memcpy(
-      &udata->csr_row_count_d, &udata->csr_row_count_h,
-      sizeof((NUM_SPECIES + 2) * sizeof(int)));
+      udata->csr_row_count_d, udata->csr_row_count_h,
+      (NUM_SPECIES + 2) * sizeof(int));
 
     size_t workspaceInBytes = 0;
     size_t internalDataInBytes = 0;
