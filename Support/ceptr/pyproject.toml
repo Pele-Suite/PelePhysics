@@ -5,31 +5,24 @@ description = ""
 authors = ["Marc Henry de Frahan <marc.henrydefrahan@nrel.gov>", "Lucas Esclapez", "Jon Rood", "Hari Sitaraman", "Marc Day", "Anne Felden", "Julia Ream", "Malik Hassanaly", "Nick Wimer"]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.12"
-Cantera = ">=3.1.0"
-Pint = "^0.23"
+python = ">=3.11,<3.15"
+Cantera = ">=3.2.0"
+Pint = "^0.24"
 PyYAML = "^6.0.1"
 networkx = "^2.8.8"
-matplotlib = "^3.7.2"
-scipy = "^1.11.2"
-numpy = "^1.25.2"
+matplotlib = "^3.10.0"
+scipy = "^1.16.1"
+numpy = "^2.3.0"
 sympy = "==1.14"
-symengine = "^0.9.2"
-pandas = ">=2.0.3"
+symengine = "^0.14.0"
+pandas = ">=2.3.3"
 toml = ">=0.10.2"
-pyarrow = "^15.0.0"
+pyarrow = ">=19.0.0"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.4.0"
-black = {version = "^24.3.0"}
-isort = "^5.12.0"
+pytest = "^8.0.0"
+ruff = "^0.9.0"
 ipython = "^8.14.0"
-flake8 = "^4.0.1"
-flake8-bugbear = "^22.12.6"
-pep8-naming = "^0.12.1"
-flake8-docstrings = "^1.7.0"
-flake8-use-fstring = "^1.4"
-flynt = "^0.77"
 clang-format = "==20.1.5"
 
 [build-system]
@@ -40,36 +33,37 @@ build-backend = "poetry.core.masonry.api"
 convert = "ceptr.ceptr:main"
 qssa = "ceptr.qssa:main"
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ['py310']
-preview = true
-include = '\.pyi?$'
-exclude = '''
+target-version = "py311"
+exclude = ["build"]
 
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-  )/
-)
-'''
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-line_length = 88
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "N", "D", "FLY", "C90", "I"]
+ignore = [
+    "E203",
+    "E302",
+    "E501",
+    "C901",
+    "D1",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.isort]
+known-first-party = ["ceptr"]
+force-sort-within-sections = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
 
 [tool.pytest.ini_options]
 filterwarnings = [

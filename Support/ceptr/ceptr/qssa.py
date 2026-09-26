@@ -150,7 +150,7 @@ def main():
     elif args.lst_qss:
         process_qss_lst(args.lst_qss, args.visualize, args.method)
     end = time.time()
-    print(f"CEPTR QSS run time: {end-start:.2f} s")
+    print(f"CEPTR QSS run time: {end - start:.2f} s")
 
 
 if __name__ == "__main__":
