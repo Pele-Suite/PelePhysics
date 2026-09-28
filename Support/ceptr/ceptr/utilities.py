@@ -9,7 +9,7 @@ import ceptr.constants as cc
 
 def intersection(lst1, lst2):
     """Return intersection of two lists."""
-    return list(set(lst1).intersection(lst2))
+    return sorted(set(lst1).intersection(lst2))
 
 
 def sc_cutoff(exponent):
