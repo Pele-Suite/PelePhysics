@@ -76,8 +76,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11']
-        poetry-version: ['1.4.2']
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+        poetry-version: ['2.1.1']
     defaults:
       run:
         working-directory: ${{github.workspace}}/Support/ceptr
@@ -92,12 +92,10 @@ jobs:
           poetry-version: ${{matrix.poetry-version}}
       - name: Install Dependencies using Poetry
         run: poetry install
-      - name: Formatting with black
-        run: poetry run black --check .
-      - name: Sort imports with isort
-        run: poetry run isort --check-only --diff .
-      - name: Lint with flake8
-        run: poetry run flake8 .
+      - name: Format check with ruff
+        run: poetry run ruff format --check .
+      - name: Lint with ruff
+        run: poetry run ruff check .
       - name: Run tests
         run: poetry run pytest
       - name: Convert air mechanism

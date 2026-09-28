@@ -1,7 +1,7 @@
 """Utility functions used across ceptr."""
 
-import copy
 from collections import Counter
+import copy
 from math import exp, isclose, log
 
 import ceptr.constants as cc
@@ -205,7 +205,7 @@ def fkc_conv_inv(self, mechanism, reaction, syms=None):
         conversion = ""
     elif dim > 0:
         if dim == 1.0:
-            conversion = "*".join(["refCinv"])
+            conversion = "refCinv"
             if record_symbolic_operations:
                 conversion_smp *= syms.refCinv_smp
         else:
@@ -222,7 +222,7 @@ def fkc_conv_inv(self, mechanism, reaction, syms=None):
                     conversion_smp *= syms.refCinv_smp**dim
     else:
         if dim == -1.0:
-            conversion = "*".join(["refC"])
+            conversion = "refC"
             if record_symbolic_operations:
                 conversion_smp *= syms.refC_smp
         else:
@@ -255,10 +255,10 @@ def kc_conv(mechanism, reaction):
         conversion = ""
     elif dim > 0:
         if dim == 1.0:
-            conversion = "*".join(["refC"])
+            conversion = "refC"
         else:
             if dim == 2.0:
-                conversion = "*".join(["(refC * refC)"])
+                conversion = "(refC * refC)"
             else:
                 if dim.is_integer():
                     conversion = "*".join(["refC"] * int(dim))
@@ -268,7 +268,7 @@ def kc_conv(mechanism, reaction):
                     )
     else:
         if dim == -1.0:
-            conversion = "*".join(["refCinv"])
+            conversion = "refCinv"
         else:
             if dim.is_integer():
                 conversion = "*".join(["refCinv"] * int(dim))

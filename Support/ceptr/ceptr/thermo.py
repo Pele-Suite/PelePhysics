@@ -3,8 +3,8 @@
 import bisect
 import itertools
 
-import numpy as np
 from cantera.speciesthermo import Nasa9PolyMultiTempRegion, NasaPoly2
+import numpy as np
 
 import ceptr.writer as cw
 
@@ -330,7 +330,7 @@ def generate_thermo_routine(
             cw.writer(
                 fstream,
                 cw.comment(
-                    f"species with inflection points at T = {*interval,} kelvin"
+                    f"species with inflection points at T = {(*interval,)} kelvin"
                 ),
             )
         for k in range(len(interval) + 1):
@@ -354,7 +354,7 @@ def generate_thermo_routine(
                 elif 0 < k and k < len(interval):
                     cw.writer(
                         fstream,
-                        f"""else if ( ({interval[k-1]:g} <= T) && (T < {interval[k]:g})) {{""",
+                        f"""else if ( ({interval[k - 1]:g} <= T) && (T < {interval[k]:g})) {{""",
                     )
                 else:
                     cw.writer(

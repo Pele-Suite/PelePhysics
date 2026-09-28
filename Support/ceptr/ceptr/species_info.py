@@ -244,8 +244,8 @@ class SpeciesInfo:
 
             level += 1
 
-        scqss_df["sc_dep"] = ""
-        scqss_df["scqss_dep"] = ""
+        scqss_df["sc_dep"] = pd.Series([None] * len(scqss_df), dtype=object)
+        scqss_df["scqss_dep"] = pd.Series([None] * len(scqss_df), dtype=object)
         # Add in a few more attributes for easy of use
         for idx, item in scqss_df.iterrows():
             scqss_df.at[idx, "sc_dep"] = self.dict_qssdepend_sc[item["symbol"]]
@@ -274,7 +274,7 @@ class SpeciesInfo:
             }
         )
 
-        sc_df["scqss_rely"] = ""
+        sc_df["scqss_rely"] = pd.Series([None] * len(sc_df), dtype=object)
         # Loop over the scqss_df and add in scqss dependence upon sc terms
         for sc_idx, sc in sc_df.iterrows():
             scqss_list = []
@@ -307,8 +307,8 @@ class SpeciesInfo:
             }
         )
 
-        wdot_df["sc_dep"] = ""
-        wdot_df["scqss_dep"] = ""
+        wdot_df["sc_dep"] = pd.Series([None] * len(wdot_df), dtype=object)
+        wdot_df["scqss_dep"] = pd.Series([None] * len(wdot_df), dtype=object)
         # Add in a few more attributes for easy of use
         for idx, item in wdot_df.iterrows():
             wdot_df.at[idx, "sc_dep"] = self.dict_wdot_sc[item["symbol"]]

@@ -1,7 +1,7 @@
 """Write jacobian functions."""
 
-import copy
 from collections import Counter, OrderedDict
+import copy
 from math import isclose
 
 import ceptr.constants as cc
@@ -854,25 +854,24 @@ def ajac_reaction_d(
         if low_beta == 0 and low_ae.m == 0:
             cw.writer(
                 fstream,
-                f"k_0 = {low_pef.m * 10 ** 3 ** dim:.15g};",
+                f"k_0 = {low_pef.m * 10**3**dim:.15g};",
             )
         elif low_ae.m == 0:
             cw.writer(
                 fstream,
-                f"k_0 = {low_pef.m * 10 ** 3 ** dim:.15g} *"
-                f" exp({low_beta:.15g} * logT);",
+                f"k_0 = {low_pef.m * 10**3**dim:.15g} * exp({low_beta:.15g} * logT);",
             )
         elif low_beta == 0:
             cw.writer(
                 fstream,
-                f"k_0 = {low_pef.m * 10 ** 3 ** dim:.15g} *"
+                f"k_0 = {low_pef.m * 10**3**dim:.15g} *"
                 f" exp(-({(1.0 / cc.Rc / cc.ureg.kelvin * low_ae).m:.15g})"
                 " * invT);",
             )
         else:
             cw.writer(
                 fstream,
-                f"k_0 = {low_pef.m * 10 ** 3 ** dim:.15g} *"
+                f"k_0 = {low_pef.m * 10**3**dim:.15g} *"
                 f" exp({low_beta:.15g} * logT -"
                 f" ({(1.0 / cc.Rc / cc.ureg.kelvin * low_ae).m:.15g}) *"
                 " invT);",
