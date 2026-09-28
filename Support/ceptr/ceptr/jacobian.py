@@ -609,7 +609,11 @@ def ajac_reaction_d(
         beta = plog_beta
         ae = (plog_ae * cc.ureg.joule / cc.ureg.kmol).to(aeuc)
     elif third_body and not falloff and plog:
-        # Case 5 third body PLOG
+        # Case 5 TB, PLOG
+        cw.writer(
+            fstream,
+            cw.comment("a third-body, non-pressure-fall-off, and PLOG reaction"),
+        )
         ctuc = cu.prefactor_units(cc.ureg("kmol/m**3"), -dim)
         plog_pef, plog_beta, plog_ae = cu.evaluate_plog(
             reaction.rate.rates, mechanism.P
@@ -677,30 +681,32 @@ def ajac_reaction_d(
     if reaction.third_body:
         if len(reaction.third_body.efficiencies) == 1:
             if isclose(reaction.third_body.default_efficiency, 0.0):
-                all_reactants = dict(
-                    sum(
-                        (
-                            Counter(x)
-                            for x in [
-                                all_reactants,
-                                reaction.third_body.efficiencies,
-                            ]
-                        ),
-                        Counter(),
+                # Do not update third-body falloff reactions
+                if not (reaction.rate.type == "falloff"):
+                    all_reactants = dict(
+                        sum(
+                            (
+                                Counter(x)
+                                for x in [
+                                    all_reactants,
+                                    reaction.third_body.efficiencies,
+                                ]
+                            ),
+                            Counter(),
+                        )
                     )
-                )
-                all_products = dict(
-                    sum(
-                        (
-                            Counter(x)
-                            for x in [
-                                all_products,
-                                reaction.third_body.efficiencies,
-                            ]
-                        ),
-                        Counter(),
+                    all_products = dict(
+                        sum(
+                            (
+                                Counter(x)
+                                for x in [
+                                    all_products,
+                                    reaction.third_body.efficiencies,
+                                ]
+                            ),
+                            Counter(),
+                        )
                     )
-                )
 
     # Build rea_dict containing reaction species
     for symbol, coefficient in all_reactants.items():
@@ -786,6 +792,13 @@ def ajac_reaction_d(
             syms=None,
         )
         cw.writer(fstream, f"alpha = {enhancement_d};")
+        if (
+            falloff
+            and len(reaction.third_body.efficiencies) == 1
+            and isclose(reaction.third_body.default_efficiency, 0.0)
+        ):
+            # Avoid float point exception
+            cw.writer(fstream, "alpha = std::max(alpha, 1e-20);")
 
     # forward
     qss_ps = cu.qss_sorted_phase_space(
@@ -1413,6 +1426,15 @@ def denhancement_d(mechanism, species_info, reaction, kid, cons_p):
             return "0"
     else:
         efficiencies = reaction.third_body.efficiencies
+        if (
+            falloff
+            and len(reaction.third_body.efficiencies) == 1
+            and isclose(reaction.third_body.default_efficiency, 0.0)
+        ):
+            # Revise the efficiencies for Jacobian
+            for symbol in species_info.all_species_list:
+                if symbol not in efficiencies:
+                    efficiencies[symbol] = 0.0
         if cons_p:
             for _, (symbol, efficiency) in enumerate(efficiencies.items()):
                 if species_info.ordered_idx_map[symbol] == kid:
