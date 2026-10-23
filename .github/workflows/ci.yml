@@ -245,10 +245,24 @@ jobs:
               if [ "${TYPE}" == 'Manifold' ]; then \
                  ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Network
               fi; \
+              if [ "${TYPE}" == 'Simple' ]; then \
+                 ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_Matrix; \
+                 ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=1; \
+                 ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=30 tran_eval.matrix_ref_tol=1.e-6; \
+              fi; \
             fi; \
             make realclean; \
             if [ $? -ne 0 ]; then exit 1; fi; \
           done
+          if [ "${{matrix.comp}}" == 'gnu' ]; then \
+            printf "\n-------- Simple (LiDryer, multicomponent diffusion) --------\n"; \
+            make -j ${{env.NPROCS}} Eos_Model=Fuego Chemistry_Model=LiDryer Transport_Model=Simple TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}; \
+            ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_Matrix; \
+            ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=1; \
+            ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=30 tran_eval.matrix_ref_tol=1.e-6; \
+            make realclean; \
+            if [ $? -ne 0 ]; then exit 1; fi; \
+          fi
       - name: Transport ccache report
         working-directory: ${{env.TRANSPORT_WORKING_DIRECTORY}}
         run: |

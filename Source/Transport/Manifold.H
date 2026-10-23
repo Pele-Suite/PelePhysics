@@ -69,6 +69,38 @@ struct ManifoldTransport
     }
   }
 
+  // Extended API (flux diffusion matrix): not available for manifold
+  // transport.
+  AMREX_GPU_HOST_DEVICE
+  AMREX_FORCE_INLINE
+  static void transport(
+    const bool wtr_get_xi,
+    const bool wtr_get_mu,
+    const bool wtr_get_lam,
+    const bool wtr_get_Ddiag,
+    const bool wtr_get_chi,
+    const bool wtr_get_Dmat,
+    const amrex::Real Tloc,
+    const amrex::Real rholoc,
+    amrex::Real* Yloc,
+    amrex::Real* Ddiag,
+    amrex::Real* chi_mix,
+    amrex::Real* /*Dmat*/,
+    amrex::Real& mu,
+    amrex::Real& xi,
+    amrex::Real& lam,
+    TransParm<EosType, transport_type> const* tparm)
+  {
+    if (wtr_get_Dmat) {
+      amrex::Abort(
+        "Multicomponent diffusion matrix is not supported for "
+        "ManifoldTransport");
+    }
+    transport(
+      wtr_get_xi, wtr_get_mu, wtr_get_lam, wtr_get_Ddiag, wtr_get_chi, Tloc,
+      rholoc, Yloc, Ddiag, chi_mix, mu, xi, lam, tparm);
+  }
+
   AMREX_GPU_HOST_DEVICE
   AMREX_FORCE_INLINE
   static void get_transport_coeffs(
@@ -121,6 +153,27 @@ struct ManifoldTransport
       }
     }
   }
+  // Extended API (flux diffusion matrix): not available for manifold
+  // transport.
+  AMREX_GPU_HOST_DEVICE
+  AMREX_FORCE_INLINE
+  static void get_transport_coeffs(
+    amrex::Box const& /*bx*/,
+    amrex::Array4<const amrex::Real> const& /*Y_in*/,
+    amrex::Array4<const amrex::Real> const& /*T_in*/,
+    amrex::Array4<const amrex::Real> const& /*Rho_in*/,
+    amrex::Array4<amrex::Real> const& /*D_out*/,
+    amrex::Array4<amrex::Real> const& /*chi_out*/,
+    amrex::Array4<amrex::Real> const& /*Dmat_out*/,
+    amrex::Array4<amrex::Real> const& /*mu_out*/,
+    amrex::Array4<amrex::Real> const& /*xi_out*/,
+    amrex::Array4<amrex::Real> const& /*lam_out*/,
+    TransParm<EosType, transport_type> const* /*tparm*/)
+  {
+    amrex::Abort(
+      "Multicomponent diffusion matrix is not supported for ManifoldTransport");
+  }
+
   template <class... Args>
   AMREX_GPU_HOST_DEVICE ManifoldTransport(Args... /*args*/)
   {

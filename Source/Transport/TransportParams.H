@@ -71,6 +71,12 @@ struct TransParm<EOSType, SimpleTransport>
   amrex::GpuArray<int, 3> liteSpec = {0};
   amrex::GpuArray<amrex::Real, NUM_SPECIES * NUM_FIT * 3> fittdrat = {0.0};
   amrex::GpuArray<int, NUM_SPECIES> nlin = {0};
+  // Shift applied to mass/mole fractions so that vanishing species keep a
+  // positive "trace" value: Y_tr = Y + eps * (sum(Y)/N - Y)
+  amrex::Real trace_epsilon{1.e-16};
+  // Number of projected standard iterations for the multicomponent
+  // diffusion matrix (2 reproduces EGlib's EGSDR1)
+  int matrix_diffusion_niter{2};
 };
 
 template <>
@@ -103,7 +109,27 @@ struct TransParm<eos::SRK, SimpleTransport>
     Upsilonijk = {0.0};
   amrex::GpuArray<amrex::Real, NUM_SPECIES> Kappai = {0.0};
   amrex::GpuArray<amrex::Real, NUM_SPECIES> omega = {0.0};
+  amrex::Real trace_epsilon{1.e-16};
+  int matrix_diffusion_niter{2};
 };
+
+// Read and validate the runtime options shared by all SimpleTransport
+// specializations
+template <typename TParm>
+inline void
+simple_transport_query_common(TParm* tparm)
+{
+  amrex::ParmParse pp("transport");
+  pp.query("trace_epsilon", tparm->trace_epsilon);
+  pp.query("matrix_diffusion_niter", tparm->matrix_diffusion_niter);
+  if (tparm->trace_epsilon < 1.e-30 || tparm->trace_epsilon > 1.e-6) {
+    amrex::Abort(
+      "transport.trace_epsilon must be in [1e-30, 1e-6] (default 1e-16)");
+  }
+  if (tparm->matrix_diffusion_niter < 1) {
+    amrex::Abort("transport.matrix_diffusion_niter must be >= 1 (default 2)");
+  }
+}
 
 } // namespace transport
 
@@ -258,6 +284,7 @@ struct InitParm<transport::TransParm<EOSType, transport::SimpleTransport>>
       egtransetKTDIF(tparm->liteSpec.data());
       egtransetCOFTD(tparm->fittdrat.data());
     }
+    transport::simple_transport_query_common(tparm);
     for (int i = 0; i < NUM_SPECIES; ++i) {
       tparm->iwt[i] = 1. / tparm->wt[i];
     }
@@ -292,6 +319,7 @@ struct InitParm<transport::TransParm<eos::SRK, transport::SimpleTransport>>
     egtransetNLITE(&tparm->numLite);
     egtransetKTDIF(tparm->liteSpec.data());
     egtransetCOFTD(tparm->fittdrat.data());
+    transport::simple_transport_query_common(tparm);
 
     for (int i = 0; i < NUM_SPECIES; ++i) {
       tparm->iwt[i] = 1. / tparm->wt[i];
