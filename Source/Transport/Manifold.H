@@ -21,7 +21,7 @@ struct ManifoldTransport
     const bool wtr_get_chi,
     const amrex::Real /*Tloc*/,
     const amrex::Real /*rholoc*/,
-    amrex::Real* Yloc,
+    const amrex::Real* Yloc,
     amrex::Real* Ddiag,
     amrex::Real* /*chi_mix*/,
     amrex::Real& mu,
@@ -67,38 +67,6 @@ struct ManifoldTransport
       }
       Ddiag[NUM_SPECIES - 1] = 0.0; // Placeholder for density
     }
-  }
-
-  // Extended API (flux diffusion matrix): not available for manifold
-  // transport.
-  AMREX_GPU_HOST_DEVICE
-  AMREX_FORCE_INLINE
-  static void transport(
-    const bool wtr_get_xi,
-    const bool wtr_get_mu,
-    const bool wtr_get_lam,
-    const bool wtr_get_Ddiag,
-    const bool wtr_get_chi,
-    const bool wtr_get_Dmat,
-    const amrex::Real Tloc,
-    const amrex::Real rholoc,
-    amrex::Real* Yloc,
-    amrex::Real* Ddiag,
-    amrex::Real* chi_mix,
-    amrex::Real* /*Dmat*/,
-    amrex::Real& mu,
-    amrex::Real& xi,
-    amrex::Real& lam,
-    TransParm<EosType, transport_type> const* tparm)
-  {
-    if (wtr_get_Dmat) {
-      amrex::Abort(
-        "Multicomponent diffusion matrix is not supported for "
-        "ManifoldTransport");
-    }
-    transport(
-      wtr_get_xi, wtr_get_mu, wtr_get_lam, wtr_get_Ddiag, wtr_get_chi, Tloc,
-      rholoc, Yloc, Ddiag, chi_mix, mu, xi, lam, tparm);
   }
 
   AMREX_GPU_HOST_DEVICE
@@ -153,25 +121,63 @@ struct ManifoldTransport
       }
     }
   }
-  // Extended API (flux diffusion matrix): not available for manifold
-  // transport.
+  // Extended API: the multicomponent diffusion matrix and the rescaled
+  // thermal diffusion ratios are not available for manifold transport.
+  AMREX_GPU_HOST_DEVICE
+  AMREX_FORCE_INLINE
+  static void transport(
+    const TransportRequest& req,
+    const amrex::Real Tloc,
+    const amrex::Real rholoc,
+    const amrex::Real* Yloc,
+    const TransportOutputs& out,
+    TransParm<EosType, transport_type> const* tparm)
+  {
+    if (req.Dmat || req.chit) {
+      amrex::Abort(
+        "Multicomponent diffusion matrix and rescaled thermal "
+        "diffusion ratios are not supported for ManifoldTransport");
+    }
+    amrex::Real mu_l = 0.0, xi_l = 0.0, lam_l = 0.0;
+    transport(
+      req.xi, req.mu, req.lam, req.Ddiag && out.Ddiag != nullptr,
+      req.chi && out.chi != nullptr, Tloc, rholoc, Yloc, out.Ddiag, out.chi,
+      mu_l, xi_l, lam_l, tparm);
+    if (out.mu != nullptr) {
+      *out.mu = mu_l;
+    }
+    if (out.xi != nullptr) {
+      *out.xi = xi_l;
+    }
+    if (out.lam != nullptr) {
+      *out.lam = lam_l;
+    }
+  }
+
   AMREX_GPU_HOST_DEVICE
   AMREX_FORCE_INLINE
   static void get_transport_coeffs(
-    amrex::Box const& /*bx*/,
-    amrex::Array4<const amrex::Real> const& /*Y_in*/,
-    amrex::Array4<const amrex::Real> const& /*T_in*/,
-    amrex::Array4<const amrex::Real> const& /*Rho_in*/,
-    amrex::Array4<amrex::Real> const& /*D_out*/,
-    amrex::Array4<amrex::Real> const& /*chi_out*/,
+    amrex::Box const& bx,
+    const TransportRequest& req,
+    amrex::Array4<const amrex::Real> const& Y_in,
+    amrex::Array4<const amrex::Real> const& T_in,
+    amrex::Array4<const amrex::Real> const& Rho_in,
+    amrex::Array4<amrex::Real> const& D_out,
+    amrex::Array4<amrex::Real> const& chi_out,
     amrex::Array4<amrex::Real> const& /*Dmat_out*/,
-    amrex::Array4<amrex::Real> const& /*mu_out*/,
-    amrex::Array4<amrex::Real> const& /*xi_out*/,
-    amrex::Array4<amrex::Real> const& /*lam_out*/,
-    TransParm<EosType, transport_type> const* /*tparm*/)
+    amrex::Array4<amrex::Real> const& /*chit_out*/,
+    amrex::Array4<amrex::Real> const& mu_out,
+    amrex::Array4<amrex::Real> const& xi_out,
+    amrex::Array4<amrex::Real> const& lam_out,
+    TransParm<EosType, transport_type> const* tparm)
   {
-    amrex::Abort(
-      "Multicomponent diffusion matrix is not supported for ManifoldTransport");
+    if (req.Dmat || req.chit) {
+      amrex::Abort(
+        "Multicomponent diffusion matrix and rescaled thermal "
+        "diffusion ratios are not supported for ManifoldTransport");
+    }
+    get_transport_coeffs(
+      bx, Y_in, T_in, Rho_in, D_out, chi_out, mu_out, xi_out, lam_out, tparm);
   }
 
   template <class... Args>

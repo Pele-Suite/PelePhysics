@@ -65,6 +65,8 @@ In this model, transport coefficients are evaluated from data available in the c
   transport.use_soret = 0                 # compute Soret coefficients (1) or not (0)
   transport.trace_epsilon = 1.e-16        # shift applied to vanishing species, see below
   transport.matrix_diffusion_niter = 2    # iterations for the multicomponent diffusion matrix
+  transport.conductivity_model = mixture  # mixture | lct1 | lct3, see below
+  transport.conductivity_niter = 3        # conjugate-gradient iterations for lct1/lct3
 
 The values listed are the defaults. These options are read only by the Simple model.
 
@@ -101,14 +103,55 @@ The matrix is stored row-major, ``Dmat[i*NUM_SPECIES + j]``, in CGS units (g/cm/
 
 The algorithm follows EGlib's ``EGSDR1``: the Stefan-Maxwell matrix :math:`L_{[00]}` is built from the trace-adjusted mole fractions and the binary diffusion coefficients, a projected standard iteration is applied with the splitting that makes the first iterate the Hirschfelder-Curtiss approximation (`Ern and Giovangigli (1995) <https://doi.org/10.1006/jcph.1995.1151>`_), the iterate is scaled by :math:`\rho Y_i` and finally projected, :math:`\tilde{D} \leftarrow P \tilde{D} P` with :math:`P = I - Y \otimes u / \sum_k Y_k`, which enforces mass conservation. The number of iterations is ``transport.matrix_diffusion_niter`` (default 2, the EGlib choice; 1 gives the projected mixture-averaged matrix; larger values converge to the exact matrix at a cost of one :math:`N^3` matrix product per additional iteration). The ``matrix_diffusion_niter = 1`` diagonal coincides with ``Ddiag`` before projection, so the two formulations are consistent.
 
-The matrix is only computed when requested through the extended entry points ::
-
-  transport(wtr_get_xi, wtr_get_mu, wtr_get_lam, wtr_get_Ddiag, wtr_get_chi, wtr_get_Dmat,
-            T, rho, Y, Ddiag, chi_mix, Dmat, mu, xi, lam, tparm);
-  get_transport_coeffs(bx, Y_in, T_in, Rho_in, D_out, chi_out, Dmat_out, mu_out, xi_out, lam_out, tparm);
-
-where ``Dmat`` has ``NUM_SPECIES*NUM_SPECIES`` entries (``Dmat_out`` as many components). The historical entry points without these arguments are unchanged and carry no additional cost. The ``Constant`` and ``Sutherland`` models return the projected uniform-diffusivity matrix through the same entry points (which yields the same fluxes as their diagonal coefficients), and ``Manifold`` transport aborts. When Simple transport is used with the SRK equation of state, the matrix is built from the density-corrected binary coefficients.
+The matrix is only computed when requested through the extended entry points described in :ref:`sec:transport:extendedapi`. The ``Constant`` and ``Sutherland`` models return the projected uniform-diffusivity matrix through the same entry points (which yields the same fluxes as their diagonal coefficients), and ``Manifold`` transport aborts. When Simple transport is used with the SRK equation of state, the matrix is built from the density-corrected binary coefficients.
 
 .. note:: Each matrix evaluation holds :math:`\mathcal{O}(N^2)` doubles per thread (about 12 KB for 21 species, 63 KB for 53 species), which is acceptable on GPUs for small to moderate mechanisms (roughly :math:`N \lesssim 30`) but reserves a large amount of local memory for larger ones. The flow solvers in the Pele suite do not yet use the multicomponent matrix; the low-Mach diffusion algorithm in PeleLMeX in particular assumes a diagonal ``Ddiag`` and would require additional algorithm development.
 
 The ``TranEval`` test (``Testing/Exec/TranEval``, input ``inputs.2d_Simple_Matrix``) exercises the matrix path and checks mass conservation, symmetry of :math:`\tilde{D}_{ij}/Y_i`, the exact binary-mixture result, and the error with respect to a direct dense solution of the transport linear system.
+
+.. _sec:transport:conductivity:
+
+Multicomponent thermal conductivity and thermal diffusion ratios
+----------------------------------------------------------------
+
+By default the thermal conductivity of the Simple model is the empirical mixture rule :math:`\lambda = (\sum_i X_i \lambda_i^{1/4})^4` built from the pure-species fits of the mechanism. Setting ``transport.conductivity_model`` selects instead a solution of the Ern-Giovangigli transport linear systems, as in EGlib's ``EGSLCT1`` and ``EGSLCT3``:
+
+* ``lct1``: the reduced system :math:`\Lambda_{[e]}` with one combined (translational + internal) energy mode per species (:math:`N` unknowns);
+* ``lct3``: the full system :math:`\Lambda` with separate translational and internal energy modes per species (:math:`2N` unknowns).
+
+Both are solved with ``transport.conductivity_niter`` preconditioned conjugate-gradient iterations (default 3, the EGlib choice; the iterates increase monotonically to the exact solution, which TranEval reaches to round-off with 30 iterations). The systems need the pure-species viscosities, the binary diffusion coefficients, the internal heat capacities, the rotational relaxation numbers (with Parker's temperature correction) and the collision-integral ratios :math:`A^*_{ij}, B^*_{ij}, C^*_{ij}`. The latter are the universal CHEMKIN/EGlib polynomial fits in :math:`\ln(T/\epsilon_{ij})`, with :math:`\epsilon_{ij}` built at initialization from the Lennard-Jones parameters, dipole moments and polarizabilities already present in the mechanism (EGlib's polar/non-polar correction), so no new mechanism data is required.
+
+This is a model choice: when an LCT model is selected, the conductivity returned by **all** entry points, including the historical ones used by PeleC and PeleLMeX, is the LCT value. The default ``mixture`` reproduces the previous results bitwise.
+
+The LCT solution also yields the *rescaled thermal diffusion ratios* :math:`\tilde{\chi}_i`, available only through the extended entry points (requesting them with the ``mixture`` model aborts). The thermal diffusion ratios are :math:`\chi_i = X_i \tilde{\chi}_i`, they sum to zero, and together with the multicomponent diffusion matrix the Soret contribution to the species mass fluxes is
+
+.. math::
+
+   \mathbf{F}_i^{T} = - \sum_j \texttt{Dmat}_{ij} \, \chi_j \, \frac{\nabla T}{T}.
+
+.. warning:: :math:`\tilde{\chi}` follows the EGlib/Ern-Giovangigli sign convention of the flux above (light species have :math:`\chi_i < 0` and drift towards hot regions). The mixture-averaged Soret coefficients ``chi`` produced with ``transport.use_soret`` follow the CHEMKIN convention and have the opposite sign for the same physical effect; the two must not be mixed without accounting for this.
+
+For a pure species the LCT conductivity agrees with the mechanism's pure-species fit (CHEMKIN's modified Eucken formula) to about 1 % for non-polar species; for polar species (e.g. H2O) the two models treat the internal-energy self-diffusion differently and differ by up to about 20 % at low temperature.
+
+With the SRK equation of state the LCT systems are built from the dilute-gas binary coefficients and the Chung real-gas correction is applied to the resulting conductivity, as for the mixture rule. The ``Constant``, ``Sutherland`` and ``Manifold`` models do not provide :math:`\tilde{\chi}` and abort if it is requested.
+
+.. note:: The LCT systems are solved matrix-free, so the only :math:`N^2` storage is the packed array of binary coefficients (:math:`N(N+1)/2` doubles: 1.9 KB for 21 species, 11 KB for 53). Because the model is a run-time switch, this array is part of the local-memory footprint of every GPU kernel that evaluates transport once the code is compiled in, even with the default ``mixture`` model. Compiling with ``-DPELE_TRANSPORT_NO_LCT`` removes the LCT code entirely (an LCT model is then rejected at initialization).
+
+The ``TranEval`` test (input ``inputs.2d_Simple_LCT``) checks the antisymmetry of :math:`\chi`, the error with respect to a direct dense solution, the monotonicity of the iterates, the pure-species closed form of each model, and the agreement of the pure-species limit with the mechanism's conductivity fits.
+
+.. _sec:transport:extendedapi:
+
+Extended transport API
+----------------------
+
+The historical entry points ``transport(wtr_get_xi, ..., mu, xi, lam, tparm)`` and ``get_transport_coeffs(bx, Y_in, T_in, Rho_in, D_out, chi_out, mu_out, xi_out, lam_out, tparm)`` are unchanged. The additional quantities are obtained through a request/output pair of structs (``Source/Transport/TransportTypes.H``): ::
+
+  pele::physics::transport::TransportRequest req;   // bools: xi, mu, lam, Ddiag, chi, Dmat, chit
+  pele::physics::transport::TransportOutputs out;   // pointers: mu, xi, lam, Ddiag, chi, Dmat, chit
+  req.lam = true; req.Dmat = true; req.chit = true;
+  out.lam = &lam; out.Dmat = Dmat; out.chit = chit;  // Dmat: NUM_SPECIES*NUM_SPECIES, chit: NUM_SPECIES
+  trans.transport(req, T, rho, Y, out, tparm);
+  trans.get_transport_coeffs(bx, req, Y_in, T_in, Rho_in, D_out, chi_out, Dmat_out, chit_out,
+                             mu_out, xi_out, lam_out, tparm);
+
+Only the requested quantities are evaluated and only non-null outputs are written; ``Array4`` outputs that are not requested may be any array. ``chi`` is accumulated into and must be zeroed by the caller. ``Dmat_out`` needs ``NUM_SPECIES*NUM_SPECIES`` components (component ``i*NUM_SPECIES + j`` holds :math:`\rho \tilde{D}_{ij}`) and ``chit_out`` ``NUM_SPECIES`` components.

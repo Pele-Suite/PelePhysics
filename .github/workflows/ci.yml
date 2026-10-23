@@ -249,6 +249,10 @@ jobs:
                  ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_Matrix; \
                  ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=1; \
                  ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=30 tran_eval.matrix_ref_tol=1.e-6; \
+                 for LCT in lct1 lct3; do \
+                   ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_LCT transport.conductivity_model=${LCT}; \
+                   ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_LCT transport.conductivity_model=${LCT} transport.conductivity_niter=30 tran_eval.lct_ref_tol=1.e-6; \
+                 done; \
               fi; \
             fi; \
             make realclean; \
@@ -260,6 +264,10 @@ jobs:
             ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_Matrix; \
             ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=1; \
             ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=30 tran_eval.matrix_ref_tol=1.e-6; \
+            for LCT in lct1 lct3; do \
+              ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_LCT transport.conductivity_model=${LCT}; \
+              ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_LCT transport.conductivity_model=${LCT} transport.conductivity_niter=30 tran_eval.lct_ref_tol=1.e-6; \
+            done; \
             make realclean; \
             if [ $? -ne 0 ]; then exit 1; fi; \
           fi

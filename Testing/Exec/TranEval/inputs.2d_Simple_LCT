@@ -1,0 +1,10 @@
+# Exercise the multicomponent (EGlib LCT) thermal conductivity and rescaled
+# thermal diffusion ratios of Simple transport and verify them against a
+# direct dense solve and the pure-species closed form.
+tran_eval.conductivity_check = 1
+tran_eval.npts = 64
+amr.plot_file = plt_lct
+
+transport.conductivity_model = lct1     # lct1 or lct3 (default: mixture)
+transport.conductivity_niter = 3        # default
+transport.use_soret = 1                 # informational comparison with chi
