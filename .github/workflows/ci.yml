@@ -78,6 +78,8 @@ jobs:
       matrix:
         python-version: ['3.10', '3.11']
         poetry-version: ['1.4.2']
+    env:
+      PYTHONHASHSEED: 0
     defaults:
       run:
         working-directory: ${{github.workspace}}/Support/ceptr
