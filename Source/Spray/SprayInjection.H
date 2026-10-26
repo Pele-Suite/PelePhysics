@@ -197,8 +197,6 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
           p.rdata(SprayComps::pstateY) = 1.;
         }
 
-        spray_jet->m_totalInjMass += parcel_mass;
-
         // If KHRT is used, BM1 is shed mass
         // If TAB is used, BM1 is y
         p.rdata(SprayComps::pstateBM1) = 0.;
@@ -209,10 +207,14 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
 
         bool where = Where(p, pld);
         if (!where) {
-          amrex::Print() << "\n Problematic particle = " << p.pos(0) << " "
-                         << p.pos(1) << " " << p.pos(2);
-          // amrex::Abort("Bad injection particle");
+          amrex::Print()
+            << "Warning: DPM parcel outside the domain discarded (jet "
+            << spray_jet->jet_name() << ", pos = " << p.pos(0) << " "
+            << p.pos(1) << " " << p.pos(2) << ")\n";
+          continue;
         }
+
+        spray_jet->m_totalInjMass += parcel_mass;
 
         std::pair<int, int> ind(pld.m_grid, pld.m_tile);
         host_particles[ind].push_back(p);
