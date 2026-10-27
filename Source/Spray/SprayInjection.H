@@ -92,9 +92,9 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
         if (m_verbose > 0) {
           amrex::Print() << " (last dpm time) \n";
         }
-        is_dpm >> lineno_last_dpm_time_end; // includes the last line no
+        is_dpm >> lineno_last_dpm_time_end; // one past the last line no
         lineno_current_dpm_time_begin = dummy_line_no;
-        lineno_current_dpm_time_end = lineno_last_dpm_time_end;
+        lineno_current_dpm_time_end = lineno_last_dpm_time_end - 1;
 
         // if dpm file is periodic, the next time instant is time=0
         if (spray_jet->is_dpm_periodic) {
@@ -142,6 +142,13 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
         is_dpm1 >> dummy_time >> part_loc[0] >> part_loc[1] >> part_loc[2] >>
           part_vel[0] >> part_vel[1] >> part_vel[2] >> dia >> temperature >>
           parcel_mass >> particle_mass >> nppp;
+        if (!is_dpm1) {
+          amrex::Print()
+            << "Warning: DPM file " << spray_jet->m_FluentDPMFile
+            << " has fewer data lines than its index implies (block t = "
+            << spray_jet->m_cur_inj_dpm_time << "); stopping this block\n";
+          break;
+        }
 
         amrex::ParticleLocData pld;
         std::map<std::pair<int, int>, amrex::Gpu::HostVector<ParticleType>>
