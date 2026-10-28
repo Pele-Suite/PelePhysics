@@ -123,6 +123,7 @@ struct ManifoldTransport
   }
   // Extended API: the multicomponent diffusion matrix and the rescaled
   // thermal diffusion ratios are not available for manifold transport.
+  // Outputs that are not requested are left untouched.
   AMREX_GPU_HOST_DEVICE
   AMREX_FORCE_INLINE
   static void transport(
@@ -143,13 +144,13 @@ struct ManifoldTransport
       req.xi, req.mu, req.lam, req.Ddiag && out.Ddiag != nullptr,
       req.chi && out.chi != nullptr, Tloc, rholoc, Yloc, out.Ddiag, out.chi,
       mu_l, xi_l, lam_l, tparm);
-    if (out.mu != nullptr) {
+    if (req.mu && out.mu != nullptr) {
       *out.mu = mu_l;
     }
-    if (out.xi != nullptr) {
+    if (req.xi && out.xi != nullptr) {
       *out.xi = xi_l;
     }
-    if (out.lam != nullptr) {
+    if (req.lam && out.lam != nullptr) {
       *out.lam = lam_l;
     }
   }
@@ -176,8 +177,52 @@ struct ManifoldTransport
         "Multicomponent diffusion matrix and rescaled thermal "
         "diffusion ratios are not supported for ManifoldTransport");
     }
-    get_transport_coeffs(
-      bx, Y_in, T_in, Rho_in, D_out, chi_out, mu_out, xi_out, lam_out, tparm);
+    AMREX_ASSERT(!req.Ddiag || D_out.nComp() >= NUM_SPECIES);
+    AMREX_ASSERT(!req.chi || chi_out.nComp() >= NUM_SPECIES);
+    const auto lo = amrex::lbound(bx);
+    const auto hi = amrex::ubound(bx);
+
+    // Request-aware loop: only the requested quantities are evaluated and
+    // only their outputs are written (the unrequested Array4s may be
+    // placeholders)
+    for (int k = lo.z; k <= hi.z; ++k) {
+      for (int j = lo.y; j <= hi.y; ++j) {
+        for (int i = lo.x; i <= hi.x; ++i) {
+          amrex::Real massloc[NUM_SPECIES] = {0.0};
+          for (int n = 0; n < NUM_SPECIES; ++n) {
+            massloc[n] = Y_in(i, j, k, n);
+          }
+          amrex::Real muloc = 0.0, xiloc = 0.0, lamloc = 0.0;
+          amrex::Real Ddiag[NUM_SPECIES] = {0.0};
+          amrex::Real chi_loc[NUM_SPECIES] = {0.0};
+          TransportOutputs out;
+          out.mu = &muloc;
+          out.xi = &xiloc;
+          out.lam = &lamloc;
+          out.Ddiag = Ddiag;
+          out.chi = chi_loc;
+          transport(req, T_in(i, j, k), Rho_in(i, j, k), massloc, out, tparm);
+
+          for (int n = 0; n < NUM_SPECIES; ++n) {
+            if (req.Ddiag) {
+              D_out(i, j, k, n) = Ddiag[n];
+            }
+            if (req.chi) {
+              chi_out(i, j, k, n) = chi_loc[n];
+            }
+          }
+          if (req.mu) {
+            mu_out(i, j, k) = muloc;
+          }
+          if (req.xi) {
+            xi_out(i, j, k) = xiloc;
+          }
+          if (req.lam) {
+            lam_out(i, j, k) = lamloc;
+          }
+        }
+      }
+    }
   }
 
   template <class... Args>

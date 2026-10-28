@@ -103,7 +103,8 @@ struct ConstTransport
   }
 
   // Extended API: evaluates the quantities selected in req and writes them
-  // to the non-null members of out (see TransportTypes.H).
+  // to the corresponding non-null members of out (see TransportTypes.H);
+  // outputs that are not requested are left untouched.
   AMREX_GPU_HOST_DEVICE
   AMREX_FORCE_INLINE static void transport(
     const TransportRequest& req,
@@ -126,13 +127,13 @@ struct ConstTransport
       req.xi, req.mu, req.lam, req.Ddiag && out.Ddiag != nullptr,
       req.chi && out.chi != nullptr, Tloc, rholoc, Yloc, out.Ddiag, out.chi,
       mu_l, xi_l, lam_l, tparm);
-    if (out.mu != nullptr) {
+    if (req.mu && out.mu != nullptr) {
       *out.mu = mu_l;
     }
-    if (out.xi != nullptr) {
+    if (req.xi && out.xi != nullptr) {
       *out.xi = xi_l;
     }
-    if (out.lam != nullptr) {
+    if (req.lam && out.lam != nullptr) {
       *out.lam = lam_l;
     }
   }

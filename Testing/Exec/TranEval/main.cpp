@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <limits>
 
 #include <AMReX_MultiFab.H>
 #include <AMReX_MultiFabUtil.H>
@@ -24,19 +25,36 @@ using pele::physics::transport::TransportRequest;
 
 constexpr int NS = NUM_SPECIES;
 
-// Record the worst violation of a check and its location
+// Record the worst violation of a check and its location. A non-finite
+// value is a failure in its own right (a NaN would otherwise never compare
+// greater than the running maximum and could hide behind a PASS), so it is
+// recorded as infinite.
 struct CheckMax
 {
   amrex::Real value{0.0};
   amrex::IntVect cell{};
   void update(amrex::Real v, const amrex::IntVect& iv)
   {
+    if (!std::isfinite(v)) {
+      v = std::numeric_limits<amrex::Real>::infinity();
+    }
     if (v > value) {
       value = v;
       cell = iv;
     }
   }
 };
+
+// Relative measure num / den with an explicit treatment of a vanishing
+// denominator: zero when the numerator vanishes too, infinite otherwise
+amrex::Real
+relative(const amrex::Real num, const amrex::Real den)
+{
+  if (den > 0.0) {
+    return num / den;
+  }
+  return (num == 0.0) ? 0.0 : std::numeric_limits<amrex::Real>::infinity();
+}
 
 void
 report(
@@ -204,7 +222,7 @@ reference_matrix(
   pele::physics::transport::project_diffusion_matrix(Ytr, Dref.data());
 }
 
-#ifndef PELE_TRANSPORT_NO_LCT
+#ifdef PELE_TRANSPORT_LCT
 // Host evaluation of lambda (and chit) through the public extended API with
 // a given parameter set
 amrex::Real
@@ -528,11 +546,11 @@ check_conductivity(
         num += Xtr[n] * chit[n];
         den += Xtr[n] * std::abs(chit[n]);
       }
-      antisym.update(std::abs(num) / den, iv);
+      antisym.update(relative(std::abs(num), den), iv);
 
       // (h) ratio to the mixture rule
       const amrex::Real lam_mix = host_lambda(tp_mix, T, rho, Y, nullptr);
-      const amrex::Real ratio = lam / lam_mix;
+      const amrex::Real ratio = relative(lam, lam_mix);
       ratio_min = std::min(ratio_min, ratio);
       ratio_max = std::max(ratio_max, ratio);
       ratio_dev.update(
@@ -555,23 +573,24 @@ check_conductivity(
       if (cell_counter % sample_stride == 0) {
         amrex::Real chit_ref[NS];
         const amrex::Real lam_ref = lct_direct(T, rho, Y, tp, chit_ref);
-        ref_lam.update(std::abs(lam - lam_ref) / lam_ref, iv);
+        ref_lam.update(
+          relative(std::abs(lam - lam_ref), std::abs(lam_ref)), iv);
         amrex::Real e = 0.0, m = 0.0;
         for (int n = 0; n < NS; ++n) {
           e = std::max(e, std::abs(Xtr[n] * (chit[n] - chit_ref[n])));
           m = std::max(m, std::abs(Xtr[n] * chit_ref[n]));
         }
-        ref_chit.update(e / m, iv);
+        ref_chit.update(relative(e, m), iv);
 
         amrex::Real prev = 0.0;
         for (int it = 1; it <= 3; ++it) {
           TransParmType tp_it = tp;
           tp_it.conductivity_niter = it;
           const amrex::Real l = host_lambda(tp_it, T, rho, Y, nullptr);
-          mono.update((prev - l) / lam_ref, iv);
+          mono.update(relative(prev - l, std::abs(lam_ref)), iv);
           prev = l;
         }
-        mono.update((prev - lam_ref) / lam_ref, iv);
+        mono.update(relative(prev - lam_ref, std::abs(lam_ref)), iv);
         ++nsampled;
       }
       ++cell_counter;
@@ -609,13 +628,14 @@ check_conductivity(
                                   (pele::physics::Constants::RU * T);
       const amrex::Real lam = host_lambda(tp, T, rho_atm, Y, nullptr);
       const amrex::Real exact = lct_pure_closed_form(k, T, rho_atm, tp);
-      pure.update(std::abs(lam - exact) / exact, amrex::IntVect(k));
+      pure.update(
+        relative(std::abs(lam - exact), std::abs(exact)), amrex::IntVect(k));
       const amrex::Real lnT = std::log(T);
       const amrex::Real lam_fit = std::exp(
         tp.fitlam[4 * k] + tp.fitlam[1 + 4 * k] * lnT +
         tp.fitlam[2 + 4 * k] * lnT * lnT +
         tp.fitlam[3 + 4 * k] * lnT * lnT * lnT);
-      const amrex::Real r = lam / lam_fit;
+      const amrex::Real r = relative(lam, lam_fit);
       fit_ratio_min = std::min(fit_ratio_min, r);
       fit_ratio_max = std::max(fit_ratio_max, r);
       pure_fit.update(std::abs(r - 1.0), amrex::IntVect(k));
@@ -647,7 +667,7 @@ check_conductivity(
   }
   amrex::Print() << "Multicomponent conductivity checks passed\n\n";
 }
-#endif // PELE_TRANSPORT_NO_LCT
+#endif // PELE_TRANSPORT_LCT
 #endif // USE_SIMPLE_TRANSPORT
 
 // Verify the multicomponent diffusion matrix on host copies of the data.
@@ -726,7 +746,7 @@ check_matrix_diffusion(
         for (int r = 0; r < NS; ++r) {
           acc += M[r * NS + c];
         }
-        colsum.update(std::abs(acc) / dmax, iv);
+        colsum.update(relative(std::abs(acc), dmax), iv);
       }
 
 #ifdef USE_SIMPLE_TRANSPORT
@@ -743,7 +763,8 @@ check_matrix_diffusion(
       for (int r = 0; r < NS; ++r) {
         for (int c = r + 1; c < NS; ++c) {
           sym.update(
-            std::abs(M[r * NS + c] / Ytr[r] - M[c * NS + r] / Ytr[c]) / smax,
+            relative(
+              std::abs(M[r * NS + c] / Ytr[r] - M[c * NS + r] / Ytr[c]), smax),
             iv);
         }
       }
@@ -757,7 +778,8 @@ check_matrix_diffusion(
           beff[pele::physics::transport::binary_pair_index(0, 1)];
         const amrex::Real exact =
           scale * wbar / b12 * tp.wt[0] * tp.wt[1] / (wbar * wbar);
-        binary.update(std::abs((M[0] - M[1]) - exact) / std::abs(exact), iv);
+        binary.update(
+          relative(std::abs((M[0] - M[1]) - exact), std::abs(exact)), iv);
       }
 
       // (e) one iteration reproduces the projected Hirschfelder-Curtiss
@@ -769,7 +791,7 @@ check_matrix_diffusion(
         }
         pele::physics::transport::project_diffusion_matrix(Ytr, P);
         for (int n = 0; n < NS * NS; ++n) {
-          hc.update(std::abs(P[n] - M[n]) / dmax, iv);
+          hc.update(relative(std::abs(P[n] - M[n]), dmax), iv);
         }
       }
 
@@ -782,7 +804,7 @@ check_matrix_diffusion(
           num += (M[n] - Dref[n]) * (M[n] - Dref[n]);
           den += Dref[n] * Dref[n];
         }
-        ref.update(std::sqrt(num / den), iv);
+        ref.update(std::sqrt(relative(num, den)), iv);
         ++nsampled;
       }
 #else
@@ -847,7 +869,7 @@ main(int argc, char* argv[])
     ppte.query("write_matrix", write_matrix);
     ppte.query("conductivity_check", conductivity_check);
     ppte.query("npts", npts_in);
-#if defined(USE_SIMPLE_TRANSPORT) && !defined(PELE_TRANSPORT_NO_LCT)
+#if defined(USE_SIMPLE_TRANSPORT) && defined(PELE_TRANSPORT_LCT)
     const bool lct_model =
       trans_parms.host_parm().conductivity_model != ConductivityModel::Mixture;
 #else
@@ -989,7 +1011,7 @@ main(int argc, char* argv[])
       check_matrix_diffusion(
         mass_frac, temperature, density, D, Dmat, trans_parms.host_parm());
     }
-#if defined(USE_SIMPLE_TRANSPORT) && !defined(PELE_TRANSPORT_NO_LCT)
+#if defined(USE_SIMPLE_TRANSPORT) && defined(PELE_TRANSPORT_LCT)
     if (do_chit) {
       check_conductivity(
         mass_frac, temperature, density, lam, chi, chit,

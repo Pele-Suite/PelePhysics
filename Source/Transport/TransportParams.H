@@ -73,8 +73,9 @@ struct TransParm<EOSType, SimpleTransport>
   amrex::GpuArray<amrex::Real, NUM_SPECIES * NUM_FIT * 3> fittdrat = {0.0};
   amrex::GpuArray<int, NUM_SPECIES> nlin = {0};
   // Shift applied to mass/mole fractions so that vanishing species keep a
-  // positive "trace" value: Y_tr = Y + eps * (sum(Y)/N - Y)
-  amrex::Real trace_epsilon{1.e-16};
+  // positive "trace" value: Y_tr = Y + eps * (sum(Y)/N - Y). The default is
+  // the value that was hard-coded before the option existed.
+  amrex::Real trace_epsilon{1.e-15};
   // Number of projected standard iterations for the multicomponent
   // diffusion matrix (2 reproduces EGlib's EGSDR1)
   int matrix_diffusion_niter{2};
@@ -117,7 +118,7 @@ struct TransParm<eos::SRK, SimpleTransport>
     Upsilonijk = {0.0};
   amrex::GpuArray<amrex::Real, NUM_SPECIES> Kappai = {0.0};
   amrex::GpuArray<amrex::Real, NUM_SPECIES> omega = {0.0};
-  amrex::Real trace_epsilon{1.e-16};
+  amrex::Real trace_epsilon{1.e-15};
   int matrix_diffusion_niter{2};
   int conductivity_model{ConductivityModel::Mixture};
   int conductivity_niter{3};
@@ -174,7 +175,7 @@ simple_transport_query_common(TParm* tparm)
   pp.query("matrix_diffusion_niter", tparm->matrix_diffusion_niter);
   if (tparm->trace_epsilon < 1.e-30 || tparm->trace_epsilon > 1.e-6) {
     amrex::Abort(
-      "transport.trace_epsilon must be in [1e-30, 1e-6] (default 1e-16)");
+      "transport.trace_epsilon must be in [1e-30, 1e-6] (default 1e-15)");
   }
   if (tparm->matrix_diffusion_niter < 1) {
     amrex::Abort("transport.matrix_diffusion_niter must be >= 1 (default 2)");
@@ -191,11 +192,12 @@ simple_transport_query_common(TParm* tparm)
     amrex::Abort(
       "transport.conductivity_model must be mixture (default), lct1 or lct3");
   }
-#ifdef PELE_TRANSPORT_NO_LCT
+#ifndef PELE_TRANSPORT_LCT
   if (tparm->conductivity_model != ConductivityModel::Mixture) {
     amrex::Abort(
-      "transport.conductivity_model = lct1/lct3 requested but the "
-      "code was compiled with PELE_TRANSPORT_NO_LCT");
+      "transport.conductivity_model = lct1/lct3 requested but the code was "
+      "built without the LCT models: build with USE_LCT_TRANSPORT = TRUE "
+      "(GNU make) or -DPELE_TRANSPORT_LCT");
   }
 #endif
   pp.query("conductivity_niter", tparm->conductivity_niter);

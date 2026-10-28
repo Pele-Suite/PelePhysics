@@ -3,3 +3,11 @@ CEXE_sources += Transport.cpp
 
 VPATH_LOCATIONS += $(PELE_PHYSICS_HOME)/Source/Transport
 INCLUDE_LOCATIONS += $(PELE_PHYSICS_HOME)/Source/Transport
+# Multicomponent (EGlib LCT) thermal conductivity and rescaled thermal
+# diffusion ratios of Simple transport. Opt-in: the LCT branch adds
+# N(N+1)/2 + ~17N doubles of local memory to every kernel that evaluates
+# transport, even when the default mixture rule is selected at run time.
+USE_LCT_TRANSPORT ?= FALSE
+ifeq ($(USE_LCT_TRANSPORT),TRUE)
+  DEFINES += -DPELE_TRANSPORT_LCT
+endif

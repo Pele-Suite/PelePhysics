@@ -3,6 +3,13 @@
 
 #include <AMReX_REAL.H>
 
+// Feature macro for downstream codes: the request/output transport API below
+// (TransportRequest / TransportOutputs with the multicomponent diffusion
+// matrix) is available. The LCT conductivity models and the rescaled thermal
+// diffusion ratios additionally need the build option PELE_TRANSPORT_LCT
+// (GNU make: USE_LCT_TRANSPORT = TRUE).
+#define PELE_PHYSICS_TRANSPORT_EXTENDED_API 1
+
 namespace pele::physics {
 namespace transport {
 struct ConstTransport;

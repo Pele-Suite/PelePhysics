@@ -31,11 +31,25 @@ struct ConductivityModel
 
 // Parker's rotational relaxation temperature dependence
 //   F(x) = 1 + pi^{3/2}/2 sqrt(x) + (2 + pi^2/4) x + pi^{3/2} x^{3/2},
-// with x = eps/T (same expression as the bulk viscosity in Simple.H)
+// with x = eps/T (Parker 1959; EGlib and the CEPTR conductivity fits)
 AMREX_GPU_HOST_DEVICE
 AMREX_FORCE_INLINE
 amrex::Real
 parker_factor(const amrex::Real x)
+{
+  const amrex::Real pi3_2 = std::pow(M_PI, 1.5);
+  const amrex::Real sqrtx = std::sqrt(x);
+  return 1.0 + 0.50 * pi3_2 * sqrtx + (2.0 + 0.25 * M_PI * M_PI) * x +
+         pi3_2 * sqrtx * x;
+}
+
+// The expression historically used by the bulk viscosity of Simple
+// transport, with pi^2/2 instead of pi^2/4 in the linear term. Kept so that
+// the bulk viscosity stays bitwise unchanged; not used by the LCT models.
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
+amrex::Real
+parker_factor_legacy(const amrex::Real x)
 {
   const amrex::Real pi3_2 = std::pow(M_PI, 1.5);
   const amrex::Real sqrtx = std::sqrt(x);

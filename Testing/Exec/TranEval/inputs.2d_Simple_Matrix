@@ -5,5 +5,5 @@ tran_eval.npts = 64
 amr.plot_file = plt_matrix
 
 # Defaults, listed for reference
-transport.trace_epsilon = 1.e-16
+transport.trace_epsilon = 1.e-15
 transport.matrix_diffusion_niter = 2

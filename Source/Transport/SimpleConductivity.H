@@ -10,9 +10,11 @@
 #include "TransportUtils.H"
 
 // Multicomponent thermal conductivity and rescaled thermal diffusion ratios
-// (Ern & Giovangigli; EGlib EGSLCT1 / EGSLCT3). Compiled out with
-// -DPELE_TRANSPORT_NO_LCT.
-#ifndef PELE_TRANSPORT_NO_LCT
+// (Ern & Giovangigli; EGlib EGSLCT1 / EGSLCT3). Opt-in: compiled with
+// -DPELE_TRANSPORT_LCT (GNU make: USE_LCT_TRANSPORT = TRUE), because the
+// runtime model switch puts the LCT work arrays into the local-memory
+// footprint of every kernel that evaluates transport.
+#ifdef PELE_TRANSPORT_LCT
 
 namespace pele::physics::transport {
 
@@ -439,7 +441,7 @@ multicomponent_conductivity(
 
 } // namespace pele::physics::transport
 
-#else // PELE_TRANSPORT_NO_LCT
+#else // !PELE_TRANSPORT_LCT
 
 namespace pele::physics::transport {
 // Stub so that the (discarded) call sites in Simple.H still compile; the
@@ -460,10 +462,10 @@ multicomponent_conductivity(
   amrex::Real*)
 {
   amrex::Abort(
-    "Multicomponent conductivity compiled out "
-    "(PELE_TRANSPORT_NO_LCT)");
+    "Multicomponent conductivity not compiled in "
+    "(build with USE_LCT_TRANSPORT = TRUE / -DPELE_TRANSPORT_LCT)");
 }
 } // namespace pele::physics::transport
 
-#endif // PELE_TRANSPORT_NO_LCT
+#endif // PELE_TRANSPORT_LCT
 #endif

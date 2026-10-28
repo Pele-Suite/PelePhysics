@@ -379,8 +379,8 @@ struct SimpleTransport
     }
 
     for (int i = 0; i < NUM_SPECIES; ++i) {
-      Fnorm[i] = parker_factor(tparm->eps[i] / 298.0);
-      FofT[i] = parker_factor(tparm->eps[i] / Tloc);
+      Fnorm[i] = parker_factor_legacy(tparm->eps[i] / 298.0);
+      FofT[i] = parker_factor_legacy(tparm->eps[i] / Tloc);
     }
 
     for (int i = 0; i < NUM_SPECIES; ++i) {
@@ -429,8 +429,11 @@ struct SimpleTransport
     amrex::Real muloc[NUM_SPECIES] = {0.0};
     amrex::Real logT[NUM_FIT - 1] = {0.0};
 
-    // Multicomponent (EGlib LCT) thermal conductivity requested?
-#ifndef PELE_TRANSPORT_NO_LCT
+    // Multicomponent (EGlib LCT) thermal conductivity requested? The LCT
+    // models are compiled in with PELE_TRANSPORT_LCT (USE_LCT_TRANSPORT =
+    // TRUE); without it the mixture model is the only one accepted at
+    // initialization.
+#ifdef PELE_TRANSPORT_LCT
     constexpr bool lct_compiled = true;
     const bool lct =
       (tparm->conductivity_model != ConductivityModel::Mixture) &&
@@ -439,11 +442,17 @@ struct SimpleTransport
     constexpr bool lct_compiled = false;
     const bool lct = false;
 #endif
+    // Requesting chit with the mixture model is a caller error: the model is
+    // a runtime option, so check tparm->conductivity_model at setup. It is
+    // trapped in DEBUG builds and otherwise yields chit = 0.
+    AMREX_ASSERT(!(
+      wtr_get_chit && tparm->conductivity_model == ConductivityModel::Mixture));
     if (
-      wtr_get_chit && tparm->conductivity_model == ConductivityModel::Mixture) {
-      amrex::Abort(
-        "Rescaled thermal diffusion ratios (chit) require "
-        "transport.conductivity_model = lct1 or lct3");
+      wtr_get_chit && (chit != nullptr) &&
+      tparm->conductivity_model == ConductivityModel::Mixture) {
+      for (int i = 0; i < NUM_SPECIES; ++i) {
+        chit[i] = 0.0;
+      }
     }
 
     logT[0] = std::log(Tloc);
@@ -671,7 +680,8 @@ struct SimpleTransport
   }
 
   // Extended API: evaluates the quantities selected in req and writes them
-  // to the non-null members of out. In addition to the historical outputs it
+  // to the corresponding non-null members of out; outputs that are not
+  // requested are left untouched. In addition to the historical outputs it
   // provides the multicomponent flux diffusion matrix
   // Dmat[i*NUM_SPECIES + j] = rho * Y_i * D_ij (see
   // multicomponent_diffusion_matrix) and, for an LCT conductivity model, the
@@ -692,13 +702,13 @@ struct SimpleTransport
       req.chi && out.chi != nullptr, req.Dmat && out.Dmat != nullptr,
       req.chit && out.chit != nullptr, Tloc, rholoc, Yloc, out.Ddiag, out.chi,
       out.Dmat, out.chit, mu_l, xi_l, lam_l, tparm);
-    if (out.mu != nullptr) {
+    if (req.mu && out.mu != nullptr) {
       *out.mu = mu_l;
     }
-    if (out.xi != nullptr) {
+    if (req.xi && out.xi != nullptr) {
       *out.xi = xi_l;
     }
-    if (out.lam != nullptr) {
+    if (req.lam && out.lam != nullptr) {
       *out.lam = lam_l;
     }
   }
