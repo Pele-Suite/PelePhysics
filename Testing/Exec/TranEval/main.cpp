@@ -25,6 +25,13 @@ using pele::physics::transport::TransportRequest;
 
 constexpr int NS = NUM_SPECIES;
 
+// The round-off tolerances below are calibrated for double precision; scale
+// them with the machine epsilon of amrex::Real so that a single-precision
+// build (PRECISION=FLOAT) is checked at its own round-off level (the factor
+// is exactly 1 for double)
+constexpr amrex::Real precision_scale =
+  std::numeric_limits<amrex::Real>::epsilon() / 2.220446049250313e-16;
+
 // Record the worst violation of a check and its location. A non-finite
 // value is a failure in its own right (a NaN would otherwise never compare
 // greater than the running maximum and could hide behind a PASS), so it is
@@ -486,11 +493,11 @@ check_conductivity(
   const amrex::MultiFab chit_h = to_host(chit_d);
 
   amrex::ParmParse pp("tran_eval");
-  amrex::Real tol_antisym = 1.e-13;
+  amrex::Real tol_antisym = 1.e-13 * precision_scale;
   amrex::Real tol_ref = 0.5;
-  amrex::Real tol_mono = 1.e-12;
+  amrex::Real tol_mono = 1.e-12 * precision_scale;
   amrex::Real ratio_lo = 0.5, ratio_hi = 2.0;
-  amrex::Real tol_pure = 1.e-10;
+  amrex::Real tol_pure = 1.e-10 * precision_scale;
   amrex::Real tol_pure_fit = 0.25; // polar species differ by up to ~20 %
   int ref_samples = 10;
   pp.query("lct_antisym_tol", tol_antisym);
@@ -689,10 +696,10 @@ check_matrix_diffusion(
   const amrex::BoxArray& ba = Dmat_d.boxArray();
 
   amrex::ParmParse pp("tran_eval");
-  amrex::Real tol_colsum = 1.e-12;
-  amrex::Real tol_sym = 1.e-10;
-  amrex::Real tol_binary = 1.e-11;
-  amrex::Real tol_hc = 1.e-11;
+  amrex::Real tol_colsum = 1.e-12 * precision_scale;
+  amrex::Real tol_sym = 1.e-10 * precision_scale;
+  amrex::Real tol_binary = 1.e-11 * precision_scale;
+  amrex::Real tol_hc = 1.e-11 * precision_scale;
   amrex::Real tol_ref = 0.5;
   int ref_samples = 10;
   pp.query("matrix_colsum_tol", tol_colsum);

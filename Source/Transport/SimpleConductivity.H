@@ -82,7 +82,7 @@ lct_species_setup(
       cint[i] = cvk[i] * wt / Constants::RU - 1.5;
       crot = (tparm->nlin[i] == 1) ? 1.0 : 1.5;
     }
-    const amrex::Real xi_i = amrex::max(1.0, tparm->zrot[i]) *
+    const amrex::Real xi_i = amrex::max<amrex::Real>(1.0, tparm->zrot[i]) *
                              parker_factor(tparm->eps[i] / 298.0) /
                              parker_factor(tparm->eps[i] / T);
     cxi[i] = crot / (xi_i * M_PI);
