@@ -83,8 +83,8 @@ project_diffusion_matrix(const amrex::Real* Yloc, amrex::Real* Dmat)
     r[i] = acc * rs;
   }
   amrex::Real c = 0.0;
-  for (int i = 0; i < NUM_SPECIES; ++i) {
-    c += r[i];
+  for (const amrex::Real ri : r) {
+    c += ri;
   }
   c *= rs;
   for (int i = 0; i < NUM_SPECIES; ++i) {

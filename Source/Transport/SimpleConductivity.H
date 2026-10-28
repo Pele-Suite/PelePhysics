@@ -449,17 +449,17 @@ namespace pele::physics::transport {
 template <typename TParm>
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
 multicomponent_conductivity(
-  int,
-  int,
-  amrex::Real,
-  amrex::Real,
-  const amrex::Real*,
-  const amrex::Real*,
-  const amrex::Real*,
-  amrex::Real*,
-  TParm const*,
-  amrex::Real&,
-  amrex::Real*)
+  int /*model*/,
+  int /*niter*/,
+  amrex::Real /*T*/,
+  amrex::Real /*lnT*/,
+  const amrex::Real* /*X*/,
+  const amrex::Real* /*eta*/,
+  const amrex::Real* /*cvk*/,
+  amrex::Real* /*binv*/,
+  TParm const* /*tparm*/,
+  amrex::Real& /*lam*/,
+  amrex::Real* /*chit*/)
 {
   amrex::Abort(
     "Multicomponent conductivity not compiled in "
