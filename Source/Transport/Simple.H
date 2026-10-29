@@ -2,6 +2,8 @@
 #define SIMPLETRANSPORT_H
 
 #include "TransportParams.H"
+#include "TransportUtils.H"
+#include "SimpleConductivity.H"
 #include "PhysicsConstants.H"
 
 namespace pele::physics::transport {
@@ -130,28 +132,27 @@ struct NonIdealChungCorrections<eos::SRK>
   }
 };
 
+// Visit every species pair (i,j), i<j, in the fixed order used historically
+// by the mixture-averaged diffusivities (outer i ascending, inner j
+// descending), calling f(i, j, b_atm, b_eff) with b_atm the reciprocal of the
+// dilute-gas binary diffusion coefficient at 1 atm and b_eff the effective
+// value used for species diffusion (identical for an ideal gas; density
+// corrected for SRK, evaluated only when need_eff). Returns the factor that
+// converts W_i * (...) / sum_j X_j b_eff_ij into rho * D (CGS).
 template <typename EOSType>
-struct BinaryDiff
+struct BinaryDiffInv
 {
-  AMREX_GPU_HOST_DEVICE
-  AMREX_FORCE_INLINE
-  void operator()(
-    const amrex::Real* Xloc,
-    const amrex::Real* Yloc,
+  template <typename F>
+  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real operator()(
+    const amrex::Real* /*Yloc*/,
     const amrex::Real* logT,
     const amrex::Real /*rholoc*/,
     const amrex::Real Tloc,
-    amrex::Real* Ddiag,
-    TransParm<EOSType, SimpleTransport> const* tparm)
+    const bool /*need_eff*/,
+    TransParm<EOSType, SimpleTransport> const* tparm,
+    F&& f) const
   {
-    const amrex::Real scale = Constants::PATM / (Constants::RU * Tloc);
-
     for (int i = 0; i < NUM_SPECIES; ++i) {
-      Ddiag[i] = 0.0;
-    }
-
-    for (int i = 0; i < NUM_SPECIES; ++i) {
-      amrex::Real term1 = 0.0;
       for (int j = NUM_SPECIES - 1; j > i; --j) {
         const int four_idx_ij = 4 * (j * (j + 1) / 2 + i);
         amrex::Real dbintemp = tparm->fitdbin[four_idx_ij] +
@@ -159,38 +160,27 @@ struct BinaryDiff
                                tparm->fitdbin[four_idx_ij + 2] * logT[1] +
                                tparm->fitdbin[four_idx_ij + 3] * logT[2];
         dbintemp = std::exp(-dbintemp);
-        Ddiag[i] += Xloc[j] * dbintemp;
-        Ddiag[j] += Xloc[i] * dbintemp;
-        term1 += Yloc[j];
+        f(i, j, dbintemp, dbintemp);
       }
-      for (int j = 0; j < i; ++j) {
-        term1 += Yloc[j];
-      }
-      Ddiag[i] = tparm->wt[i] * term1 / Ddiag[i] * scale;
     }
+    return Constants::PATM / (Constants::RU * Tloc);
   }
 };
 
 template <>
-struct BinaryDiff<eos::SRK>
+struct BinaryDiffInv<eos::SRK>
 {
-  AMREX_GPU_HOST_DEVICE
-  AMREX_FORCE_INLINE
-  void operator()(
-    const amrex::Real* Xloc,
+  template <typename F>
+  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real operator()(
     const amrex::Real* Yloc,
     const amrex::Real* logT,
     const amrex::Real rholoc,
     const amrex::Real Tloc,
-    amrex::Real* Ddiag,
-    TransParm<eos::SRK, SimpleTransport> const* tparm)
+    const bool need_eff,
+    TransParm<eos::SRK, SimpleTransport> const* tparm,
+    F&& f) const
   {
-
     for (int i = 0; i < NUM_SPECIES; ++i) {
-      Ddiag[i] = 0.0;
-    }
-    for (int i = 0; i < NUM_SPECIES; ++i) {
-      amrex::Real term1 = 0.0;
       for (int j = NUM_SPECIES - 1; j > i; --j) {
         const int idx_ij = 4 * (j * (j + 1) / 2 + i);
         const int idx_ijk = (i + NUM_SPECIES * j) * NUM_SPECIES;
@@ -200,24 +190,161 @@ struct BinaryDiff<eos::SRK>
                                tparm->fitdbin[idx_ij + 3] * logT[2];
         dbintemp = std::exp(-dbintemp);
 
-        amrex::Real Upsilonij = 0.0;
-        for (int k = 0; k < NUM_SPECIES; ++k) {
-          Upsilonij += tparm->Upsilonijk[idx_ijk + k] * Yloc[k];
+        amrex::Real beff = dbintemp;
+        if (need_eff) {
+          amrex::Real Upsilonij = 0.0;
+          for (int k = 0; k < NUM_SPECIES; ++k) {
+            Upsilonij += tparm->Upsilonijk[idx_ijk + k] * Yloc[k];
+          }
+          // here we have a symmetry
+          Upsilonij = Upsilonij * rholoc * Constants::Avna * M_PI / 12.0 + 1.0;
+          beff =
+            dbintemp * (Constants::RU * Tloc * Upsilonij) / Constants::PATM;
         }
-        // here we have a symmetry
-        Upsilonij = Upsilonij * rholoc * Constants::Avna * M_PI / 12.0 + 1.0;
-        dbintemp *= (Constants::RU * Tloc * Upsilonij) / Constants::PATM;
-        Ddiag[i] += Xloc[j] * dbintemp;
-        Ddiag[j] += Xloc[i] * dbintemp;
-        term1 += Yloc[j];
+        f(i, j, dbintemp, beff);
       }
-      for (int j = 0; j < i; ++j) {
-        term1 += Yloc[j];
-      }
-      Ddiag[i] = tparm->wt[i] * term1 / Ddiag[i];
     }
+    return 1.0;
   }
 };
+
+// Finish the mixture-averaged (Hirschfelder-Curtiss) diffusivities once
+// Ddiag[i] holds sum_{j != i} X_j binv_ij:
+//   Ddiag[i] = rho * (W_i / Wbar) * (sum_{j != i} Y_j) / (sum_{j != i} X_j /
+//   D_ij)
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
+void
+finalize_mixture_averaged_diffusivities(
+  const amrex::Real* Yloc,
+  const amrex::Real scale,
+  const amrex::Real* wt,
+  amrex::Real* Ddiag)
+{
+  for (int i = 0; i < NUM_SPECIES; ++i) {
+    amrex::Real term1 = 0.0;
+    for (int j = NUM_SPECIES - 1; j > i; --j) {
+      term1 += Yloc[j];
+    }
+    for (int j = 0; j < i; ++j) {
+      term1 += Yloc[j];
+    }
+    Ddiag[i] = wt[i] * term1 / Ddiag[i] * scale;
+  }
+}
+
+// Multicomponent flux diffusion matrix (Ern & Giovangigli; EGlib EGSDR1).
+//
+// On exit Dmat[i*NUM_SPECIES + j] = rho * Y_i * D_ij in CGS (g/cm/s), where
+// D_ij is the symmetric multicomponent diffusion matrix, such that the species
+// mass fluxes are F_i = -sum_j Dmat_ij grad(X_j). The result is pressure
+// independent and satisfies sum_i Dmat_ij = 0.
+//
+// Inputs are the trace-adjusted mole and mass fractions (all strictly
+// positive, each summing to ~1), the packed reciprocal binary diffusion
+// coefficients binv[binary_pair_index(i,j)], the density scale returned by
+// BinaryDiffInv, the number of projected standard iterations on the
+// Stefan-Maxwell matrix L_[00] (niter = 1 is Hirschfelder-Curtiss, niter = 2
+// is EGlib's choice) and the species molecular weights.
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
+void
+multicomponent_diffusion_matrix(
+  const amrex::Real* Xloc,
+  const amrex::Real* Yloc,
+  const amrex::Real* binv,
+  const amrex::Real scale,
+  const int niter,
+  const amrex::Real* wt,
+  amrex::Real* Dmat)
+{
+  constexpr int N = NUM_SPECIES;
+
+  // Diagonal of L_[00]: Gd_i = X_i sum_{j != i} X_j binv_ij, and
+  // a_i = sum_{j != i} Y_j (summed rather than 1 - Y_i to stay accurate for
+  // the dominant species). The splitting L_[00] = M - Z with
+  // M = diag(Gd_i / a_i) makes the first iterate Hirschfelder-Curtiss.
+  amrex::Real Gd[N] = {0.0};
+  amrex::Real a[N] = {0.0};
+  amrex::Real m[N] = {0.0};
+  for (int i = 0; i < N; ++i) {
+    for (int j = i + 1; j < N; ++j) {
+      const amrex::Real b = binv[binary_pair_index(i, j)];
+      Gd[i] += Xloc[j] * b;
+      Gd[j] += Xloc[i] * b;
+      a[i] += Yloc[j];
+      a[j] += Yloc[i];
+    }
+  }
+  for (int i = 0; i < N; ++i) {
+    Gd[i] *= Xloc[i];
+    m[i] = a[i] / Gd[i];
+  }
+
+  // Symmetric iterate S^(k) = sum_{l<k} (M^-1 Z)^l M^-1, written into Dmat.
+  // k = 1: diag(m); k = 2 (closed form, EGlib EGSSI1):
+  //   S_ii = m_i (1 + Y_i),  S_ij = m_i m_j X_i X_j binv_ij
+  if (niter <= 1) {
+    for (int i = 0; i < N; ++i) {
+      for (int j = 0; j < N; ++j) {
+        Dmat[i * N + j] = 0.0;
+      }
+      Dmat[i * N + i] = m[i];
+    }
+  } else {
+    for (int i = 0; i < N; ++i) {
+      Dmat[i * N + i] = m[i] * (1.0 + Yloc[i]);
+      for (int j = i + 1; j < N; ++j) {
+        const amrex::Real sij =
+          m[i] * m[j] * Xloc[i] * Xloc[j] * binv[binary_pair_index(i, j)];
+        Dmat[i * N + j] = sij;
+        Dmat[j * N + i] = sij;
+      }
+    }
+  }
+
+  // Further iterations: S^(k) = diag(m) (I + Z S^(k-1)) with
+  // Z_ij = X_i X_j binv_ij (i != j), Z_ii = Gd_i Y_i / a_i.
+  if (niter > 2) {
+    amrex::Real S[N * N];
+    amrex::Real* cur = Dmat;
+    amrex::Real* nxt = S;
+    for (int it = 3; it <= niter; ++it) {
+      for (int i = 0; i < N; ++i) {
+        const amrex::Real zii = Gd[i] * Yloc[i] / a[i];
+        for (int j = 0; j < N; ++j) {
+          amrex::Real acc = (i == j) ? 1.0 : 0.0;
+          acc += zii * cur[i * N + j];
+          for (int k = 0; k < N; ++k) {
+            if (k != i) {
+              acc += Xloc[i] * Xloc[k] * binv[binary_pair_index(i, k)] *
+                     cur[k * N + j];
+            }
+          }
+          nxt[i * N + j] = m[i] * acc;
+        }
+      }
+      amrex::Real* tmp = cur;
+      cur = nxt;
+      nxt = tmp;
+    }
+    if (cur != Dmat) {
+      for (int n = 0; n < N * N; ++n) {
+        Dmat[n] = S[n];
+      }
+    }
+  }
+
+  // Flux form: rho * Y_i * S_ij with rho * Y_i = scale * X_i * W_i, then the
+  // mass-conserving projection P D P.
+  for (int i = 0; i < N; ++i) {
+    const amrex::Real fac = scale * Xloc[i] * wt[i];
+    for (int j = 0; j < N; ++j) {
+      Dmat[i * N + j] *= fac;
+    }
+  }
+  project_diffusion_matrix(Yloc, Dmat);
+}
 
 struct SimpleTransport
 {
@@ -229,17 +356,14 @@ struct SimpleTransport
   AMREX_FORCE_INLINE static void comp_pure_bulk(
     amrex::Real Tloc,
     const amrex::Real* muloc,
+    const amrex::Real* cvk,
     amrex::Real* xiloc,
     TransParm<EosType, transport_type> const* tparm)
   {
-    amrex::Real cvk[NUM_SPECIES] = {0.0};
     amrex::Real cvkint[NUM_SPECIES] = {0.0};
     amrex::Real cvkrot[NUM_SPECIES] = {0.0};
     amrex::Real FofT[NUM_SPECIES] = {0.0};
     amrex::Real Fnorm[NUM_SPECIES] = {0.0};
-    amrex::Real pi3_2 = std::pow(M_PI, 1.5);
-
-    CKCVMS(Tloc, cvk);
 
     for (int i = 0; i < NUM_SPECIES; ++i) {
       if (tparm->nlin[i] == 0) {
@@ -255,15 +379,8 @@ struct SimpleTransport
     }
 
     for (int i = 0; i < NUM_SPECIES; ++i) {
-      amrex::Real epskoverTstd = tparm->eps[i] / 298.0;
-      amrex::Real epskoverT = tparm->eps[i] / Tloc;
-      Fnorm[i] = 1.0 + 0.50 * pi3_2 * std::sqrt(epskoverTstd) +
-                 (2.0 + .50 * M_PI * M_PI) * epskoverTstd +
-                 pi3_2 * std::sqrt(epskoverTstd) * epskoverTstd;
-
-      FofT[i] = 1.0 + 0.50 * pi3_2 * std::sqrt(epskoverT) +
-                (2.0 + .50 * M_PI * M_PI) * epskoverT +
-                pi3_2 * std::sqrt(epskoverT) * epskoverT;
+      Fnorm[i] = parker_factor_legacy(tparm->eps[i] / 298.0);
+      FofT[i] = parker_factor_legacy(tparm->eps[i] / Tloc);
     }
 
     for (int i = 0; i < NUM_SPECIES; ++i) {
@@ -281,29 +398,62 @@ struct SimpleTransport
     }
   }
 
-  AMREX_GPU_HOST_DEVICE
-  AMREX_FORCE_INLINE static void transport(
+  // Shared implementation. DoMatrix = false compiles out the multicomponent
+  // diffusion matrix and the rescaled thermal diffusion ratios (including
+  // their N^2 work arrays), so callers of the historical API are only
+  // affected by the runtime thermal conductivity model.
+  template <bool DoMatrix>
+  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void transport_impl(
     const bool wtr_get_xi,
     const bool wtr_get_mu,
     const bool wtr_get_lam,
     const bool wtr_get_Ddiag,
     const bool wtr_get_chi,
+    const bool wtr_get_Dmat,
+    const bool wtr_get_chit,
     const amrex::Real Tloc,
     const amrex::Real rholoc,
     const amrex::Real* Yloc,
     amrex::Real* Ddiag,
     amrex::Real* chi_mix,
+    amrex::Real* Dmat,
+    amrex::Real* chit,
     amrex::Real& mu,
     amrex::Real& xi,
     amrex::Real& lam,
     TransParm<EosType, transport_type> const* tparm)
   {
-    amrex::Real trace = 1.e-15;
+    const amrex::Real trace = tparm->trace_epsilon;
     amrex::Real Xloc[NUM_SPECIES] = {0.0};
     amrex::Real Yloc_mod[NUM_SPECIES] = {0.0};
     amrex::Real muloc[NUM_SPECIES] = {0.0};
-    amrex::Real xiloc[NUM_SPECIES] = {0.0};
     amrex::Real logT[NUM_FIT - 1] = {0.0};
+
+    // Multicomponent (EGlib LCT) thermal conductivity requested? The LCT
+    // models are compiled in with PELE_TRANSPORT_LCT (USE_LCT_TRANSPORT =
+    // TRUE); without it the mixture model is the only one accepted at
+    // initialization.
+#ifdef PELE_TRANSPORT_LCT
+    constexpr bool lct_compiled = true;
+    const bool lct =
+      (tparm->conductivity_model != ConductivityModel::Mixture) &&
+      (wtr_get_lam || wtr_get_chit);
+#else
+    constexpr bool lct_compiled = false;
+    const bool lct = false;
+#endif
+    // Requesting chit with the mixture model is a caller error: the model is
+    // a runtime option, so check tparm->conductivity_model at setup. It is
+    // trapped in DEBUG builds and otherwise yields chit = 0.
+    AMREX_ASSERT(!(
+      wtr_get_chit && tparm->conductivity_model == ConductivityModel::Mixture));
+    if (
+      wtr_get_chit && (chit != nullptr) &&
+      tparm->conductivity_model == ConductivityModel::Mixture) {
+      for (int i = 0; i < NUM_SPECIES; ++i) {
+        chit[i] = 0.0;
+      }
+    }
 
     logT[0] = std::log(Tloc);
     logT[1] = logT[0] * logT[0];
@@ -326,37 +476,43 @@ struct SimpleTransport
     for (int i = 0; i < NUM_SPECIES; ++i) {
       Xloc[i] = Yloc_mod[i] * wbar * tparm->iwt[i];
     }
-    if (wtr_get_mu) {
+
+    // Pure species viscosities: needed for mu, xi and the LCT systems
+    if (wtr_get_mu || wtr_get_xi || lct) {
       for (int i = 0; i < NUM_SPECIES; ++i) {
         muloc[i] = tparm->fitmu[4 * i] + tparm->fitmu[1 + 4 * i] * logT[0] +
                    tparm->fitmu[2 + 4 * i] * logT[1] +
                    tparm->fitmu[3 + 4 * i] * logT[2];
         muloc[i] = std::exp(muloc[i]);
       }
-
+    }
+    if (wtr_get_mu) {
       mu = 0.0;
-
       for (int i = 0; i < NUM_SPECIES; ++i) {
         mu += Xloc[i] *
               (muloc[i] * muloc[i] * muloc[i] * muloc[i] * muloc[i] * muloc[i]);
       }
       mu = std::cbrt(std::sqrt(mu));
-
-      //  assumption that we only get bulk viscosity if we are already getting
-      //  shear viscosity
-
-      if (wtr_get_xi) {
-        comp_pure_bulk(Tloc, muloc, xiloc, tparm);
-        xi = 0.0;
-        for (int i = 0; i < NUM_SPECIES; ++i) {
-          xi +=
-            Xloc[i] * (std::sqrt(std::sqrt(xiloc[i] * xiloc[i] * xiloc[i])));
-        }
-        xi = std::cbrt(xi * xi * xi * xi);
-      }
     }
 
-    if (wtr_get_lam) {
+    // Species heat capacities: needed for the bulk viscosity and the LCT
+    // systems
+    amrex::Real cvk[NUM_SPECIES] = {0.0};
+    if (wtr_get_xi || lct) {
+      CKCVMS(Tloc, cvk);
+    }
+    if (wtr_get_xi) {
+      amrex::Real xiloc[NUM_SPECIES] = {0.0};
+      comp_pure_bulk(Tloc, muloc, cvk, xiloc, tparm);
+      xi = 0.0;
+      for (int i = 0; i < NUM_SPECIES; ++i) {
+        xi += Xloc[i] * (std::sqrt(std::sqrt(xiloc[i] * xiloc[i] * xiloc[i])));
+      }
+      xi = std::cbrt(xi * xi * xi * xi);
+    }
+
+    // Thermal conductivity, empirical mixture rule (default model)
+    if (wtr_get_lam && !lct) {
       amrex::Real lamloc[NUM_SPECIES] = {0.0};
       for (int i = 0; i < NUM_SPECIES; ++i) {
         lamloc[i] = tparm->fitlam[4 * i] + tparm->fitlam[1 + 4 * i] * logT[0] +
@@ -371,13 +527,115 @@ struct SimpleTransport
       }
       lam = lam * lam * lam * lam;
     }
-    // Add nonideal corrections if necessary
+
+    // Species diffusion and LCT conductivity: the binary coefficients are
+    // evaluated once and shared. b_eff feeds Ddiag/Dmat, b_atm the LCT
+    // systems.
+    const bool need_eff = wtr_get_Ddiag || (DoMatrix && wtr_get_Dmat);
+    if constexpr (DoMatrix) {
+      if (need_eff || lct) {
+        amrex::Real binv_eff[NUM_BINARY_PAIRS] = {0.0};
+        amrex::Real binv_atm[NUM_BINARY_PAIRS] = {0.0};
+        if (wtr_get_Ddiag) {
+          for (int i = 0; i < NUM_SPECIES; ++i) {
+            Ddiag[i] = 0.0;
+          }
+        }
+        const amrex::Real scale = BinaryDiffInv<EosType>()(
+          Yloc_mod, logT, rholoc, Tloc, need_eff, tparm,
+          [&](
+            const int i, const int j, const amrex::Real batm,
+            const amrex::Real beff) {
+            const int p = binary_pair_index(i, j);
+            binv_eff[p] = beff;
+            binv_atm[p] = batm;
+            if (wtr_get_Ddiag) {
+              Ddiag[i] += Xloc[j] * beff;
+              Ddiag[j] += Xloc[i] * beff;
+            }
+          });
+        if (wtr_get_Ddiag) {
+          finalize_mixture_averaged_diffusivities(
+            Yloc_mod, scale, tparm->wt.data(), Ddiag);
+        }
+        if (wtr_get_Dmat) {
+          multicomponent_diffusion_matrix(
+            Xloc, Yloc_mod, binv_eff, scale, tparm->matrix_diffusion_niter,
+            tparm->wt.data(), Dmat);
+        }
+        if constexpr (lct_compiled) {
+          if (lct) {
+            amrex::Real lam_lct = 0.0;
+            multicomponent_conductivity(
+              tparm->conductivity_model, tparm->conductivity_niter, Tloc,
+              logT[0], Xloc, muloc, cvk, binv_atm, tparm, lam_lct,
+              wtr_get_chit ? chit : nullptr);
+            if (wtr_get_lam) {
+              lam = lam_lct;
+            }
+          }
+        } else {
+          amrex::ignore_unused(binv_atm, cvk);
+        }
+      }
+    } else {
+      amrex::ignore_unused(wtr_get_Dmat, Dmat, wtr_get_chit, chit);
+      bool done_Ddiag = false;
+      if constexpr (lct_compiled) {
+        if (lct) {
+          amrex::Real binv[NUM_BINARY_PAIRS] = {0.0};
+          if (wtr_get_Ddiag) {
+            for (int i = 0; i < NUM_SPECIES; ++i) {
+              Ddiag[i] = 0.0;
+            }
+          }
+          const amrex::Real scale = BinaryDiffInv<EosType>()(
+            Yloc_mod, logT, rholoc, Tloc, need_eff, tparm,
+            [&](
+              const int i, const int j, const amrex::Real batm,
+              const amrex::Real beff) {
+              binv[binary_pair_index(i, j)] = batm;
+              if (wtr_get_Ddiag) {
+                Ddiag[i] += Xloc[j] * beff;
+                Ddiag[j] += Xloc[i] * beff;
+              }
+            });
+          if (wtr_get_Ddiag) {
+            finalize_mixture_averaged_diffusivities(
+              Yloc_mod, scale, tparm->wt.data(), Ddiag);
+          }
+          amrex::Real lam_lct = 0.0;
+          multicomponent_conductivity(
+            tparm->conductivity_model, tparm->conductivity_niter, Tloc, logT[0],
+            Xloc, muloc, cvk, binv, tparm, lam_lct, nullptr);
+          if (wtr_get_lam) {
+            lam = lam_lct;
+          }
+          done_Ddiag = true;
+        }
+      } else {
+        amrex::ignore_unused(cvk);
+      }
+      if (wtr_get_Ddiag && !done_Ddiag) {
+        for (int i = 0; i < NUM_SPECIES; ++i) {
+          Ddiag[i] = 0.0;
+        }
+        const amrex::Real scale = BinaryDiffInv<EosType>()(
+          Yloc_mod, logT, rholoc, Tloc, true, tparm,
+          [&](
+            const int i, const int j, const amrex::Real /*batm*/,
+            const amrex::Real beff) {
+            Ddiag[i] += Xloc[j] * beff;
+            Ddiag[j] += Xloc[i] * beff;
+          });
+        finalize_mixture_averaged_diffusivities(
+          Yloc_mod, scale, tparm->wt.data(), Ddiag);
+      }
+    }
+
+    // Add nonideal corrections if necessary (mu and lam are final here)
     NonIdealChungCorrections<EosType>()(
       wtr_get_mu, wtr_get_lam, Tloc, Xloc, rholoc, wbar, mu, lam, tparm);
-
-    if (wtr_get_Ddiag) {
-      BinaryDiff<EosType>()(Xloc, Yloc_mod, logT, rholoc, Tloc, Ddiag, tparm);
-    }
 
     if (wtr_get_chi) {
       for (int n = 0; n < tparm->numLite; ++n) {
@@ -399,13 +657,74 @@ struct SimpleTransport
   }
 
   AMREX_GPU_HOST_DEVICE
-  AMREX_FORCE_INLINE static void get_transport_coeffs(
+  AMREX_FORCE_INLINE static void transport(
+    const bool wtr_get_xi,
+    const bool wtr_get_mu,
+    const bool wtr_get_lam,
+    const bool wtr_get_Ddiag,
+    const bool wtr_get_chi,
+    const amrex::Real Tloc,
+    const amrex::Real rholoc,
+    const amrex::Real* Yloc,
+    amrex::Real* Ddiag,
+    amrex::Real* chi_mix,
+    amrex::Real& mu,
+    amrex::Real& xi,
+    amrex::Real& lam,
+    TransParm<EosType, transport_type> const* tparm)
+  {
+    transport_impl<false>(
+      wtr_get_xi, wtr_get_mu, wtr_get_lam, wtr_get_Ddiag, wtr_get_chi, false,
+      false, Tloc, rholoc, Yloc, Ddiag, chi_mix, nullptr, nullptr, mu, xi, lam,
+      tparm);
+  }
+
+  // Extended API: evaluates the quantities selected in req and writes them
+  // to the corresponding non-null members of out; outputs that are not
+  // requested are left untouched. In addition to the historical outputs it
+  // provides the multicomponent flux diffusion matrix
+  // Dmat[i*NUM_SPECIES + j] = rho * Y_i * D_ij (see
+  // multicomponent_diffusion_matrix) and, for an LCT conductivity model, the
+  // rescaled thermal diffusion ratios chit (see SimpleConductivity.H).
+  // out.chi must be zeroed by the caller.
+  AMREX_GPU_HOST_DEVICE
+  AMREX_FORCE_INLINE static void transport(
+    const TransportRequest& req,
+    const amrex::Real Tloc,
+    const amrex::Real rholoc,
+    const amrex::Real* Yloc,
+    const TransportOutputs& out,
+    TransParm<EosType, transport_type> const* tparm)
+  {
+    amrex::Real mu_l = 0.0, xi_l = 0.0, lam_l = 0.0;
+    transport_impl<true>(
+      req.xi, req.mu, req.lam, req.Ddiag && out.Ddiag != nullptr,
+      req.chi && out.chi != nullptr, req.Dmat && out.Dmat != nullptr,
+      req.chit && out.chit != nullptr, Tloc, rholoc, Yloc, out.Ddiag, out.chi,
+      out.Dmat, out.chit, mu_l, xi_l, lam_l, tparm);
+    if (req.mu && out.mu != nullptr) {
+      *out.mu = mu_l;
+    }
+    if (req.xi && out.xi != nullptr) {
+      *out.xi = xi_l;
+    }
+    if (req.lam && out.lam != nullptr) {
+      *out.lam = lam_l;
+    }
+  }
+
+  template <bool DoMatrix>
+  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static void
+  get_transport_coeffs_impl(
     amrex::Box const& bx,
+    const TransportRequest& req,
     amrex::Array4<const amrex::Real> const& Y_in,
     amrex::Array4<const amrex::Real> const& T_in,
     amrex::Array4<const amrex::Real> const& Rho_in,
     amrex::Array4<amrex::Real> const& D_out,
     amrex::Array4<amrex::Real> const& chi_out,
+    amrex::Array4<amrex::Real> const& Dmat_out,
+    amrex::Array4<amrex::Real> const& chit_out,
     amrex::Array4<amrex::Real> const& mu_out,
     amrex::Array4<amrex::Real> const& xi_out,
     amrex::Array4<amrex::Real> const& lam_out,
@@ -413,12 +732,6 @@ struct SimpleTransport
   {
     const auto lo = amrex::lbound(bx);
     const auto hi = amrex::ubound(bx);
-
-    const bool wtr_get_xi = true;
-    const bool wtr_get_mu = true;
-    const bool wtr_get_lam = true;
-    const bool wtr_get_Ddiag = true;
-    const bool wtr_get_chi = tparm->use_soret;
 
     for (int k = lo.z; k <= hi.z; ++k) {
       for (int j = lo.y; j <= hi.y; ++j) {
@@ -431,27 +744,110 @@ struct SimpleTransport
             massloc[n] = Y_in(i, j, k, n);
           }
 
-          amrex::Real muloc, xiloc, lamloc;
+          amrex::Real muloc = 0.0, xiloc = 0.0, lamloc = 0.0;
           amrex::Real Ddiag[NUM_SPECIES] = {0.0};
           amrex::Real chi_mix[NUM_SPECIES] = {0.0};
-          transport(
-            wtr_get_xi, wtr_get_mu, wtr_get_lam, wtr_get_Ddiag, wtr_get_chi, T,
-            rho, massloc, Ddiag, chi_mix, muloc, xiloc, lamloc, tparm);
+          if constexpr (DoMatrix) {
+            amrex::Real Dmat[NUM_SPECIES * NUM_SPECIES] = {0.0};
+            amrex::Real chit[NUM_SPECIES] = {0.0};
+            transport_impl<true>(
+              req.xi, req.mu, req.lam, req.Ddiag, req.chi, req.Dmat, req.chit,
+              T, rho, massloc, Ddiag, chi_mix, Dmat, chit, muloc, xiloc, lamloc,
+              tparm);
+            if (req.Dmat) {
+              for (int n = 0; n < NUM_SPECIES * NUM_SPECIES; ++n) {
+                Dmat_out(i, j, k, n) = Dmat[n];
+              }
+            }
+            if (req.chit) {
+              for (int n = 0; n < NUM_SPECIES; ++n) {
+                chit_out(i, j, k, n) = chit[n];
+              }
+            }
+          } else {
+            amrex::ignore_unused(Dmat_out, chit_out);
+            transport_impl<false>(
+              req.xi, req.mu, req.lam, req.Ddiag, req.chi, false, false, T, rho,
+              massloc, Ddiag, chi_mix, nullptr, nullptr, muloc, xiloc, lamloc,
+              tparm);
+          }
 
           //   mu, xi and lambda are stored after D in the diffusion multifab
           for (int n = 0; n < NUM_SPECIES; ++n) {
-            D_out(i, j, k, n) = Ddiag[n];
-            if (wtr_get_chi) {
+            if (req.Ddiag) {
+              D_out(i, j, k, n) = Ddiag[n];
+            }
+            if (req.chi) {
               chi_out(i, j, k, n) = chi_mix[n];
             }
           }
-          mu_out(i, j, k) = muloc;
-          xi_out(i, j, k) = xiloc;
-          lam_out(i, j, k) = lamloc;
+          if (req.mu) {
+            mu_out(i, j, k) = muloc;
+          }
+          if (req.xi) {
+            xi_out(i, j, k) = xiloc;
+          }
+          if (req.lam) {
+            lam_out(i, j, k) = lamloc;
+          }
         }
       }
     }
   }
+
+  AMREX_GPU_HOST_DEVICE
+  AMREX_FORCE_INLINE static void get_transport_coeffs(
+    amrex::Box const& bx,
+    amrex::Array4<const amrex::Real> const& Y_in,
+    amrex::Array4<const amrex::Real> const& T_in,
+    amrex::Array4<const amrex::Real> const& Rho_in,
+    amrex::Array4<amrex::Real> const& D_out,
+    amrex::Array4<amrex::Real> const& chi_out,
+    amrex::Array4<amrex::Real> const& mu_out,
+    amrex::Array4<amrex::Real> const& xi_out,
+    amrex::Array4<amrex::Real> const& lam_out,
+    TransParm<EosType, transport_type> const* tparm)
+  {
+    TransportRequest req;
+    req.xi = true;
+    req.mu = true;
+    req.lam = true;
+    req.Ddiag = true;
+    req.chi = tparm->use_soret;
+    get_transport_coeffs_impl<false>(
+      bx, req, Y_in, T_in, Rho_in, D_out, chi_out, D_out, D_out, mu_out, xi_out,
+      lam_out, tparm);
+  }
+
+  // Extended API (see the TransportRequest overload of transport()).
+  // Dmat_out needs NUM_SPECIES*NUM_SPECIES components (component
+  // i*NUM_SPECIES + j receives rho * Y_i * D_ij) and chit_out NUM_SPECIES
+  // components; outputs that are not requested may be any Array4.
+  AMREX_GPU_HOST_DEVICE
+  AMREX_FORCE_INLINE static void get_transport_coeffs(
+    amrex::Box const& bx,
+    const TransportRequest& req,
+    amrex::Array4<const amrex::Real> const& Y_in,
+    amrex::Array4<const amrex::Real> const& T_in,
+    amrex::Array4<const amrex::Real> const& Rho_in,
+    amrex::Array4<amrex::Real> const& D_out,
+    amrex::Array4<amrex::Real> const& chi_out,
+    amrex::Array4<amrex::Real> const& Dmat_out,
+    amrex::Array4<amrex::Real> const& chit_out,
+    amrex::Array4<amrex::Real> const& mu_out,
+    amrex::Array4<amrex::Real> const& xi_out,
+    amrex::Array4<amrex::Real> const& lam_out,
+    TransParm<EosType, transport_type> const* tparm)
+  {
+    AMREX_ASSERT(!req.Ddiag || D_out.nComp() >= NUM_SPECIES);
+    AMREX_ASSERT(!req.chi || chi_out.nComp() >= NUM_SPECIES);
+    AMREX_ASSERT(!req.Dmat || Dmat_out.nComp() >= NUM_SPECIES * NUM_SPECIES);
+    AMREX_ASSERT(!req.chit || chit_out.nComp() >= NUM_SPECIES);
+    get_transport_coeffs_impl<true>(
+      bx, req, Y_in, T_in, Rho_in, D_out, chi_out, Dmat_out, chit_out, mu_out,
+      xi_out, lam_out, tparm);
+  }
+
   template <class... Args>
   AMREX_GPU_HOST_DEVICE explicit SimpleTransport(Args... /*unused*/)
   {

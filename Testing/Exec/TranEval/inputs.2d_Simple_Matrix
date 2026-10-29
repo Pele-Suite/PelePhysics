@@ -1,0 +1,9 @@
+# Exercise the multicomponent (full matrix) diffusion path of Simple
+# transport and verify it against a direct dense solve.
+tran_eval.matrix_diffusion = 1
+tran_eval.npts = 64
+amr.plot_file = plt_matrix
+
+# Defaults, listed for reference
+transport.trace_epsilon = 1.e-15
+transport.matrix_diffusion_niter = 2
