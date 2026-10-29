@@ -1,0 +1,275 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analytically reduced chemistry via quasi-steady state (QSS) assumption in PelePhysics &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="CEPTR: Chemistry Evaluation for Pele Through Recasting" href="Ceptr.html" />
+    <link rel="prev" title="CVODE implementation in PelePhysics" href="CvodeInPP.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="Chemistry.html">Chemistry</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="IntroductionToCvode.html">A brief introduction to CVODE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html">CVODE implementation in <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#cvode-implementation-in-pelephysics-on-gpu">CVODE implementation in <cite>PelePhysics</cite> on GPU</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Analytically reduced chemistry via quasi-steady state (QSS) assumption in <cite>PelePhysics</cite></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#the-qss-assumption">The QSS assumption</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#the-advantage-of-the-qss-assumption">The advantage of the QSS assumption</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#from-non-qss-species-to-qss-species-concentration">From <cite>non-QSS species</cite> to <cite>QSS species</cite> concentration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#linearizing-the-set-of-equations">Linearizing the set of equations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#validation">Validation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#analytical-jacobian">Analytical Jacobian</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#using-the-analytical-jacobian">Using the Analytical Jacobian</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="Ceptr.html">CEPTR: Chemistry Evaluation for Pele Through Recasting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="Chemistry.html">Chemistry</a></li>
+      <li class="breadcrumb-item active">Analytically reduced chemistry via quasi-steady state (QSS) assumption in <cite>PelePhysics</cite></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/QSS.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="analytically-reduced-chemistry-via-quasi-steady-state-qss-assumption-in-pelephysics">
+<h1>Analytically reduced chemistry via quasi-steady state (QSS) assumption in <cite>PelePhysics</cite><a class="headerlink" href="#analytically-reduced-chemistry-via-quasi-steady-state-qss-assumption-in-pelephysics" title="Link to this heading"></a></h1>
+<section id="the-qss-assumption">
+<span id="sec-qssassumption"></span><h2>The QSS assumption<a class="headerlink" href="#the-qss-assumption" title="Link to this heading"></a></h2>
+<p>Given a detailed chemical mechanism, some species can sometimes be assumed to be in a <cite>quasi-steady state (QSS)</cite>.
+Formally, if species <span class="math notranslate nohighlight">\(A\)</span> is assumed to be in a QSS then</p>
+<div class="math notranslate nohighlight">
+\[\frac{\partial [A]}{\partial t} = 0,\]</div>
+<p>where <span class="math notranslate nohighlight">\([A]\)</span> is the molar concentration of species <span class="math notranslate nohighlight">\(A\)</span>.
+If the set of QSS species is judiciously chosen, macroscopic quantities of interest such as ignition delay or laminar flame speed are only mildly affected by the QSS assumption <a class="reference internal" href="#drg2005" id="id1"><span>[DRG2005]</span></a>.</p>
+</section>
+<section id="the-advantage-of-the-qss-assumption">
+<span id="sec-advantageqss"></span><h2>The advantage of the QSS assumption<a class="headerlink" href="#the-advantage-of-the-qss-assumption" title="Link to this heading"></a></h2>
+<p>Using the elementary reactions of the chemical mechanism, it is possible to write a set of algebraic equations that relate <cite>QSS species</cite> to <cite>non-QSS species</cite>. In turn, it is not necessary to transport the <cite>QSS species</cite> in the flow solver, as their concentration can be directly obtained from the <cite>non-QSS species</cite>.</p>
+<p>In addition, <cite>QSS species</cite> are typically species that induce stiffness in the chemical mechanism since they evolve on scales different that the <cite>non-QSS species</cite>.</p>
+</section>
+<section id="from-non-qss-species-to-qss-species-concentration">
+<span id="sec-invertalgebraicsystem"></span><h2>From <cite>non-QSS species</cite> to <cite>QSS species</cite> concentration<a class="headerlink" href="#from-non-qss-species-to-qss-species-concentration" title="Link to this heading"></a></h2>
+<p>The set of algebraic equations that result from the QSS assumption does not always easily result in a simple algebraic relation between a given <cite>QSS species</cite> and all the <cite>non-QSS species</cite>. To do this, it is necessary to apply some form of linearization to the reactions involved <a class="reference internal" href="#sys2006" id="id2"><span>[SYS2006]</span></a>. In addition, even in the presence of linear relations, <cite>QSS species</cite> may depend on one another. The following figure shows the relation graph between the <cite>QSS species</cite> of a reduced <span class="math notranslate nohighlight">\(N-C_{12}H_{26}\)</span> mechanism <a class="reference internal" href="#nd2018" id="id3"><span>[ND2018]</span></a>. The arrows indicate that a <cite>QSS species</cite> concentration depends on another <cite>QSS species</cite> concentration. It can also be seen that dependency groups exist among the <cite>QSS species</cite>. In <cite>PelePhysics</cite> it is possible to deduce invert analytically the linear system of equations given an arbitrary relation graph.</p>
+<figure class="align-center" id="fig-drg">
+<span id="fig-depgraph"></span><a class="reference external image-reference" href="./Visualization/directedGraphQSS.png"><img alt="Directed graph of dependencies between QSS species" src="_images/directedGraphQSS.png" style="width: 90%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">4 </span><span class="caption-text">Relation graph between QSS species for N-dodecane mechanism <a class="reference internal" href="#nd2018" id="id4"><span>[ND2018]</span></a></span><a class="headerlink" href="#fig-drg" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="linearizing-the-set-of-equations">
+<span id="sec-linearizing"></span><h2>Linearizing the set of equations<a class="headerlink" href="#linearizing-the-set-of-equations" title="Link to this heading"></a></h2>
+<p>In general, the QSS assumption results in a set of equations that are non-linearly coupled making it difficult to invert the system. The non-linear relations can arise if two or more <cite>QSS-species</cite> are on the same side of an elementary reaction, or if the stoichiometric coefficient of a <cite>QSS-species</cite> is not equal to one. Below, the relation graph between the QSS species plotted above is expanded with dots that denote reactions that relate <cite>QSS-species</cite>. Dots or species are colored in red if they are involved in a quadratic coupling.</p>
+<figure class="align-center" id="fig-quad">
+<span id="fig-quadgraph"></span><a class="reference external image-reference" href="./Visualization/quadGraphQSS.png"><img alt="Graph of dependencies between QSS species augmented with reactions." src="_images/quadGraphQSS.png" style="width: 90%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">5 </span><span class="caption-text">Graph of dependencies between QSS species for N-dodecane mechanism <a class="reference internal" href="#nd2018" id="id5"><span>[ND2018]</span></a>, augmented with reactions. Red species or dots denote species and reactions involved in quadratic coupling.</span><a class="headerlink" href="#fig-quad" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p>From here, it is necessary to eliminate the quadratic coupling to linearize the set of algebraic equations that result from the QSS assumption. Three methods can be envisioned: either one relaxes the QSS assumption by reducing the set of <cite>QSS species</cite> (Method 1) or one can eliminate the reactions that induce quadratic coupling. In case reactions are reversible, it can happen that either the forward or the backward reaction induces the quadratic coupling. Either one can remove both the forward and the backward reaction (Method 2) or remove either the backward or the forward reaction (Method 3).</p>
+<p>All three methods are available in <cite>PelePhysics</cite>. By default, Method 3 is activated as it is computationally efficient and accurate (as will be shown below). Method 1 is the most accurate and Method 2 is the most computationally efficient in our experience. Given that each method has its advantage, we decided to allow the user to choose either one according to his/her needs.</p>
+</section>
+<section id="validation">
+<span id="sec-validation"></span><h2>Validation<a class="headerlink" href="#validation" title="Link to this heading"></a></h2>
+<p>The three linearization methods are validated against the skeletal <span class="math notranslate nohighlight">\(N-C_{12}H_{26}\)</span> <a class="reference internal" href="#skel2017" id="id6"><span>[SKEL2017]</span></a>. Using 343 0D calculation that span the range of applicability of the QSS assumption (<span class="math notranslate nohighlight">\(\phi = [0.5, 2.0], p=[1atm, 50atm], T=[800K, 1600K]\)</span>), the ignition delay is computed using the skeletal mechanism (SK53) and each one of the three linearization methods for the QSS mechanism (RedXX). The left plot shows the correlation between the ignition delay from the skeletal mechanism and the reduced version. The statistics of the relative error between the reduced and the skeletal mechanism are shown in the title of that plot. The right plot shows the ignition delay values at high-pressure conditions only.</p>
+<figure class="align-center" id="id7">
+<span id="fig-val"></span><a class="reference external image-reference" href="./Visualization/validationQSS.png"><img alt="Validation of linearization method" src="_images/validationQSS.png" style="width: 90%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">6 </span><span class="caption-text">Left: Scatter plot of the ignition delay measured with the QSS mechanism linearized and the skeletal mechanism.
+Right: Ignition delays measured for the skeletal mechanism and QSS mechanism linearized at high-pressure conditions.
+Top: Method 1. Middle: Method 2. Bottom: Method 3.</span><a class="headerlink" href="#id7" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="analytical-jacobian">
+<h2>Analytical Jacobian<a class="headerlink" href="#analytical-jacobian" title="Link to this heading"></a></h2>
+<p>In several computational experiments, using analytical Jacobians was found to provide better stability or efficiency compared with finite difference approximation or numerical inversion (see also <a class="reference internal" href="#fig-qss-integrator">fig:qss_integrator</a>).
+Compared with non-QSS mechanisms, analytical Jacobians need to reflect the dependence of each QSS species on non-QSS species. However, QSS species may depend on an ensemble of other non-QSS species and therefore ensemble of reactions. Therefore, analytical Jacobian cannot be constructed by sequentially adding the contribution of each reaction. This significantly complicates the analytical jacobian generation. Failure to include the dependence of QSS species with respect to non-QSS species typically results in wrong ignition profiles, unless very small timesteps are used, as seen in figure <a class="reference internal" href="#fig-qss-aj">fig:qss_aj</a>.</p>
+<figure class="align-center" id="fig-qss-constant">
+<span id="fig-qss-aj"></span><a class="reference external image-reference" href="./Visualization/aj_0D_QSS.png"><img alt="" src="_images/aj_0D_QSS.png" style="width: 90%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">7 </span><span class="caption-text">Temperature of a 0D reactor at constant pressure for NC12H26. Initial temperature is 600K, initial molar fraction of O2 is 0.7 and initial molar fraction of fuel is 0.3.
+Left: Results without inclusion of dependence of QSS species with respect to non-QSS species.
+Right: Result with inclusion of dependence of QSS species with respect to non-QSS species.</span><a class="headerlink" href="#fig-qss-constant" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p>To ease the implementation of analytical Jacobian in presence of QSS species, a symbolic approach is used to construct the analytical Jacobian. This strategy has the advantage of not requiring complex logic, and being flexible and readable for future development. For the last row of the Jacobian (partial difference of reaction rate with respect to temperature), finite difference is used since perturbations in temperature are less susceptible to numerical errors than perturbations in species concentrations. During the construction of the reaction rates, the operations printed to file are recorded symbolically using the <code class="docutils literal notranslate"><span class="pre">sympy</span></code> and <code class="docutils literal notranslate"><span class="pre">symengine</span></code> library <a class="reference internal" href="#sympy" id="id8"><span>[SYMPY]</span></a>. For computational efficiency during the symbolic differentiation, the chain-rules terms are computed and the final expressions are computed and assembled by chain-ruling using logic internal to <cite>CEPTR</cite> rather than <code class="docutils literal notranslate"><span class="pre">sympy</span></code>. We have found that this speeds up the Jacobian construction cost by a factor 10.</p>
+<p>To activate the use of symbolic jacobian, one needs to pass the flag <code class="docutils literal notranslate"><span class="pre">--qss_symbolic_jacobian</span></code> to <cite>CEPTR</cite>.</p>
+<p>Printing the Jacobian terms one by one is not possible since the expressions that include QSS species are typically very large. Instead, the expressions are reduced via common sub-expression precomputing that are later used in each term of the Jacobian. The number of subexpressions may be orders of magnitude larger than the number of Jacobian entries which can be problematic if the computational architecture has limited memory.</p>
+<p>Several formatting strategies have been implemented to mitigate the memory footprint of the symbolic Jacobian. They can be adjusted by providing a <code class="docutils literal notranslate"><span class="pre">.toml</span></code> file to <cite>CEPTR</cite> via the <code class="docutils literal notranslate"><span class="pre">qss_format_input</span></code> flag. A model input file is provided in the <cite>Tutorials</cite> section of this documentation. A model execution script for generating a mechanism for <code class="docutils literal notranslate"><span class="pre">dodecane_lu_qss</span></code> is available under the <cite>Tutorials</cite> section of this documentation.</p>
+<p>The formatting options are the following</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">hformat</span></code> <strong>(string)</strong></dt><dd><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">cpu</span></code> will print intermediate variables used for chainruling. This gives a “readable” version of the Jacobian entries, albeit memory consuming.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gpu</span></code> will not print intermediate variables used for chainruling, and instead will replace them directly in the Jacobian entries. This gives a less readable version of the Jacobian, but more memory efficient.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">remove_1</span></code> <strong>(boolean)</strong> will replace expressions of the type <code class="docutils literal notranslate"><span class="pre">1.0</span> <span class="pre">*</span> <span class="pre">xxx</span></code> into <code class="docutils literal notranslate"><span class="pre">xxx</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">remove_pow</span></code> <strong>(boolean)</strong> will convert expressions of the type <code class="docutils literal notranslate"><span class="pre">pow(xxx,n)</span></code> into multiplications or division. The conversion occurs for <code class="docutils literal notranslate"><span class="pre">n&lt;=3</span></code> and <code class="docutils literal notranslate"><span class="pre">n&gt;=-3</span></code> consistent with <a class="reference external" href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html">optimCuda</a></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">remove_pow10</span></code> <strong>(boolean)</strong> will convert expressions of the type <code class="docutils literal notranslate"><span class="pre">pow(10,xxx)</span></code> into <code class="docutils literal notranslate"><span class="pre">exp(ln(10)*xxx)</span></code>, consistent with <a class="reference external" href="https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html">optimCuda</a></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">min_op_count</span></code> <strong>(integer)</strong> counts number operations used to construct each common subexpression and replace the common subexpression if the number of operations is less or equal to <code class="docutils literal notranslate"><span class="pre">n</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">min_op_count_all</span></code> <strong>(integer)</strong> is similar to <code class="docutils literal notranslate"><span class="pre">min_op_count</span></code> but also counts how many times that common subexpression is used later. The meaning of <code class="docutils literal notranslate"><span class="pre">n</span></code> is different than for <code class="docutils literal notranslate"><span class="pre">min_op_count</span></code> as it refers to how many more operations will be done if the common subexpression is eliminated. This option should be preferred to <code class="docutils literal notranslate"><span class="pre">min_op_count</span></code> as it tends to only marginally increase the file size (therefore compile time), while still being memory efficient.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gradual_op_count</span></code> <strong>(boolean)</strong> is useful if <code class="docutils literal notranslate"><span class="pre">min_op_count</span></code> or <code class="docutils literal notranslate"><span class="pre">min_op_count_all</span></code> are active. It loops from 1 to <code class="docutils literal notranslate"><span class="pre">n</span></code> and gradually eliminate the common subexpressions. This has the advantage of ensuring that the memory footprint is strictly monotonically decreasing as <cite>n</cite> is increased.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">store_in_jacobian</span></code> <strong>(boolean)</strong> will use the Jacobian array as a temporary space to store intermediate variables. In particular, the last row of the Jacobian (dependence with respect to temperature) is done by finite difference which requires storing intermediate variables (production rate, forward and backward reactions). When the option is active, the <code class="docutils literal notranslate"><span class="pre">productionRate</span></code> function used to compute the finite difference is replaced with a <code class="docutils literal notranslate"><span class="pre">productionRate_light</span></code> functions where references to different parts of the Jacobian are used in place of allocating new arrays.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">round_decimals</span></code> <strong>(boolean)</strong> will round floats printed by <code class="docutils literal notranslate"><span class="pre">sympy</span></code> when possible to minimize character count in the <code class="docutils literal notranslate"><span class="pre">mechanism.H</span></code> file.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">recycle_cse</span></code> <strong>(boolean)</strong> will reuse subexpressions that are not used later to avoid declaring new temporary reals.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">remove_single_symbols_cse</span></code> <strong>(boolean)</strong> will remove common subexpressions that are made of 1 operation and 1 symbol. Those common subexpressions are typically <code class="docutils literal notranslate"><span class="pre">-xxx</span></code> and may not appear as worth replacing because they save 1 operations and are reused multiple times. However, when replaced in the later expressions, the <code class="docutils literal notranslate"><span class="pre">-</span></code> operations typically disappear or is merged into another operations which actually does not increase the total number of operations.</p></li>
+</ul>
+<p>The analytical Jacobian for QSS mechanisms is typically more accurate and stable than GMRES, and is on par with the finite difference Jacobian of <cite>CVODE</cite> as seen in <a class="reference internal" href="#fig-qss-integrator">fig:qss_integrator</a></p>
+<figure class="align-center" id="id9">
+<span id="fig-qss-integrator"></span><a class="reference external image-reference" href="./Visualization/qss_integrator.png"><img alt="" src="_images/qss_integrator.png" style="width: 70%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">8 </span><span class="caption-text">Temperature of a 0D reactor at constant pressure for NC12H26. Initial temperature is 600K, initial molar fraction of O2 is 0.7 and initial molar fraction of fuel is 0.3. Results are shown for finite difference jacobian (red thick line), analytical jacobian (black line) and GMRES (crosses) using the same tolerances.</span><a class="headerlink" href="#id9" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p>In terms of speed, the analytical Jacobian 0D reactor is faster on CPU than finite difference Jacobian and GMRES. For the piston bowl challenge problem, the analytical Jacobian relative speed depends on the prevalence of chemical reactions. At some points, the AJ is slower than GMRES with PeleC, at others, AJ is faster. In PeleLM cases, AJ was found to be faster than GMRES. Further optimization and tests are still ongoing.</p>
+</section>
+<section id="using-the-analytical-jacobian">
+<h2>Using the Analytical Jacobian<a class="headerlink" href="#using-the-analytical-jacobian" title="Link to this heading"></a></h2>
+<p>To use the analytic Jacobian QSS mechanisms in a Pele run, one must specify the correct <code class="docutils literal notranslate"><span class="pre">solve_type</span></code>. The choice of the <code class="docutils literal notranslate"><span class="pre">solve_type</span></code> will determine whether or not the analytic Jacobian is used. With CUDA, both <code class="docutils literal notranslate"><span class="pre">magma_direct</span></code> and <code class="docutils literal notranslate"><span class="pre">sparse_direct</span></code> will use the analytic Jacobian, while on HIP only <code class="docutils literal notranslate"><span class="pre">magma_direct</span></code>  will trigger the use of the analytic Jacobian parts.</p>
+<div role="list" class="citation-list">
+<div class="citation" id="drg2005" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">DRG2005</a><span class="fn-bracket">]</span></span>
+<ol class="upperalpha simple" start="20">
+<li><p>Lu, C. K. Law, A directed relation graph method for mechanism reduction, Proceedings of the combustion institute, 30(1):1333-1341, 2005.</p></li>
+</ol>
+</div>
+<div class="citation" id="sys2006" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id2">SYS2006</a><span class="fn-bracket">]</span></span>
+<ol class="upperalpha simple" start="20">
+<li><p>Lu, C. K. Law, Systematic approach to obtain analytic solutions of quasi steady state species in reduced mechanisms, The Journal of Physical Chemistry A, 110(49):13202-13208, 2006.</p></li>
+</ol>
+</div>
+<div class="citation" id="nd2018" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>ND2018<span class="fn-bracket">]</span></span>
+<span class="backrefs">(<a role="doc-backlink" href="#id3">1</a>,<a role="doc-backlink" href="#id4">2</a>,<a role="doc-backlink" href="#id5">3</a>)</span>
+<ol class="upperalpha simple" start="7">
+<li><p>Borghesi, A. Krisman, T. Lu, J. H. Chen, Direct numerical simulation of a temporally evolving air/n-dodecane jet at low-temperature diesel-relevant conditions, 195:183-202, 2018.</p></li>
+</ol>
+</div>
+<div class="citation" id="skel2017" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id6">SKEL2017</a><span class="fn-bracket">]</span></span>
+<ol class="upperalpha simple" start="20">
+<li><p>Yao, Y. Pei, B. J. Zhong, S. Som, T. Lu, K. H. Luo, A compact skeletal mechanism for n-dodecane with optimized semi-global ! low-temperature chemistry for diesel engine simulations, 191:339-349, 2017.</p></li>
+</ol>
+</div>
+<div class="citation" id="sympy" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id8">SYMPY</a><span class="fn-bracket">]</span></span>
+<ol class="upperalpha simple">
+<li><p>Meurer, C. P. Smith, M. Paprocki, O. v{C}ert'{i}k, S. B. Kirpichev, M. Rocklin, A. Kumar, S. Ivanov, J. K. Moore, S. Singh, T. Rathnayake, S. Vig, B. E. Granger, R. P. Muller, F. Bonazzi, H. Gupta, S. Vats, F. Johansson, F. Pedregosa, M. J. Curry, A. R. Terrel, S. Rouv{c}ka, A. Saboo, I. Fernando, S. Kulal, R. Cimrman, A. Scopatz, SymPy: symbolic computing in Python, 3:e103, 2017.</p></li>
+</ol>
+</div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="CvodeInPP.html" class="btn btn-neutral float-left" title="CVODE implementation in PelePhysics" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Ceptr.html" class="btn btn-neutral float-right" title="CEPTR: Chemistry Evaluation for Pele Through Recasting" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

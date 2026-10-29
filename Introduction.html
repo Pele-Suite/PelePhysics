@@ -1,0 +1,193 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Introduction &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Chemistry" href="Chemistry.html" />
+    <link rel="prev" title="PelePhysics Quickstart" href="GettingStarted.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Introduction</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#objectives-and-state-of-the-art">Objectives and State-Of-The-Art</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#how-to-naviguate-this-documentation">How to naviguate this documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Chemistry.html">Chemistry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Introduction</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/Introduction.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="introduction">
+<span id="sec-subswd"></span><h1>Introduction<a class="headerlink" href="#introduction" title="Link to this heading"></a></h1>
+<section id="objectives-and-state-of-the-art">
+<h2>Objectives and State-Of-The-Art<a class="headerlink" href="#objectives-and-state-of-the-art" title="Link to this heading"></a></h2>
+<p>What we will call the <cite>PeleSuite</cite> is currently composed of 3 separate codes:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://github.com/Pele-Suite/PelePhysics">PelePhysics</a> is a repository of physics databases and implementation code for use within the other <cite>Pele</cite> codes. In particular, the choice of chemistry and transport models as well as associated functions and capabilities are managed in <cite>PelePhysics</cite>.</p></li>
+<li><p><a class="reference external" href="https://github.com/AMReX-Combustion/PeleLM">PeleLM</a> is an adaptive-mesh Low-Mach number hydrodynamics code for reacting flows. It has a sibling, <a class="reference external" href="https://github.com/Pele-Suite/PeleLMeX">PeleLMeX</a>, that solves for the same type of flow using a subtly different numerical approach.</p></li>
+<li><p><a class="reference external" href="https://github.com/Pele-Suite/PeleC">PeleC</a> is an adaptive-mesh compressible hydrodynamics code for reacting flows.</p></li>
+</ul>
+<p>All three codes rely on <a class="reference external" href="https://amrex-codes.github.io/amrex">AMReX</a>, which is a software frameworks that provides the data structure and enable massive parallelization.</p>
+<table class="docutils align-center">
+<tbody>
+<tr class="row-odd"><td><p><img alt="a" src="_images/PeleSuite.png" /></p></td>
+</tr>
+</tbody>
+</table>
+<p><cite>PelePhysics</cite> (as well as the <cite>ChemDriver</cite> object of <cite>PeleLM</cite> ) used to rely upon DVODE <a class="reference internal" href="IntroductionToCvode.html#vode1989" id="id1"><span>[VODE1989]</span></a>
+to perform the chemistry integration, no matter the problem at hand.
+DVODE is a very robust, but slightly outdated, variable-coefficient Ordinary Differential Equation (ODE) solver written in Fortran 77.
+At its core, it uses a direct dense linear solver. DVODE is very efficient in the resolution of small stiff systems
+of equations but can become prohibitively expensive when dealing with bigger systems of equations, such as those frequently encountered in combustion systems.</p>
+<p>In recent years, the Sundials team at LLNL <a class="reference internal" href="IntroductionToCvode.html#llnl2005" id="id2"><span>[LLNL2005]</span></a> has been involved in the active development of a modern,
+C++ version, of DVODE called CVODE.
+CVODE implements the same functionalities as those available in DVODE, but offers much more flexibility through
+its user-friendly set of interface routines. Additionally, other linear solvers are available,
+such as iterative or sparse solvers which can prove to be very efficient in handling “larger” systems of equations.</p>
+<p>The objective of this user-guide is to document the CVODE-based chemistry integration implemented in <cite>PelePhysics</cite>. Although it is possible to use CVODE in <cite>PeleC</cite>, the following is mainly intended for <cite>PeleLM</cite> users. This user-guide will cover:</p>
+<ul class="simple">
+<li><p>ODE equations (<cite>reactor type</cite>)</p></li>
+<li><p>Default settings (tolerances/order/…)</p></li>
+<li><p>Linear solvers available –along with examples of performance</p></li>
+<li><p>Setting-up a <cite>PelePhysics</cite> test case</p></li>
+<li><p>…</p></li>
+</ul>
+</section>
+<section id="how-to-naviguate-this-documentation">
+<h2>How to naviguate this documentation<a class="headerlink" href="#how-to-naviguate-this-documentation" title="Link to this heading"></a></h2>
+<p><cite>This section provides a short overview of the chemistry-related features of PelePhysics. For an in-depth discussion, relevant references to specific sections of this manuscript are given.</cite></p>
+<ul>
+<li><p>In <cite>PelePhysics</cite>, the user can select between <strong>two different reactor types</strong>.
+The first type is a <cite>constant volume</cite> reactor, were the choice of fixed variables are the internal energy and the density,
+to comply with <cite>PeleC</cite> transported variables. This reproduces what was originally
+implemented with DVODE in <cite>PelePhysics</cite>.
+A second reactor type formulated in terms of enthalpy and density has been put in place, to comply with <cite>PeleLM</cite>.
+Both reactors are available in DVODE (in fortran 90) and CVODE (in cpp).
+See sections <a class="reference internal" href="CvodeInPP.html#sec-subsdiffreacts"><span class="std std-ref">The different reactors</span></a> for additional details,
+and <a class="reference internal" href="CvodeInPP.html#sec-subsppoptions"><span class="std std-ref">Activating the different CVODE solver options via the input files</span></a> to see how to activate one or the other via the input files.</p></li>
+<li><p>With both reactors, it is possible to use an <strong>Analytical Jacobian</strong> (depending upon the choice of linear solver, see section <a class="reference internal" href="IntroductionToCvode.html#sec-subslinalg"><span class="std std-ref">Linear Algebra</span></a>.)</p></li>
+<li><p>Three different types of <strong>linear solvers</strong> are implemented, see section <a class="reference internal" href="IntroductionToCvode.html#sec-subslinalg"><span class="std std-ref">Linear Algebra</span></a> for additional details, and <a class="reference internal" href="CvodeInPP.html#sec-subsppoptions"><span class="std std-ref">Activating the different CVODE solver options via the input files</span></a> to see how to make a selection:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>a dense direct solver – with or without Analytical Jacobian</p></li>
+<li><p>a sparse direct solver (requires the KLU library) – always requires an Analytical Jacobian</p></li>
+<li><p>a couple of sparse iterative solvers from the GMRES family – preconditioned or not</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p><strong>Regression testings</strong> have been put in place in <cite>PelePhysics</cite> to test the CVODE integration. See section <a class="reference internal" href="CvodeInPP.html#sec-subsubvalidcvreact"><span class="std std-ref">Validation of the CV reactor implementation in CVODE (with CANTERA)</span></a> for validations, and section <a class="reference internal" href="CvodeInPP.html#sec-subsreactevalcvode"><span class="std std-ref">The ReactEval_C test case with CVODE in details</span></a> for a step-by-step example.</p></li>
+<li><p>A CVODE version running on <strong>GPU</strong> is also technically available but the documentation is a WIP. The interested user can
+contact code developers for additional information</p></li>
+<li><p><cite>PelePhysics</cite> uses an automatic chemistry-related routine generator:
+<strong>CEPTR</strong>. CEPTR is part of the sources of <cite>PelePhysics</cite>. With
+CEPTR, a unique chemistry file is generated for a specific kinetic
+scheme. Instructions to generate your own chemistry files (all you
+need are chemistry files in the famous <a class="reference external" href="https://cantera.org">Cantera</a> yaml format) are discussed in section
+<a class="reference internal" href="Ceptr.html#sec-ceptr"><span class="std std-ref">CEPTR: Chemistry Evaluation for Pele Through Recasting</span></a>.  Note that <cite>PelePhysics</cite> already offers a large
+choice of more than 20 different kinetic schemes.</p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="GettingStarted.html" class="btn btn-neutral float-left" title="PelePhysics Quickstart" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Chemistry.html" class="btn btn-neutral float-right" title="Chemistry" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

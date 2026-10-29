@@ -1,0 +1,211 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PelePhysics Quickstart &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Introduction" href="Introduction.html" />
+    <link rel="prev" title="PelePhysics" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><cite>PelePhysics</cite> Quickstart</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#obtaining-pelephysics">Obtaining <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#dependencies">Dependencies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#building-and-running-test-cases">Building and Running Test Cases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Chemistry.html">Chemistry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active"><cite>PelePhysics</cite> Quickstart</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/GettingStarted.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pelephysics-quickstart">
+<h1><cite>PelePhysics</cite> Quickstart<a class="headerlink" href="#pelephysics-quickstart" title="Link to this heading"></a></h1>
+<p>Greetings users. As a word of caution, this documentation is in progress. Some parts of the code remain undocumented,
+and some parts of the documentation are out of data. If you are confused by something you read here, or otherwise
+need help with <cite>PelePhysics</cite>, the best course of action is to open a Discussion on the <a class="reference external" href="https://github.com/Pele-Suite/PelePhysics/discussions">GitHub page</a>,
+so the development team and other users can help.</p>
+<ul class="simple">
+<li><p>If you are a complete beginner, I urge you to carefully read the two following chapters <a class="reference internal" href="#sec-getpp"><span class="std std-ref">Obtaining PelePhysics</span></a> and <a class="reference internal" href="#sec-getcvode"><span class="std std-ref">Dependencies</span></a>, to properly set-up your working environment.</p></li>
+<li><p>If you are familiar with <cite>PelePhysics</cite>, have it installed already and would simply like to know which chemistry-related keywords and/or environment variables to set in your various input files to perform a simulation with one of the codes available in the <cite>PeleSuite</cite>, then I invite you to directly skip to section <a class="reference internal" href="CvodeInPP.html#sec-subsppoptions"><span class="std std-ref">Activating the different CVODE solver options via the input files</span></a>.</p></li>
+<li><p>If you are in a hurry but still would like more context, visit section <a class="reference internal" href="Introduction.html#sec-subswd"><span class="std std-ref">Introduction</span></a> to be referred to portions of this document that are of interest to you.</p></li>
+</ul>
+<section id="obtaining-pelephysics">
+<span id="sec-getpp"></span><h2>Obtaining <cite>PelePhysics</cite><a class="headerlink" href="#obtaining-pelephysics" title="Link to this heading"></a></h2>
+<p>PelePhysics is primarily intended as a library for use in the other <a class="reference external" href="https://Pele-Suite.github.io">Pele codes</a>, and is automatically downloaded as
+a submodule of both PeleC and PeleLMeX. However, it can also be used as a stand-alone solver for chemical reactions and thermodynamic properties,
+or as a library for other codes. Instructions for how to obtain <cite>PelePhysics</cite> for these purposes are provided here.</p>
+<p>First, make sure that “Git” is installed on your machine—we recommend version 1.7.x or higher. Then…</p>
+<ol class="arabic">
+<li><p>Clone the <cite>PelePhysics</cite> repository and its submodules:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>git clone --recursive https://github.com/Pele-Suite/PelePhysics.git
+</pre></div>
+</div>
+</li>
+</ol>
+<blockquote>
+<div><p>This will create a <code class="docutils literal notranslate"><span class="pre">PelePhysics</span></code> directory on your machine. The <code class="docutils literal notranslate"><span class="pre">--recursive</span></code> option ensures that the required <a class="reference internal" href="#sec-getcvode"><span class="std std-ref">Dependencies</span></a> are also downloaded to the
+<code class="docutils literal notranslate"><span class="pre">PelePhysics/Submodules</span></code> directory. Set the environment variable <code class="docutils literal notranslate"><span class="pre">PELE_PHYSICS_HOME</span></code> to point to the location of this folder (<code class="docutils literal notranslate"><span class="pre">export</span> <span class="pre">PELE_PHYSICS_HOME=$(pwd)/PelePhysics</span></code>)</p>
+</div></blockquote>
+<ol class="arabic simple" start="2">
+<li><p>Periodically update the repository and its dependencies by typing <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">pull</span> <span class="pre">&amp;&amp;</span> <span class="pre">git</span> <span class="pre">submodule</span> <span class="pre">update</span></code> within the repository.</p></li>
+</ol>
+</section>
+<section id="dependencies">
+<span id="sec-getcvode"></span><h2>Dependencies<a class="headerlink" href="#dependencies" title="Link to this heading"></a></h2>
+<p>PelePhysics has two required dependencies: <a class="reference external" href="https://amrex-codes.github.io/amrex/">AMReX</a> and <a class="reference external" href="https://github.com/LLNL/sundials">SUNDIALS</a>.
+These dependencies are shipped with PelePhysics as git submodules and the proper versions are cloned to the <code class="docutils literal notranslate"><span class="pre">PelePhysics/Submodules/</span></code> directory automatically when
+doing the recursive git clone described in <a class="reference internal" href="#sec-getpp"><span class="std std-ref">Obtaining PelePhysics</span></a>. Users also have the option to download their own versions of these dependencies elsewhere on their machine, in which case
+the paths to these libraries must be specified by exporting <code class="docutils literal notranslate"><span class="pre">AMREX_HOME</span></code> and <code class="docutils literal notranslate"><span class="pre">SUNDIALS_HOME</span></code> environment variables or defining these variables in
+the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code> when building.</p>
+<ol class="arabic simple">
+<li><p><cite>AMReX</cite> is a library that provides data structures and methods for operating on data in the context of
+block-structured adaptive mesh refinement that are used throughout the Pele suite of codes.</p></li>
+<li><p><cite>SUNDIALS</cite> is a library of differential and algebraic equation solvers that is used by PelePhysics
+primarily for its CVODE package for implicit solution of stiff ODE systems. CVODE is used for integration of stiff chemical reaction systems in PelePhysics.</p></li>
+</ol>
+<p>PelePhysics has two optional dependencies: <a class="reference external" href="http://faculty.cse.tamu.edu/davis/suitesparse.html">SuiteSparse</a> and <a class="reference external" href="https://icl.utk.edu/magma/">MAGMA</a>.
+These dependencies are not shipped with PelePhysics by default, but the proper versions are automatically downloaded if needed during the building
+process (<a class="reference internal" href="#sec-buildingrunning"><span class="std std-ref">Building and Running Test Cases</span></a>). Both of these dependencies are libraries that aid in solving the linear systems that arise during implicit integration of a chemical system using CVODE.
+There are several other options available for solvers within CVODE, so these libraries are not strictly required, but they may enable options that
+lead to better performance on certain computing architectures.</p>
+<ol class="arabic simple">
+<li><p><cite>SuiteSparse</cite> is a suite of Sparse Matrix software that is very handy when dealing with big kinetic mechanisms (the Jacobian of which are usually very sparse).
+In such a case, CVODE can make use of the KLU library, which is part of <cite>SuiteSparse</cite>, to perform sparse linear algebra.
+Documentation and further information can be found on <a class="reference external" href="http://faculty.cse.tamu.edu/davis/suitesparse.html">SuiteSparse website</a>.</p></li>
+<li><p><cite>MAGMA</cite> is a collection of linear algebra libraries for heterogeneous computing.</p></li>
+</ol>
+</section>
+<section id="building-and-running-test-cases">
+<span id="sec-buildingrunning"></span><h2>Building and Running Test Cases<a class="headerlink" href="#building-and-running-test-cases" title="Link to this heading"></a></h2>
+<p>PelePhysics has several short programs that are used to test its various capabilities, located in the <code class="docutils literal notranslate"><span class="pre">Testing/Exec</span></code> directory. For example,
+we will consider the <cite>ReactEval</cite> case, which tests the chemical reaction integration capability.</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>cd ${PELE_PHYSICS_HOME}/Testing/Exec/ReactEval
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code> in this directory specifies several key build options, like the compiler (<code class="docutils literal notranslate"><span class="pre">COMP</span></code>) and whether it will be a debug (<code class="docutils literal notranslate"><span class="pre">DEBUG</span></code>) build.</p>
+<p>First, build the necessary dependencies. <cite>SUNDIALS</cite> is always built.
+<cite>SuiteSparse</cite> is downloaded and built if <code class="docutils literal notranslate"><span class="pre">PELE_USE_KLU</span> <span class="pre">=</span> <span class="pre">TRUE</span></code> is specified in the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code>.
+<cite>MAGMA</cite> is downloaded and built if <code class="docutils literal notranslate"><span class="pre">PELE_USE_MAGMA</span> <span class="pre">=</span> <span class="pre">TRUE</span></code> is specified in the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code>.
+All dependencies are installed in the ${PELE_PHYSICS_HOME}/ThirdParty directory. For a given set of
+compile-time options, this step only needs to be done once, but it needs to be redone whenever compile-time
+options are changed</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>make TPL
+</pre></div>
+</div>
+<p>Now, build the <cite>ReactEval</cite> executable (the <code class="docutils literal notranslate"><span class="pre">-j</span> <span class="pre">4</span></code> option specified to compile in parallel on 4 processors):</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>make -j 4
+</pre></div>
+</div>
+<p>To run the program, execute:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>./Pele3d.gnu.ex inputs.3d-regt_GPU
+</pre></div>
+</div>
+<p>If you need to clean your build, you can run</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>make TPLrealclean &amp;&amp; make realclean
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="PelePhysics" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Introduction.html" class="btn btn-neutral float-right" title="Introduction" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

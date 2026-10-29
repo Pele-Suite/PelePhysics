@@ -1,0 +1,203 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chemistry &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="A brief introduction to CVODE" href="IntroductionToCvode.html" />
+    <link rel="prev" title="Introduction" href="Introduction.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Chemistry</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="IntroductionToCvode.html">A brief introduction to CVODE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html">CVODE implementation in <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#cvode-implementation-in-pelephysics-on-gpu">CVODE implementation in <cite>PelePhysics</cite> on GPU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html">Analytically reduced chemistry via quasi-steady state (QSS) assumption in <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="Ceptr.html">CEPTR: Chemistry Evaluation for Pele Through Recasting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Chemistry</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/Chemistry.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="chemistry">
+<span id="sec-chemistry"></span><h1>Chemistry<a class="headerlink" href="#chemistry" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Chemistry contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="IntroductionToCvode.html">A brief introduction to CVODE</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="IntroductionToCvode.html#numerical-methods-overview">Numerical methods overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="IntroductionToCvode.html#linear-algebra">Linear Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="IntroductionToCvode.html#error-control-step-sizing-order-determination">Error control, step-sizing, order determination</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="CvodeInPP.html">CVODE implementation in <cite>PelePhysics</cite></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#the-different-reactors">The different reactors</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#validation-of-the-cv-reactor-implementation-in-cvode-with-cantera">Validation of the CV reactor implementation in CVODE (with CANTERA)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#activating-the-different-cvode-solver-options-via-the-input-files">Activating the different CVODE solver options via the input files</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#the-gnumakefile">The GNUmakefile</a></li>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#the-input-file">The input file</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#the-reacteval-c-test-case-with-cvode-in-details">The ReactEval_C test case with CVODE in details</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#id2">The GNUmakefile</a></li>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#id3">The input file</a></li>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#results">Results</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#to-go-further-reacteval-c-with-cvode-and-the-klu-library">To go further: ReactEval_C with CVODE and the KLU library</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#id5">The GNUmakefile</a></li>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#id6">The input file</a></li>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#id7">Results</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#current-limitations">Current Limitations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#tricks-and-hacks-stuff-to-know">Tricks and hacks, stuff to know</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#how-does-cvode-compare-with-dvode">How does CVODE compare with DVODE ?</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="CvodeInPP.html#cvode-implementation-in-pelephysics-on-gpu">CVODE implementation in <cite>PelePhysics</cite> on GPU</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#requirements-and-input-files">Requirements and input files</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#id8">The GNUmakefile</a></li>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#id9">The input file</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#grouping-cells-together">Grouping cells together</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#the-reacteval-c-gpu-test-case-in-details">The ReactEval_C_GPU test case in details</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#id11">The GNUmakefile</a></li>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#id12">The input file</a></li>
+<li class="toctree-l3"><a class="reference internal" href="CvodeInPP.html#the-results">The Results</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#id13">Current Limitations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="QSS.html">Analytically reduced chemistry via quasi-steady state (QSS) assumption in <cite>PelePhysics</cite></a><ul>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html#the-qss-assumption">The QSS assumption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html#the-advantage-of-the-qss-assumption">The advantage of the QSS assumption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html#from-non-qss-species-to-qss-species-concentration">From <cite>non-QSS species</cite> to <cite>QSS species</cite> concentration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html#linearizing-the-set-of-equations">Linearizing the set of equations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html#validation">Validation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html#analytical-jacobian">Analytical Jacobian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html#using-the-analytical-jacobian">Using the Analytical Jacobian</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Ceptr.html">CEPTR: Chemistry Evaluation for Pele Through Recasting</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="Ceptr.html#software-requirements">Software requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Ceptr.html#usage">Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="Ceptr.html#generating-yaml-chemistry-files-converting-from-chemkin-files">Generating YAML chemistry files: converting from CHEMKIN files</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Ceptr.html#generating-pele-compatible-mechanisms-for-a-single-chemistry">Generating Pele-compatible mechanisms for a single chemistry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Ceptr.html#generating-a-reduced-qss-chemistry-file">Generating a reduced, QSS chemistry file</a></li>
+<li class="toctree-l3"><a class="reference internal" href="Ceptr.html#batched-generation-of-pele-compatible-mechanisms">Batched generation of Pele-compatible mechanisms</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Introduction.html" class="btn btn-neutral float-left" title="Introduction" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="IntroductionToCvode.html" class="btn btn-neutral float-right" title="A brief introduction to CVODE" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

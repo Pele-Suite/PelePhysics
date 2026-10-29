@@ -1,0 +1,257 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Transport &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Thermodynamics" href="Thermodynamics.html" />
+    <link rel="prev" title="CEPTR: Chemistry Evaluation for Pele Through Recasting" href="Ceptr.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Chemistry.html">Chemistry</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Transport</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#constant">Constant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#sutherland">Sutherland</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#simple">Simple</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#multicomponent-diffusion">Multicomponent diffusion</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#multicomponent-thermal-conductivity-and-thermal-diffusion-ratios">Multicomponent thermal conductivity and thermal diffusion ratios</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#extended-transport-api">Extended transport API</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Transport</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/Transport.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="transport">
+<span id="sec-transport"></span><h1>Transport<a class="headerlink" href="#transport" title="Link to this heading"></a></h1>
+<p>PelePhysics supports computation of several transport coefficients: dynamic viscosity (<span class="math notranslate nohighlight">\(\mu\)</span>), bulk viscosity (<span class="math notranslate nohighlight">\(\xi\)</span>), thermal conductivity (<span class="math notranslate nohighlight">\(\lambda\)</span>), mixture-averaged species diffusion coefficients (<span class="math notranslate nohighlight">\(D_i\)</span>), optionally the full multicomponent diffusion matrix (<span class="math notranslate nohighlight">\(\tilde{D}_{ij}\)</span>, see <a class="reference internal" href="#sec-transport-multicomponent"><span class="std std-ref">Multicomponent diffusion</span></a>), and Soret coefficients/thermal diffusion ratio (<span class="math notranslate nohighlight">\(\chi_i\)</span>). There are three choices of model for computing these transport coefficients:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Constant</span></code> with user-specified values</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Sutherland</span></code>, adding a simple temperature dependence to user-specified values</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Simple</span></code> where transport coefficients are computed based on thermochemistry data for the multi-component mixture</p></li>
+</ul>
+<p>The choice between these transport models is made at compile time. When using GNUmake, this is done by setting the <code class="docutils literal notranslate"><span class="pre">Transport_Model</span></code> parameter in the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code>.</p>
+<p>The appropriate choice of transport model depends on the EOS being used. For perfect gasses (GammaLaw), constant transport must be used. For reacting flow calculations using either the ideal gas (Fuego) or Soave-Redlich-Kwong equations of state, Simple transport is appropriate in most cases. Note that based on code implementation and physics considerations, the EOS/transport combinations of GammaLaw/Sutherland, GammaLaw/Simple, Soave-Redlich-Kwong/Constant and Soave-Redlich-Kwong/Sutherland are not supported and attempting to compile with any of those combinations will lead to an error message similar to this:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>error: static_assert failed due to requirement 'is_valid_physics_combination&lt;pele::physics::eos::SRK,
+      pele::physics::transport::ConstTransport&gt;::value' "Invalid physics combination attempted"
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>For the flow solvers in the Pele suite, Soret effects are only supported in PeleLMeX at present. The bulk viscosity is utilized in PeleC but not in the low-Mach algorithm used in PeleLM and PeleLMeX.</p>
+</div>
+<section id="constant">
+<h2>Constant<a class="headerlink" href="#constant" title="Link to this heading"></a></h2>
+<p>In this model, all transport coefficients are user-specified constants. They can be set in a simulation input file using:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>transport.const_viscosity = 1.81e-4
+transport.const_bulk_viscosity = 0.0
+transport.const_conductivity = 2.623e2
+transport.const_diffusivity = 0.242
+transport.const_thermal_diffusion_ratio =  0.0
+transport.units = CGS
+</pre></div>
+</div>
+<p>Any unspecified quantity is assumed to be 0.0. The <code class="docutils literal notranslate"><span class="pre">transport.units</span></code> parameter indicates the units of the parameters set in the input file and can be <code class="docutils literal notranslate"><span class="pre">CGS</span></code> or <code class="docutils literal notranslate"><span class="pre">MKS</span></code>. If not specified, CGS units are assumed, and regardless of the value of this parameter the output of all transport functions is in CGS units.</p>
+</section>
+<section id="sutherland">
+<h2>Sutherland<a class="headerlink" href="#sutherland" title="Link to this heading"></a></h2>
+<p>This is another minimal model, based on the temperature dependence of viscosity proposed by <a class="reference external" href="https://doi.org/10.1080/14786449308620508">Sutherland (1893)</a>:</p>
+<div class="math notranslate nohighlight">
+\[\mu = \mu_{ref} \left(\frac{T}{T_{ref}} \right)^{3/2} \frac{T_{ref} + S} {T + S},\]</div>
+<p>where <span class="math notranslate nohighlight">\(\mu_{ref}\)</span> is the dynamic viscosity at a reference temperature <span class="math notranslate nohighlight">\(T_{ref}\)</span> and <span class="math notranslate nohighlight">\(S\)</span> is a constant. In the PelePhysics implementation, the thermal conductivity is then computed based on a user-specified Prandtl number, <span class="math notranslate nohighlight">\(\lambda = \mu c_p / Pr\)</span>, where the heat capacity <span class="math notranslate nohighlight">\(c_p\)</span> is evaluated using the EOS model. The user may specify constant values for the bulk viscosity and diffusvity (a single value for all species). Soret effects are not supported for this Transport model (<span class="math notranslate nohighlight">\(\chi_i = 0\)</span>).</p>
+<p>For Sutherland transport, there are several runtime parameters that may be specified in the input file:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>transport.Prandtl_number = 0.7
+transport.viscosity_mu_ref = 17.16
+transport.viscosity_T_ref = 273.15
+transport.viscosity_S = 110.4
+transport.const_bulk_viscosity = 0.0
+transport.const_diffusivity = 1.0
+</pre></div>
+</div>
+<p>The values listed above are the defaults for each parameter. Note that the temperature is specified in K and all other dimensional quantities must be specified in CGS units.</p>
+</section>
+<section id="simple">
+<h2>Simple<a class="headerlink" href="#simple" title="Link to this heading"></a></h2>
+<p>In this model, transport coefficients are evaluated from data available in the chemical mechanisms (set at compilation using <code class="docutils literal notranslate"><span class="pre">Chemistry_Model</span></code>). The implementation isbased on that in <a class="reference external" href="http://www.cmap.polytechnique.fr/www.eglib/">EGlib</a> (see <a class="reference external" href="https://doi.org/10.1006/jcph.1995.1151">Ern and Giovangigli (1995)</a>) and simplified to compute, by default, only mixture-averaged diffusivities for each species. The full multicomponent diffusion matrix is also available on request (see <a class="reference internal" href="#sec-transport-multicomponent"><span class="std std-ref">Multicomponent diffusion</span></a>). The run-time options are:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>transport.use_soret = 0                 # compute Soret coefficients (1) or not (0)
+transport.trace_epsilon = 1.e-15        # shift applied to vanishing species, see below
+transport.matrix_diffusion_niter = 2    # iterations for the multicomponent diffusion matrix
+transport.conductivity_model = mixture  # mixture | lct1 | lct3, see below
+transport.conductivity_niter = 3        # conjugate-gradient iterations for lct1/lct3
+</pre></div>
+</div>
+<p>The values listed are the defaults. These options are read only by the Simple model. The <code class="docutils literal notranslate"><span class="pre">lct1</span></code> and <code class="docutils literal notranslate"><span class="pre">lct3</span></code> conductivity models are compiled in only with the build option <code class="docutils literal notranslate"><span class="pre">USE_LCT_TRANSPORT</span> <span class="pre">=</span> <span class="pre">TRUE</span></code> (GNU make; CMake-based codes define <code class="docutils literal notranslate"><span class="pre">PELE_TRANSPORT_LCT</span></code>), see <a class="reference internal" href="#sec-transport-conductivity"><span class="std std-ref">Multicomponent thermal conductivity and thermal diffusion ratios</span></a>; without it, selecting them aborts at initialization.</p>
+<p>All Simple transport evaluations start by replacing the mass fractions with “trace” values that are strictly positive but still sum to one,</p>
+<div class="math notranslate nohighlight">
+\[Y_i^{tr} = Y_i + \epsilon \left( \frac{1}{N} \sum_k Y_k - Y_i \right), \qquad \epsilon = \texttt{transport.trace\_epsilon},\]</div>
+<p>and deriving the mole fractions from <span class="math notranslate nohighlight">\(Y^{tr}\)</span>. This keeps every quantity finite for pure components and vanishing species (as in EGlib) and only affects species whose mole fraction is below roughly <span class="math notranslate nohighlight">\(\epsilon\)</span>. The default is the value that was hard-coded before the parameter existed, so the default results are unchanged bitwise; EGlib’s own examples use <span class="math notranslate nohighlight">\(10^{-16}\)</span>.</p>
+<p>The mixture-averaged diffusivity returned in <code class="docutils literal notranslate"><span class="pre">Ddiag</span></code> is <span class="math notranslate nohighlight">\(\rho \, (W_i / \overline{W}) \, D_i^{mix}\)</span> with <span class="math notranslate nohighlight">\(D_i^{mix} = (1 - Y_i) / \sum_{j \neq i} X_j / \mathcal{D}_{ij}\)</span> the Hirschfelder-Curtiss approximation, so that the species mass flux is <span class="math notranslate nohighlight">\(\mathbf{F}_i = -\texttt{Ddiag}_i \nabla X_i\)</span>.</p>
+<p>When Simple transport is used with the Soave-Redlich-Kwong equation of state, additional corrections are used to modify the transport coefficients to account for real gas effects based on <a class="reference external" href="https://doi.org/10.1021/ie00076a024">Chung et al. (1988)</a>. Soret effects are not supported for SRK.</p>
+<section id="multicomponent-diffusion">
+<span id="sec-transport-multicomponent"></span><h3>Multicomponent diffusion<a class="headerlink" href="#multicomponent-diffusion" title="Link to this heading"></a></h3>
+<p>In addition to the mixture-averaged diffusivities, the Simple model can return the full multicomponent <em>flux diffusion matrix</em></p>
+<div class="math notranslate nohighlight">
+\[\texttt{Dmat}_{ij} = \rho \, \tilde{D}_{ij} = \rho \, Y_i \, D_{ij},\]</div>
+<p>where <span class="math notranslate nohighlight">\(D_{ij}\)</span> is the symmetric multicomponent diffusion matrix of Ern and Giovangigli, such that the species mass fluxes are</p>
+<div class="math notranslate nohighlight">
+\[\mathbf{F}_i = - \sum_j \texttt{Dmat}_{ij} \nabla X_j .\]</div>
+<p>The matrix is stored row-major, <code class="docutils literal notranslate"><span class="pre">Dmat[i*NUM_SPECIES</span> <span class="pre">+</span> <span class="pre">j]</span></code>, in CGS units (g/cm/s), is independent of pressure (like <code class="docutils literal notranslate"><span class="pre">Ddiag</span></code>), and satisfies <span class="math notranslate nohighlight">\(\sum_i \texttt{Dmat}_{ij} = 0\)</span> exactly so that the fluxes sum to zero.</p>
+<p>The algorithm follows EGlib’s <code class="docutils literal notranslate"><span class="pre">EGSDR1</span></code>: the Stefan-Maxwell matrix <span class="math notranslate nohighlight">\(L_{[00]}\)</span> is built from the trace-adjusted mole fractions and the binary diffusion coefficients, a projected standard iteration is applied with the splitting that makes the first iterate the Hirschfelder-Curtiss approximation (<a class="reference external" href="https://doi.org/10.1006/jcph.1995.1151">Ern and Giovangigli (1995)</a>), the iterate is scaled by <span class="math notranslate nohighlight">\(\rho Y_i\)</span> and finally projected, <span class="math notranslate nohighlight">\(\tilde{D} \leftarrow P \tilde{D} P\)</span> with <span class="math notranslate nohighlight">\(P = I - Y \otimes u / \sum_k Y_k\)</span>, which enforces mass conservation. The number of iterations is <code class="docutils literal notranslate"><span class="pre">transport.matrix_diffusion_niter</span></code> (default 2, the EGlib choice; 1 gives the projected mixture-averaged matrix; larger values converge to the exact matrix at a cost of one <span class="math notranslate nohighlight">\(N^3\)</span> matrix product per additional iteration). The <code class="docutils literal notranslate"><span class="pre">matrix_diffusion_niter</span> <span class="pre">=</span> <span class="pre">1</span></code> diagonal coincides with <code class="docutils literal notranslate"><span class="pre">Ddiag</span></code> before projection, so the two formulations are consistent. At the default of 2 iterations the matrix differs from the converged solution by 1 to 4 % (relative Frobenius norm, hydrogen and methane mechanisms over flame compositions at 300 to 2500 K); 5 iterations bring this below 0.1 %. The converged matrix agrees with Cantera’s multicomponent coefficients to about 0.1 %.</p>
+<p>The matrix is only computed when requested through the extended entry points described in <a class="reference internal" href="#sec-transport-extendedapi"><span class="std std-ref">Extended transport API</span></a>. The <code class="docutils literal notranslate"><span class="pre">Constant</span></code> and <code class="docutils literal notranslate"><span class="pre">Sutherland</span></code> models return the projected uniform-diffusivity matrix through the same entry points (which yields the same fluxes as their diagonal coefficients), and <code class="docutils literal notranslate"><span class="pre">Manifold</span></code> transport aborts. When Simple transport is used with the SRK equation of state, the matrix is built from the density-corrected binary coefficients.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Each matrix evaluation holds <span class="math notranslate nohighlight">\(\mathcal{O}(N^2)\)</span> doubles per thread (about 12 KB for 21 species, 63 KB for 53 species), which is acceptable on GPUs for small to moderate mechanisms (roughly <span class="math notranslate nohighlight">\(N \lesssim 30\)</span>) but reserves a large amount of local memory for larger ones. The flow solvers in the Pele suite do not yet use the multicomponent matrix; the low-Mach diffusion algorithm in PeleLMeX in particular assumes a diagonal <code class="docutils literal notranslate"><span class="pre">Ddiag</span></code> and would require additional algorithm development.</p>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">TranEval</span></code> test (<code class="docutils literal notranslate"><span class="pre">Testing/Exec/TranEval</span></code>, input <code class="docutils literal notranslate"><span class="pre">inputs.2d_Simple_Matrix</span></code>) exercises the matrix path and checks mass conservation, symmetry of <span class="math notranslate nohighlight">\(\tilde{D}_{ij}/Y_i\)</span>, the exact binary-mixture result, and the error with respect to a direct dense solution of the transport linear system.</p>
+</section>
+<section id="multicomponent-thermal-conductivity-and-thermal-diffusion-ratios">
+<span id="sec-transport-conductivity"></span><h3>Multicomponent thermal conductivity and thermal diffusion ratios<a class="headerlink" href="#multicomponent-thermal-conductivity-and-thermal-diffusion-ratios" title="Link to this heading"></a></h3>
+<p>By default the thermal conductivity of the Simple model is the empirical mixture rule <span class="math notranslate nohighlight">\(\lambda = (\sum_i X_i \lambda_i^{1/4})^4\)</span> built from the pure-species fits of the mechanism. Setting <code class="docutils literal notranslate"><span class="pre">transport.conductivity_model</span></code> selects instead a solution of the Ern-Giovangigli transport linear systems, as in EGlib’s <code class="docutils literal notranslate"><span class="pre">EGSLCT1</span></code> and <code class="docutils literal notranslate"><span class="pre">EGSLCT3</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">lct1</span></code>: the reduced system <span class="math notranslate nohighlight">\(\Lambda_{[e]}\)</span> with one combined (translational + internal) energy mode per species (<span class="math notranslate nohighlight">\(N\)</span> unknowns);</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lct3</span></code>: the full system <span class="math notranslate nohighlight">\(\Lambda\)</span> with separate translational and internal energy modes per species (<span class="math notranslate nohighlight">\(2N\)</span> unknowns).</p></li>
+</ul>
+<p>Both are solved with <code class="docutils literal notranslate"><span class="pre">transport.conductivity_niter</span></code> preconditioned conjugate-gradient iterations (default 3, the EGlib choice; the iterates increase monotonically to the exact solution, which TranEval reaches to round-off with 30 iterations). The systems need the pure-species viscosities, the binary diffusion coefficients, the internal heat capacities, the rotational relaxation numbers (with Parker’s temperature correction) and the collision-integral ratios <span class="math notranslate nohighlight">\(A^*_{ij}, B^*_{ij}, C^*_{ij}\)</span>. The latter are the universal CHEMKIN/EGlib polynomial fits in <span class="math notranslate nohighlight">\(\ln(T/\epsilon_{ij})\)</span>, with <span class="math notranslate nohighlight">\(\epsilon_{ij}\)</span> built at initialization from the Lennard-Jones parameters, dipole moments and polarizabilities already present in the mechanism (EGlib’s polar/non-polar correction), so no new mechanism data is required.</p>
+<p>This is a model choice: when an LCT model is selected, the conductivity returned by <strong>all</strong> entry points, including the historical ones used by PeleC and PeleLMeX, is the LCT value. The default <code class="docutils literal notranslate"><span class="pre">mixture</span></code> reproduces the previous results bitwise.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>The LCT conductivity is a different model from the mixture rule, not a refinement of it. Over flame compositions at 300 to 2500 K, <span class="math notranslate nohighlight">\(\lambda_{LCT} / \lambda_{mixture}\)</span> spans 0.82 to 1.05 for the LiDryer hydrogen mechanism and 0.75 to 1.07 for drm19, and is 0.81 for pure H2O at 300 K. Cantera’s multicomponent conductivity agrees with the LCT values to 2 to 3 % and differs from its own mixture rule by the same 15 to 20 %. A flow solver that selects <code class="docutils literal notranslate"><span class="pre">lct1</span></code> or <code class="docutils literal notranslate"><span class="pre">lct3</span></code> in order to obtain <span class="math notranslate nohighlight">\(\tilde{\chi}\)</span> therefore also changes the heat conduction everywhere, including at isothermal walls.</p>
+</div>
+<p>The LCT models are compiled in only with <code class="docutils literal notranslate"><span class="pre">USE_LCT_TRANSPORT</span> <span class="pre">=</span> <span class="pre">TRUE</span></code> (GNU make, through <code class="docutils literal notranslate"><span class="pre">Source/Transport/Make.package</span></code>) or the preprocessor definition <code class="docutils literal notranslate"><span class="pre">PELE_TRANSPORT_LCT</span></code> (CMake); see the note at the end of this section for the reason. The models use Parker’s rotational relaxation correction with its standard coefficients (as in EGlib and the CEPTR fits); the bulk viscosity of the Simple model keeps its historical expression for backward compatibility.</p>
+<p>The LCT solution also yields the <em>rescaled thermal diffusion ratios</em> <span class="math notranslate nohighlight">\(\tilde{\chi}_i\)</span>, available only through the extended entry points (requesting them with the <code class="docutils literal notranslate"><span class="pre">mixture</span></code> model aborts). The thermal diffusion ratios are <span class="math notranslate nohighlight">\(\chi_i = X_i \tilde{\chi}_i\)</span>, they sum to zero, and together with the multicomponent diffusion matrix the Soret contribution to the species mass fluxes is</p>
+<div class="math notranslate nohighlight">
+\[\mathbf{F}_i^{T} = - \sum_j \texttt{Dmat}_{ij} \, \chi_j \, \frac{\nabla T}{T}.\]</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p><span class="math notranslate nohighlight">\(\tilde{\chi}\)</span> follows the EGlib/Ern-Giovangigli sign convention of the flux above (light species have <span class="math notranslate nohighlight">\(\chi_i &lt; 0\)</span> and drift towards hot regions). The mixture-averaged Soret coefficients <code class="docutils literal notranslate"><span class="pre">chi</span></code> produced with <code class="docutils literal notranslate"><span class="pre">transport.use_soret</span></code> follow the CHEMKIN convention and have the opposite sign for the same physical effect; the two must not be mixed without accounting for this. The magnitudes differ as well: the CHEMKIN fit is a dilute-limit approximation for the light species, and in flame mixtures it exceeds <span class="math notranslate nohighlight">\(X_i \tilde{\chi}_i\)</span> by a factor of 1.5 to 2 for H2 (TranEval reports the ratio when both are computed).</p>
+</div>
+<p>For a pure species the LCT conductivity agrees with the mechanism’s pure-species fit (CHEMKIN’s modified Eucken formula) to about 1 % for non-polar species; for polar species (e.g. H2O) the two models treat the internal-energy self-diffusion differently and differ by up to about 20 % at low temperature.</p>
+<p>The conductivity converges quickly (the default 3 iterations are within <span class="math notranslate nohighlight">\(4 \times 10^{-8}\)</span> of the converged value), but <span class="math notranslate nohighlight">\(\tilde{\chi}\)</span> is built from the solution vector itself and converges more slowly: at 3 iterations <span class="math notranslate nohighlight">\(X_i \tilde{\chi}_i\)</span> is within about 10 % of the converged value (1 to 5 % in the median), and the converged values agree with Cantera’s thermal diffusion coefficients to 5 to 7 %. Use <code class="docutils literal notranslate"><span class="pre">transport.conductivity_niter</span> <span class="pre">=</span> <span class="pre">10</span></code> or more when the Soret fluxes matter.</p>
+<p>With the SRK equation of state the LCT systems are built from the dilute-gas binary coefficients and the Chung real-gas correction is applied to the resulting conductivity, as for the mixture rule. The <code class="docutils literal notranslate"><span class="pre">Constant</span></code>, <code class="docutils literal notranslate"><span class="pre">Sutherland</span></code> and <code class="docutils literal notranslate"><span class="pre">Manifold</span></code> models do not provide <span class="math notranslate nohighlight">\(\tilde{\chi}\)</span> and abort if it is requested. Requesting <span class="math notranslate nohighlight">\(\tilde{\chi}\)</span> from the Simple model with the <code class="docutils literal notranslate"><span class="pre">mixture</span></code> conductivity is a caller error: the model is a run-time option, so check <code class="docutils literal notranslate"><span class="pre">conductivity_model</span></code> in the transport parameters at setup; it is trapped in DEBUG builds and otherwise returns <span class="math notranslate nohighlight">\(\tilde{\chi} = 0\)</span>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The LCT systems are solved matrix-free, so the only <span class="math notranslate nohighlight">\(N^2\)</span> storage is the packed array of binary coefficients (<span class="math notranslate nohighlight">\(N(N+1)/2\)</span> doubles), plus about <span class="math notranslate nohighlight">\(17 N\)</span> doubles of conjugate-gradient work space: 4.7 KB for 21 species and 18 KB for 53 in total. Because the model is a run-time switch, this storage is part of the local-memory footprint of every GPU kernel that evaluates transport once the code is compiled in, even with the default <code class="docutils literal notranslate"><span class="pre">mixture</span></code> model: for a 53-species mechanism the stack frame of PeleC’s transport-coefficient kernel grows from 4 KB to 25 KB per thread. This is why the LCT code is opt-in (<code class="docutils literal notranslate"><span class="pre">USE_LCT_TRANSPORT</span> <span class="pre">=</span> <span class="pre">TRUE</span></code> / <code class="docutils literal notranslate"><span class="pre">-DPELE_TRANSPORT_LCT</span></code>); without it an LCT model is rejected at initialization and nothing else changes.</p>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">TranEval</span></code> test (input <code class="docutils literal notranslate"><span class="pre">inputs.2d_Simple_LCT</span></code>) checks the antisymmetry of <span class="math notranslate nohighlight">\(\chi\)</span>, the error with respect to a direct dense solution, the monotonicity of the iterates, the pure-species closed form of each model, and the agreement of the pure-species limit with the mechanism’s conductivity fits.</p>
+</section>
+<section id="extended-transport-api">
+<span id="sec-transport-extendedapi"></span><h3>Extended transport API<a class="headerlink" href="#extended-transport-api" title="Link to this heading"></a></h3>
+<p>The historical entry points <code class="docutils literal notranslate"><span class="pre">transport(wtr_get_xi,</span> <span class="pre">...,</span> <span class="pre">mu,</span> <span class="pre">xi,</span> <span class="pre">lam,</span> <span class="pre">tparm)</span></code> and <code class="docutils literal notranslate"><span class="pre">get_transport_coeffs(bx,</span> <span class="pre">Y_in,</span> <span class="pre">T_in,</span> <span class="pre">Rho_in,</span> <span class="pre">D_out,</span> <span class="pre">chi_out,</span> <span class="pre">mu_out,</span> <span class="pre">xi_out,</span> <span class="pre">lam_out,</span> <span class="pre">tparm)</span></code> are unchanged. The additional quantities are obtained through a request/output pair of structs (<code class="docutils literal notranslate"><span class="pre">Source/Transport/TransportTypes.H</span></code>):</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>pele::physics::transport::TransportRequest req;   // bools: xi, mu, lam, Ddiag, chi, Dmat, chit
+pele::physics::transport::TransportOutputs out;   // pointers: mu, xi, lam, Ddiag, chi, Dmat, chit
+req.lam = true; req.Dmat = true; req.chit = true;
+out.lam = &amp;lam; out.Dmat = Dmat; out.chit = chit;  // Dmat: NUM_SPECIES*NUM_SPECIES, chit: NUM_SPECIES
+trans.transport(req, T, rho, Y, out, tparm);
+trans.get_transport_coeffs(bx, req, Y_in, T_in, Rho_in, D_out, chi_out, Dmat_out, chit_out,
+                           mu_out, xi_out, lam_out, tparm);
+</pre></div>
+</div>
+<p>Only the requested quantities are evaluated and only the requested, non-null outputs are written (unrequested outputs, scalars included, are left untouched); <code class="docutils literal notranslate"><span class="pre">Array4</span></code> outputs that are not requested may be any array. <code class="docutils literal notranslate"><span class="pre">chi</span></code> is accumulated into and must be zeroed by the caller. Downstream codes can test for this API with the preprocessor symbol <code class="docutils literal notranslate"><span class="pre">PELE_PHYSICS_TRANSPORT_EXTENDED_API</span></code> (defined in <code class="docutils literal notranslate"><span class="pre">TransportTypes.H</span></code>) and for the LCT models with <code class="docutils literal notranslate"><span class="pre">PELE_TRANSPORT_LCT</span></code>. <code class="docutils literal notranslate"><span class="pre">Dmat_out</span></code> needs <code class="docutils literal notranslate"><span class="pre">NUM_SPECIES*NUM_SPECIES</span></code> components (component <code class="docutils literal notranslate"><span class="pre">i*NUM_SPECIES</span> <span class="pre">+</span> <span class="pre">j</span></code> holds <span class="math notranslate nohighlight">\(\rho \tilde{D}_{ij}\)</span>) and <code class="docutils literal notranslate"><span class="pre">chit_out</span></code> <code class="docutils literal notranslate"><span class="pre">NUM_SPECIES</span></code> components.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Ceptr.html" class="btn btn-neutral float-left" title="CEPTR: Chemistry Evaluation for Pele Through Recasting" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Thermodynamics.html" class="btn btn-neutral float-right" title="Thermodynamics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

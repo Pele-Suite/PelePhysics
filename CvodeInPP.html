@@ -1,0 +1,874 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CVODE implementation in PelePhysics &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Analytically reduced chemistry via quasi-steady state (QSS) assumption in PelePhysics" href="QSS.html" />
+    <link rel="prev" title="A brief introduction to CVODE" href="IntroductionToCvode.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="Chemistry.html">Chemistry</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="IntroductionToCvode.html">A brief introduction to CVODE</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">CVODE implementation in <cite>PelePhysics</cite></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#the-different-reactors">The different reactors</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#validation-of-the-cv-reactor-implementation-in-cvode-with-cantera">Validation of the CV reactor implementation in CVODE (with CANTERA)</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#activating-the-different-cvode-solver-options-via-the-input-files">Activating the different CVODE solver options via the input files</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#the-gnumakefile">The GNUmakefile</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#the-input-file">The input file</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#the-reacteval-c-test-case-with-cvode-in-details">The ReactEval_C test case with CVODE in details</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#id2">The GNUmakefile</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id3">The input file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#results">Results</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#to-go-further-reacteval-c-with-cvode-and-the-klu-library">To go further: ReactEval_C with CVODE and the KLU library</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#id5">The GNUmakefile</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id6">The input file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id7">Results</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#current-limitations">Current Limitations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#tricks-and-hacks-stuff-to-know">Tricks and hacks, stuff to know</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#how-does-cvode-compare-with-dvode">How does CVODE compare with DVODE ?</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#cvode-implementation-in-pelephysics-on-gpu">CVODE implementation in <cite>PelePhysics</cite> on GPU</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#requirements-and-input-files">Requirements and input files</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#id8">The GNUmakefile</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id9">The input file</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#grouping-cells-together">Grouping cells together</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#the-reacteval-c-gpu-test-case-in-details">The ReactEval_C_GPU test case in details</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#id11">The GNUmakefile</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id12">The input file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#the-results">The Results</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#id13">Current Limitations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html">Analytically reduced chemistry via quasi-steady state (QSS) assumption in <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="Ceptr.html">CEPTR: Chemistry Evaluation for Pele Through Recasting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="Chemistry.html">Chemistry</a></li>
+      <li class="breadcrumb-item active">CVODE implementation in <cite>PelePhysics</cite></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/CvodeInPP.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cvode-implementation-in-pelephysics">
+<h1>CVODE implementation in <cite>PelePhysics</cite><a class="headerlink" href="#cvode-implementation-in-pelephysics" title="Link to this heading"></a></h1>
+<section id="the-different-reactors">
+<span id="sec-subsdiffreacts"></span><h2>The different reactors<a class="headerlink" href="#the-different-reactors" title="Link to this heading"></a></h2>
+<p>Throughout this document, what we call a <cite>reactor</cite> is in fact a zero-dimensional model,
+the simplest representation of a chemically reacting system. Depending upon the choice of state variables
+driving the system, several different types of reactor can be considered;
+and the “correct” choice is case dependent. In general, the state variables for a reactor model are</p>
+<ul class="simple">
+<li><p>The reactor mass</p></li>
+<li><p>The reactor volume</p></li>
+<li><p>The energy of the system</p></li>
+<li><p>The mass fractions for each species</p></li>
+</ul>
+<p>The most common type of reactor is the <cite>constant-volume</cite> (CV) reactor, which is the one used to advance the chemistry
+within <cite>PeleC</cite>. This reactor type is equivalent to a rigid vessel with fixed volume but variable pressure.
+In <cite>PelePhysics</cite>, the constant-volume constraint is ensured by keeping the density <span class="math notranslate nohighlight">\(\rho\)</span> fixed
+-since there is no change of mass; and the indirect choice of energy in the CV reactor implementation is the total energy
+<span class="math notranslate nohighlight">\(E\)</span>. <span class="math notranslate nohighlight">\(E\)</span>’s evolution in our case is solely due to a constant external source term <span class="math notranslate nohighlight">\(\dot{E}_{ext}\)</span>, which accounts
+for the effects of advection and convection in the Spectral Deferred Correction (SDC) scheme that all <cite>Pele</cite> codes use (see the <a class="reference external" href="https://pelelm.readthedocs.io/en/latest/index.html">PeleLM</a> documentation for example).
+In that sense, the CV reactor is an abstraction and is not a true closed vessel.</p>
+<p>Note that CVODE still integrates the mass fractions (<span class="math notranslate nohighlight">\(\rho Y\)</span>) together with energy for stability reasons,
+but a change of variable is applied to effectively transport the temperature <span class="math notranslate nohighlight">\(T\)</span> via</p>
+<div class="math notranslate nohighlight">
+\[\rho C_v \frac{\partial T}{\partial t} = \rho\dot{E}_{ext}  - \sum_k e_k {\dot{\omega}_k}^M\]</div>
+<p>where the <span class="math notranslate nohighlight">\(e_k\)</span> are the species internal energy and <span class="math notranslate nohighlight">\({\dot{\omega}_k}^M\)</span> is the species <span class="math notranslate nohighlight">\(k\)</span> mass production rate.</p>
+<p>In a second implementation, that we will label <cite>constant-volume-enthalpy</cite> (CVH), the mass-weighted total enthalpy <span class="math notranslate nohighlight">\(\rho H\)</span> is used and
+conserved along with <span class="math notranslate nohighlight">\(\rho\)</span>. This reactor type is also an abstraction. Here also, <span class="math notranslate nohighlight">\(\rho H\)</span>
+evolves according to an external source term <span class="math notranslate nohighlight">\(\dot{\rho H}_{ext}\)</span>, and in CVODE, the mass fractions (<span class="math notranslate nohighlight">\(\rho Y\)</span>) and
+temperature <span class="math notranslate nohighlight">\(T\)</span> are integrated according to</p>
+<div class="math notranslate nohighlight">
+\[\rho C_p \frac{\partial T}{\partial t} = \rho\dot{H}_{ext}  - \sum_k h_k  {\dot{\omega}_k}^M\]</div>
+<p>where the <span class="math notranslate nohighlight">\(h_k\)</span> are the species internal energy.</p>
+<section id="validation-of-the-cv-reactor-implementation-in-cvode-with-cantera">
+<span id="sec-subsubvalidcvreact"></span><h3>Validation of the CV reactor implementation in CVODE (with CANTERA)<a class="headerlink" href="#validation-of-the-cv-reactor-implementation-in-cvode-with-cantera" title="Link to this heading"></a></h3>
+<p><a class="reference external" href="https://cantera.org/">CANTERA</a> is an open-source suite of tools for problems involving chemical kinetics, thermodynamics, and transport processes.
+It is a very robust and fast tool written in C++ that is also based on CVODE to perform the chemistry integration.
+CANTERA is well recognized in the combustion community, and by comparing our results to CANTERA reactor simulations,
+we will be able to validate our implementation.</p>
+<p>Note that only the CV reactor model described above can be validated, since as we discussed before,
+the CVH reactor model is an abstraction needed for our Low-Mach PeleLM chemistry integration. Also, to have a real CV reactor,
+the external source terms for the energy and species equations in <cite>PelePhysics</cite> have been set to 0 (see <a class="reference internal" href="#sec-subsdiffreacts"><span class="std std-ref">The different reactors</span></a>).</p>
+<p>The parameters chosen to initialize the simulation in both CANTERA and <cite>PelePhysics</cite> are described in
+Table <a class="reference internal" href="#fig-reactevalcvodetable"><span class="std std-numref">1</span></a>. The kinetic mechanism used for hydrogen combustion is available in <cite>PelePhysics</cite>.
+Note that small sub-steps are explicitly taken until the final time is reached,
+but CVODE’s internal machinery can subdivides the <span class="math notranslate nohighlight">\(dt\)</span> even further.
+For the purpose of validation, the direct dense solver of CVODE is selected
+in <cite>PelePhysics</cite> (see section <a class="reference internal" href="#sec-subsppoptions"><span class="std std-ref">Activating the different CVODE solver options via the input files</span></a>).</p>
+<span id="fig-reactevalcvodetable"></span><table class="docutils align-center" id="id14">
+<caption><span class="caption-number">1 </span><span class="caption-text">Parameters for initializing simulation</span><a class="headerlink" href="#id14" title="Link to this table"></a></caption>
+<tbody>
+<tr class="row-odd"><td><p>Mechanism</p></td>
+<td><p>Mixture</p></td>
+<td><p>Initial T</p></td>
+<td><p>Initial phi</p></td>
+<td><p>Pressure</p></td>
+<td><p>dt</p></td>
+<td><p>Final time</p></td>
+</tr>
+<tr class="row-even"><td><p>Li Dryer</p></td>
+<td><p>H2/O2</p></td>
+<td><p>1500 K</p></td>
+<td><p>0.8</p></td>
+<td><p>101325 Pa</p></td>
+<td><p>1.0e-8s</p></td>
+<td><p>3.0e-6s</p></td>
+</tr>
+</tbody>
+</table>
+<p>Results are plotted in Fig <a class="reference internal" href="#fig-reactevalcvode"><span class="std std-numref">2</span></a> and <a class="reference internal" href="#fig-reactevalcvodespecs"><span class="std std-numref">3</span></a>. for the <span class="math notranslate nohighlight">\(H_2/O_2\)</span> mixture.
+All curves are indistinguishable, so the relative error of all major quantities is also plotted in Fig. <a class="reference internal" href="#fig-reactevalcvodeerrss"><span class="std std-numref">4</span></a>.
+Note that <span class="math notranslate nohighlight">\(H_2\)</span> and <span class="math notranslate nohighlight">\(O_2\)</span> relative errors have similar features, and that relative errors observed
+for <span class="math notranslate nohighlight">\(H\)</span> and <span class="math notranslate nohighlight">\(H_2O\)</span> are representative of those exhibited by, respectively, intermediates and products.</p>
+<span id="fig-reactevalcvode"></span><table class="docutils align-center" id="id15">
+<caption><span class="caption-number">2 </span><span class="caption-text">Evolution of temperature, pressure and enthalpy in a CV reactor, computed with the LiDryer mechanism. Black: CANTERA, red: PelePhysics.</span><a class="headerlink" href="#id15" title="Link to this table"></a></caption>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_images/Main.001.png"><img alt="a" src="_images/Main.001.png" style="width: 100%;" /></a></p></td>
+</tr>
+</tbody>
+</table>
+<span id="fig-reactevalcvodespecs"></span><table class="docutils align-center" id="id16">
+<caption><span class="caption-number">3 </span><span class="caption-text">Evolution of major species in a CV reactor, computed with the LiDryer mechanism. Black: CANTERA, red: PelePhysics.</span><a class="headerlink" href="#id16" title="Link to this table"></a></caption>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_images/Specs.png"><img alt="b" src="_images/Specs.png" style="width: 100%;" /></a></p></td>
+</tr>
+</tbody>
+</table>
+<span id="fig-reactevalcvodeerrss"></span><table class="docutils align-center" id="id17">
+<caption><span class="caption-number">4 </span><span class="caption-text">Relative errors on the temperature, pressure, enthalpy and major species in a CV reactor, computed with the LiDryer mechanism.</span><a class="headerlink" href="#id17" title="Link to this table"></a></caption>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_images/ERRs.png"><img alt="c" src="_images/ERRs.png" style="width: 100%;" /></a></p></td>
+</tr>
+</tbody>
+</table>
+<p>Overall, considering the many CVODE controlling parameters, results are deemed acceptable and that
+concludes the validation of the reactors implemented in <cite>PelePhysics</cite>.</p>
+</section>
+</section>
+<section id="activating-the-different-cvode-solver-options-via-the-input-files">
+<span id="sec-subsppoptions"></span><h2>Activating the different CVODE solver options via the input files<a class="headerlink" href="#activating-the-different-cvode-solver-options-via-the-input-files" title="Link to this heading"></a></h2>
+<p><strong>Note that at this point, it is believed that the user has properly installed CVODE as well as the SuiteSparse package. If not, refer to</strong> <a class="reference internal" href="GettingStarted.html#sec-getcvode"><span class="std std-ref">Dependencies</span></a>.</p>
+<p>Choosing between DVODE/CVODE (as well as other ODE integrators that will not be discussed in this section) is done at compile time,
+via the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code>. On the other hand, the type of reactor and specifics of the numerical algorithm
+are selected via keywords in the input file. There is a subtlety though:
+when any sparsity feature is required, the choice should also be made at compile time since external libraries will be required;
+and if the compilation is not performed properly, subsequent options via keywords in the input file can either lead to an error or fall back to a dense formulation
+of the problem. This is discussed in more depth in what follows.</p>
+<section id="the-gnumakefile">
+<span id="subsubs-gnutype"></span><h3>The GNUmakefile<a class="headerlink" href="#the-gnumakefile" title="Link to this heading"></a></h3>
+<p>The default setting is to use DVODE in <cite>PelePhysics</cite>; i.e, if no modifications are done to the original <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code> (see the test case ReactEval_FORTRAN of <cite>PelePhysics</cite>),
+then this option should automatically be selected. To activate CVODE, the user must first activates the use of Sundials via the following line:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>USE_SUNDIALS_PP = TRUE
+</pre></div>
+</div>
+<p>Note that this is a <cite>PelePhysics</cite> flag, so it will automatically be recognized in the <cite>Pele</cite> codes. However, if CVODE has not been installed as prescribed in <a class="reference internal" href="GettingStarted.html#sec-getcvode"><span class="std std-ref">Dependencies</span></a> then a line specifying the location of the Sundials libraries should be added:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>CVODE_LIB_DIR=PathToSundials/instdir/lib/
+</pre></div>
+</div>
+<p>By default, if Sundials is used then the implicit ODE solver CVODE is selected. The user then has to choose between a number of
+different methods to integrate the linear system arising during the implicit solve. Add the following line if sparsity features are required:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>PELE_USE_KLU = TRUE
+</pre></div>
+</div>
+<p>Likewise, if <cite>SuiteSparse</cite> has not been installed as prescribed in <a class="reference internal" href="GettingStarted.html#sec-getcvode"><span class="std std-ref">Dependencies</span></a>, then a line specifying its location should be added:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>SUITESPARSE_DIR=PathToSuiteSparse/
+</pre></div>
+</div>
+<p>All of the flags discussed in this subection are used in <code class="docutils literal notranslate"><span class="pre">$PELE_PHYSICS_HOME/ThirdPartyThirdParty/Make.ThirdParty</span></code>.</p>
+</section>
+<section id="the-input-file">
+<h3>The input file<a class="headerlink" href="#the-input-file" title="Link to this heading"></a></h3>
+<p>The input file is made up of specific blocks containing keywords that apply to specific areas of the integrationof the problem at hand.
+The suffix associated with each block of keywords should help the user in determining which keywords
+are needed in his case, depending on the options selected via the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code>.
+If CVODE is enabled via the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code>, for example, keywords starting with <code class="docutils literal notranslate"><span class="pre">cvode.*</span></code> are relevant.
+The general <code class="docutils literal notranslate"><span class="pre">ode.*</span></code> keywords are shared by all ODE integrators and thus are also relevant for CVODE:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ode.reactor_type</span></code> enable to switch from a CV reactor (<code class="docutils literal notranslate"><span class="pre">=1</span></code>) to a CVH reactor (<code class="docutils literal notranslate"><span class="pre">=2</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cvode.solve_type</span></code> controls the CVODE linear integration method: choose <code class="docutils literal notranslate"><span class="pre">1</span></code> to enable the dense direct linear solver,
+<code class="docutils literal notranslate"><span class="pre">5</span></code> for the sparse direct linear solver (if the KLU library has been linked) and <code class="docutils literal notranslate"><span class="pre">99</span></code> for the Krylov iterative solver</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ode.analytical_jacobian</span></code> is a bit less obvious:</p>
+<ul>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">cvode.solve_type</span> <span class="pre">=</span> <span class="pre">1</span></code>, then <code class="docutils literal notranslate"><span class="pre">ode.analytical_jacobian</span> <span class="pre">=</span> <span class="pre">1</span></code> will activate the use of an Analytical Jacobian.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">cvode.solve_type</span> <span class="pre">=</span> <span class="pre">99</span></code>, then <code class="docutils literal notranslate"><span class="pre">ode.analytical_jacobian</span> <span class="pre">=</span> <span class="pre">1</span></code> will activate the preconditioned GMRES solver while <code class="docutils literal notranslate"><span class="pre">ode.analytical_jacobian</span> <span class="pre">=</span> <span class="pre">0</span></code> will activate the non-preconditioned GMRES solver.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">cvode.solve_type</span> <span class="pre">=</span> <span class="pre">99</span></code>, <code class="docutils literal notranslate"><span class="pre">ode.analytical_jacobian</span> <span class="pre">=</span> <span class="pre">1</span></code> <strong>and</strong> the KLU library is linked, then the preconditioned solve is done in a sparse format.</p></li>
+<li><p>With <code class="docutils literal notranslate"><span class="pre">cvode.solve_type</span> <span class="pre">=</span> <span class="pre">5</span></code>, the only allowed option is <code class="docutils literal notranslate"><span class="pre">ode.analytical_jacobian</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+<section id="the-reacteval-c-test-case-with-cvode-in-details">
+<span id="sec-subsreactevalcvode"></span><h2>The ReactEval_C test case with CVODE in details<a class="headerlink" href="#the-reacteval-c-test-case-with-cvode-in-details" title="Link to this heading"></a></h2>
+<p>This tutorial has been adapted from the <cite>ReactEval_FORTRAN</cite> tutorial employed in the series of regression tests to monitor the DVODE chemistry integration.
+The domain considered is a <span class="math notranslate nohighlight">\(2x1024x2\)</span> box, where the initial temperature is different in each <span class="math notranslate nohighlight">\((i,j,k)-\)</span> cell, according to a <span class="math notranslate nohighlight">\(y-\)</span> evolving sinusoidal profile, see Fig. <a class="reference internal" href="#fig-errh2"><span class="std std-numref">1</span></a>:</p>
+<div class="math notranslate nohighlight">
+\[T(i,j,k) =  T_l + (T_h-T_l)\frac{y(i,j,k)}{L} + dTsin\left(2\pi\frac{y(i,j,k)}{P}\right)\]</div>
+<p>The different parameters involved are summarized in Table <a class="reference internal" href="#tab-paramreactevalcvode"><span class="std std-numref">5</span></a>. The initial pressure is 1 atm. The initial composition is the same in every cell, and is a mixture of 0.1 <span class="math notranslate nohighlight">\(C_nH_m\)</span>, 0.2 <span class="math notranslate nohighlight">\(O_2\)</span> and 0.7 <span class="math notranslate nohighlight">\(N_2\)</span> in mass fractions.</p>
+<p>Various fuels and kinetic mechanisms can be employed. For the purpose of this tutorial, two common fuels will be considered: <strong>methane</strong> (n=1 and m=4) and <strong>n-dodecane</strong> (n=12 and m=26), modelled via the <strong>drm</strong> and <strong>dodecane_wang</strong> kinetic schemes, respectively. Both mechanisms are available in <cite>PelePhysics</cite>.</p>
+<p>The following focuses on the <span class="math notranslate nohighlight">\(CH_4\)</span>/<span class="math notranslate nohighlight">\(O_2\)</span> example, but performances for both mechanisms and initial composition will be reported in the results section.</p>
+<span id="tab-paramreactevalcvode"></span><table class="docutils align-center" id="id18">
+<caption><span class="caption-number">5 </span><span class="caption-text">Parameters used to initialize T in the ReactEval_C test case</span><a class="headerlink" href="#id18" title="Link to this table"></a></caption>
+<tbody>
+<tr class="row-odd"><td><p>Tl</p></td>
+<td><p>Th</p></td>
+<td><p>dT</p></td>
+<td><p>L</p></td>
+<td><p>P</p></td>
+</tr>
+<tr class="row-even"><td><p>2000 K</p></td>
+<td><p>2500 K</p></td>
+<td><p>100 K</p></td>
+<td><p>1024</p></td>
+<td><p>L/4</p></td>
+</tr>
+</tbody>
+</table>
+<figure class="align-center" id="id1">
+<span id="fig-errh2"></span><a class="reference external image-reference" href="./Visualization/Case_ReactEvalCvode.001.png"><img alt="The ReactEval_C test case" src="_images/Case_ReactEvalCvode.001.png" style="width: 50%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">1 </span><span class="caption-text">The ReactEval_C test case</span><a class="headerlink" href="#id1" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<section id="id2">
+<h3>The GNUmakefile<a class="headerlink" href="#id2" title="Link to this heading"></a></h3>
+<p>For this example, the <code class="docutils literal notranslate"><span class="pre">USE_SUNDIALS_PP</span></code> flag should be set to true, as the ODE integration
+is called from the C++ routine directly using CVODE.
+Additionally, the <code class="docutils literal notranslate"><span class="pre">FUEGO_GAS</span></code> flag should be set to true and the chemistry model should be set to <code class="docutils literal notranslate"><span class="pre">drm19</span></code>. The full file reads as follows:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>PRECISION  = DOUBLE
+PROFILE    = FALSE
+
+DEBUG      = FALSE
+
+DIM        = 3
+
+COMP       = gcc
+FCOMP      = gfortran
+
+USE_MPI    = TRUE
+USE_OMP    = FALSE
+
+FUEGO_GAS  = TRUE
+
+TINY_PROFILE = TRUE
+
+# define the location of the PELE_PHYSICS top directory
+PELE_PHYSICS_HOME    := ../../../..
+
+#######################
+DEFINES  += -DMOD_REACTOR
+
+<span class="gh">#######################</span>
+<span class="gh"># ODE solver OPTIONS: DVODE (default) / SUNDIALS / RK explicit</span>
+<span class="gh">#######################</span>
+# Activates use of SUNDIALS: CVODE (default) / ARKODE
+USE_SUNDIALS_PP = TRUE
+ifeq ($(USE_SUNDIALS_PP), TRUE)
+  # provide location of sundials lib if needed
+  SUNDIALS_LIB_DIR=$(PELE_PHYSICS_HOME)/ThirdParty/sundials/instdir/lib/
+  # use KLU sparse features -- only useful if CVODE is used
+  PELE_USE_KLU = FALSE
+  ifeq ($(PELE_USE_KLU), TRUE)
+    # provide location of KLU lib if needed
+    SUITESPARSE_DIR=$(PELE_PHYSICS_HOME)/ThirdParty/SuiteSparse/
+  endif
+endif
+
+#######################
+ifeq ($(FUEGO_GAS), TRUE)
+  Eos_Model       = Fuego
+  Chemistry_Model = drm19
+  Reactions_dir   = Fuego
+  Transport_Model = Simple
+else
+  Eos_Model       = GammaLaw
+  Reactions_dir   = Null
+  Transport_Model = Constant
+endif
+
+Bpack   := ./Make.package
+Blocs   := .
+
+include $(PELE_PHYSICS_HOME)/Testing/Exec/Make.PelePhysics
+</pre></div>
+</div>
+<p>Note that the <code class="docutils literal notranslate"><span class="pre">TINY_PROFILE</span></code> flag has been activated to obtain statistics on the run. This is an <cite>AMREX</cite> option.</p>
+</section>
+<section id="id3">
+<h3>The input file<a class="headerlink" href="#id3" title="Link to this heading"></a></h3>
+<p>The run parameters that can be controlled via <code class="docutils literal notranslate"><span class="pre">inputs.3d</span></code> input file for this example are as follows:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>#ODE solver options
+# REACTOR mode
+ode.dt = 1.e-05
+ode.ndt = 10
+# Reactor formalism: 1=full e, 2=full h
+ode.reactor_type = 1
+# Tolerances for ODE solve
+ode.rtol = 1e-9
+ode.atol = 1e-9
+# Select ARK/CV-ODE Jacobian eval: 0=FD 1=AJ
+ode.analytical_jacobian = 0
+#CVODE SPECIFICS
+# Choose between sparse (5) dense (1/101) iterative (99) solver
+cvode.solve_type = 1
+
+#OTHER
+# Max size of problem
+max_grid_size = 2
+# Choose name of output pltfile
+amr.plot_file       = plt
+# Fuel species
+fuel_name = CH4
+</pre></div>
+</div>
+<p>so in this example, a <strong>CV reactor model is chosen</strong> to integrate each cell, and the <strong>dense direct solve without analytical Jacobian</strong> is activated.
+Each cell is then integrated for a total of <span class="math notranslate nohighlight">\(1.e-05\)</span> seconds, with 10 external time steps.
+This means that the actual <span class="math notranslate nohighlight">\(dt\)</span> is <span class="math notranslate nohighlight">\(1.e-06s\)</span>, which is more than what is typically used in the <cite>PeleC</cite> code,
+but consistent with what is used in <cite>PeleLM</cite>. Note that the fuel is explicitly specified to be methane.
+By default, the number of cells integrated simultaneously by one CVODE instance is 1 <a class="footnote-reference brackets" href="#foot1" id="id4" role="doc-noteref"><span class="fn-bracket">[</span>1<span class="fn-bracket">]</span></a>, but the <cite>AMREX</cite> block-integration proceeds by blocks of <span class="math notranslate nohighlight">\(2x2x2\)</span>.</p>
+</section>
+<section id="results">
+<h3>Results<a class="headerlink" href="#results" title="Link to this heading"></a></h3>
+<p>It took 52.61s to integrate the 4096 cells of this box, with 4 MPI processes and no OMP process.
+The resulting temperature evolution for all cells in the y-direction is displayed in Fig. <a class="reference internal" href="#fig-reacevalcv"><span class="std std-numref">2</span></a>.</p>
+<figure class="align-center" id="fig-reactevalcv">
+<span id="fig-reacevalcv"></span><a class="reference internal image-reference" href="_images/ReactEvalCv.001.png"><img alt="Evolution of temperature in the 2x1024x2 example box, using a CV reactor and a dense direct solve, and computed with the DRM mechanism. Black: $t=0$, red: $t=1e-05s$" src="_images/ReactEvalCv.001.png" style="width: 100%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">2 </span><span class="caption-text">Evolution of temperature in the 2x1024x2 example box, using a CV reactor and a dense direct solve, and computed with the DRM mechanism. Black: t=0s, red: t=1e-05s</span><a class="headerlink" href="#fig-reactevalcv" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+</section>
+<section id="to-go-further-reacteval-c-with-cvode-and-the-klu-library">
+<h2>To go further: ReactEval_C with CVODE and the KLU library<a class="headerlink" href="#to-go-further-reacteval-c-with-cvode-and-the-klu-library" title="Link to this heading"></a></h2>
+<section id="id5">
+<h3>The GNUmakefile<a class="headerlink" href="#id5" title="Link to this heading"></a></h3>
+<p>Only the middle part of the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code> needs to be modified compared to the previous example.</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span><span class="gh">...</span>
+<span class="gh">#######################</span>
+<span class="gh"># ODE solver OPTIONS: DVODE (default) / SUNDIALS / RK explicit</span>
+<span class="gh">#######################</span>
+# Activates use of SUNDIALS: CVODE (default) / ARKODE
+USE_SUNDIALS_PP = TRUE
+ifeq ($(USE_SUNDIALS_PP), TRUE)
+  ...
+  # use KLU sparse features -- only useful if CVODE is used
+  PELE_USE_KLU = TRUE
+<span class="c">  ...</span>
+else
+  ...
+endif
+
+<span class="gh">#######################</span>
+<span class="gh">...</span>
+</pre></div>
+</div>
+</section>
+<section id="id6">
+<h3>The input file<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
+<p>For the KLU library to be of use, a solver utilizing sparsity features should
+be selected. We modify the input file as follows:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span><span class="gh">...</span>
+<span class="gh">#######################</span>
+<span class="gh">#ODE solver options</span>
+<span class="gh">...</span>
+# Select ARK/CV-ODE Jacobian eval: 0=FD 1=AJ
+ode.analytical_jacobian = 1
+#CVODE SPECIFICS
+# Choose between sparse (5) dense (1/101) iterative (99) solver
+<span class="gh">cvode.solve_type = 99</span>
+<span class="gh">...</span>
+<span class="gh">#OTHER</span>
+<span class="gh">...</span>
+</pre></div>
+</div>
+<p>So that now, a preconditioned iterative Krylov solver is selected, where the preconditioner is specified in a sparse format.</p>
+</section>
+<section id="id7">
+<h3>Results<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
+<p>This run now takes 1m34s to run. As expected from the dense Jacobian of the system obtained when using the small DRM mechanism
+(the fill in pattern is <span class="math notranslate nohighlight">\(&gt;90 \%\)</span>), using an iterative solver does not enable to reach speed-ups over the simple dense direct
+solve. <strong>NOTE</strong>, and this is important, that this tendency will revert when sufficiently small time steps are used.
+For example, if instead of <span class="math notranslate nohighlight">\(1e-6s\)</span> we took time steps of <span class="math notranslate nohighlight">\(1e-8s\)</span> (consistent with <cite>PeleC</cite> time steps), then using
+the iterative GMRES solver would have provided significant time savings. This is because the smaller the time step the
+closer the system matrix is from the identity matrix and the GMRES iterations become really easy to complete.</p>
+<p>This example illustrates that choosing the “best” and “most efficient” algorithm is far from being a trivial task,
+and will depend upon many factors. Table <a class="reference internal" href="#tab-runsreactevalcvode"><span class="std std-numref">6</span></a> provides a summary of the CPU run time in solving the
+ReactEval_C example with a subset of the various available CVODE linear solvers. As can be seen from the numbers, using an AJ is much more efficient than relying upon CVODE’s built-in difference quotients. Using a sparse solver does not appear to provide additional time savings.</p>
+<span id="tab-runsreactevalcvode"></span><table class="docutils align-center" id="id19">
+<caption><span class="caption-number">6 </span><span class="caption-text">Summary of ReactEval_C runs with various algorithms (methane/air)</span><a class="headerlink" href="#id19" title="Link to this table"></a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p>Solver</p></th>
+<th class="head"><p>Direct
+Dense</p></th>
+<th class="head"><p>Direct
+Dense AJ</p></th>
+<th class="head"><p>Direct
+Sparse AJ</p></th>
+<th class="head"><p>Iter.
+not Precond.</p></th>
+<th class="head"><p>Iter.
+Precond. (S)</p></th>
+</tr>
+<tr class="row-even"><th class="head"><p>KLU</p></th>
+<th class="head"><p>OFF</p></th>
+<th class="head"><p>OFF</p></th>
+<th class="head"><p>ON</p></th>
+<th class="head"><p>OFF</p></th>
+<th class="head"><p>ON</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-odd"><td><p>ode.reactor_type</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-even"><td><p>cvode.solve_type</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>5</p></td>
+<td><p>99</p></td>
+<td><p>99</p></td>
+</tr>
+<tr class="row-odd"><td><p>ode.analytical_jacobian</p></td>
+<td><p>0</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-even"><td><p>Run time</p></td>
+<td><p>52.61s</p></td>
+<td><p>44.87s</p></td>
+<td><p>48.64s</p></td>
+<td><p>1m42s</p></td>
+<td><p>1m34s</p></td>
+</tr>
+</tbody>
+</table>
+<p>The same series of tests are performed for a mixture of n-dodecane and air (see <a class="reference internal" href="#sec-subsreactevalcvode"><span class="std std-ref">The ReactEval_C test case with CVODE in details</span></a>), the configuration being otherwise the same as in the methane/air case. Results are summarized in Table <a class="reference internal" href="#tab-runsreactevalcvodedod"><span class="std std-numref">7</span></a>. The overall tendencies remain similar. Note that the non-preconditioned GMRES solver becomes very inefficient for this larger system. Here also, the direct sparse solve –which relies upon the KLU library, does not seem to provide additional time savings. The fill-in pattern is <span class="math notranslate nohighlight">\(70 \%\)</span>.</p>
+<span id="tab-runsreactevalcvodedod"></span><table class="docutils align-center" id="id20">
+<caption><span class="caption-number">7 </span><span class="caption-text">Summary of ReactEvalCvode runs with various algorithms (n-dodecane/air)</span><a class="headerlink" href="#id20" title="Link to this table"></a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p>Solver</p></th>
+<th class="head"><p>Direct
+Dense</p></th>
+<th class="head"><p>Direct
+Dense AJ</p></th>
+<th class="head"><p>Direct
+Sparse AJ</p></th>
+<th class="head"><p>Iter.
+not Precond.</p></th>
+<th class="head"><p>Iter.
+Precond. (S)</p></th>
+</tr>
+<tr class="row-even"><th class="head"><p>KLU</p></th>
+<th class="head"><p>OFF</p></th>
+<th class="head"><p>OFF</p></th>
+<th class="head"><p>ON</p></th>
+<th class="head"><p>OFF</p></th>
+<th class="head"><p>ON</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-odd"><td><p>ode.reactor_type</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-even"><td><p>cvode.solve_type</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>5</p></td>
+<td><p>99</p></td>
+<td><p>99</p></td>
+</tr>
+<tr class="row-odd"><td><p>ode.analytical_jacobian</p></td>
+<td><p>0</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-even"><td><p>Run time</p></td>
+<td><p>6m25s</p></td>
+<td><p>5m33s</p></td>
+<td><p>6m32s</p></td>
+<td><p>21m44s</p></td>
+<td><p>10m14s</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="current-limitations">
+<h2>Current Limitations<a class="headerlink" href="#current-limitations" title="Link to this heading"></a></h2>
+<p>Note that currently, all sparse operations rely on an Analytical Jacobian. This AJ is provided via the chemistry routines dumped by the CEPTR code. Those routines are generated in a pre-processing step, when the sparsity pattern of the AJ is still unknown. As such, all entries of the AJ are computed at all times, and when a sparsity solver is chosen, the AJ is in fact “sparsified” to take advantage of the sparse linear algebra. The “sparsification” process involves a series of loop in the cpp that takes a significant amount of the CPU time most of the time. However, it is always good to verify that this is the case. <cite>AMREX</cite>’s <code class="docutils literal notranslate"><span class="pre">TINY_PROFILER</span></code> features is a handy tool to do so.</p>
+</section>
+<section id="tricks-and-hacks-stuff-to-know">
+<span id="sec-subssubstricks"></span><h2>Tricks and hacks, stuff to know<a class="headerlink" href="#tricks-and-hacks-stuff-to-know" title="Link to this heading"></a></h2>
+<p>When using DVODE, there is a <cite>hack</cite> enabling the user to reuse the Jacobian instead of reevaluating it from scratch.
+This option is triggered when setting the <code class="docutils literal notranslate"><span class="pre">extern_probin_module</span></code> flag <code class="docutils literal notranslate"><span class="pre">new_Jacobian_each_cell</span></code> to <code class="docutils literal notranslate"><span class="pre">0</span></code>.
+This can be done in <cite>PelePhysics</cite>  by adding the following line in the <code class="docutils literal notranslate"><span class="pre">probin</span></code> file:</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="o">&amp;</span><span class="k">extern</span>
+<span class="w"> </span><span class="n">new_Jacobian_each_cell</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="o">/</span>
+</pre></div>
+</div>
+<p>A similar feature is currently not available in CVODE, although it would be possible to modify the <code class="docutils literal notranslate"><span class="pre">CVodeReInit</span></code> function
+to reinitialize only a subset of counters. This is currently under investigation.
+The user still has some control via the CVODE flag <code class="docutils literal notranslate"><span class="pre">CVodeSetMaxStepsBetweenJac</span></code>.</p>
+</section>
+<section id="how-does-cvode-compare-with-dvode">
+<h2>How does CVODE compare with DVODE ?<a class="headerlink" href="#how-does-cvode-compare-with-dvode" title="Link to this heading"></a></h2>
+<p>Depending on whether the famous Jacobian <cite>hack</cite> is activated or not in DVODE,
+the completion time of the run can be decreased significantly. The same test case as that described in the previous section can also be integrated with DVODE.
+For that purpose, the FORTRAN routines implementing the DVODE integration have been interfaced with C++ via a FORTRAN header. The run is thus identical to ReactEval_C with CVODE.
+Only the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code> needs to be modified:</p>
+<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="p">...</span>
+<span class="cp">#######################</span>
+<span class="cp"># ODE solver OPTIONS: DVODE (default) / SUNDIALS / RK explicit</span>
+<span class="cp">#######################</span>
+<span class="cp"># Activates use of SUNDIALS: CVODE (default) / ARKODE</span>
+<span class="n">USE_SUNDIALS_PP</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">FALSE</span>
+<span class="p">...</span>
+
+<span class="cp">#######################</span>
+<span class="p">...</span>
+</pre></div>
+</div>
+<p>and, as explained in section <a class="reference internal" href="#sec-subssubstricks"><span class="std std-ref">Tricks and hacks, stuff to know</span></a>, the famous AJ <cite>hack</cite> can be activated via the <code class="docutils literal notranslate"><span class="pre">probin</span></code> file.</p>
+<p>Two runs are performed, activating the hack or not. Times are reported in Table <a class="reference internal" href="#tab-cvodevsdvode"><span class="std std-numref">8</span></a>.</p>
+<span id="tab-cvodevsdvode"></span><table class="docutils align-center" id="id21">
+<caption><span class="caption-number">8 </span><span class="caption-text">Summary of a CVODE vs a DVODE chemistry integration on the same test case</span><a class="headerlink" href="#id21" title="Link to this table"></a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p>Solver</p></th>
+<th class="head"><p>Direct
+Dense</p></th>
+<th class="head"><p>Direct
+Dense</p></th>
+<th class="head"><p>Direct
+Dense + <cite>hack</cite></p></th>
+</tr>
+<tr class="row-even"><th class="head"><p>KLU</p></th>
+<th class="head"><p>OFF</p></th>
+<th class="head"><p>OFF</p></th>
+<th class="head"><p>OFF</p></th>
+</tr>
+<tr class="row-odd"><th class="head"><p>USE_SUNDIALS_PP</p></th>
+<th class="head"><p>ON (CVODE)</p></th>
+<th class="head"><p>OFF (DVODE)</p></th>
+<th class="head"><p>OFF (DVODE)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>ode.reactor_type</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-odd"><td><p>cvode.solve_type</p></td>
+<td><p>1</p></td>
+<td><p>N/A</p></td>
+<td><p>N/A</p></td>
+</tr>
+<tr class="row-even"><td><p>ode.analytical_jacobian</p></td>
+<td><p>0</p></td>
+<td><p>N/A</p></td>
+<td><p>N/A</p></td>
+</tr>
+<tr class="row-odd"><td><p>Run time</p></td>
+<td><p>52.61s</p></td>
+<td><p>53.21s</p></td>
+<td><p>52.83s</p></td>
+</tr>
+</tbody>
+</table>
+<p>In this case, the hack does not seem to provide significant time savings. Note also that CVODE is usually slightly more efficient than DVODE, consistently with findings of other studies available in the literature – although in this case all options give comparable results.</p>
+</section>
+</section>
+<section id="cvode-implementation-in-pelephysics-on-gpu">
+<h1>CVODE implementation in <cite>PelePhysics</cite> on GPU<a class="headerlink" href="#cvode-implementation-in-pelephysics-on-gpu" title="Link to this heading"></a></h1>
+<section id="requirements-and-input-files">
+<h2>Requirements and input files<a class="headerlink" href="#requirements-and-input-files" title="Link to this heading"></a></h2>
+<p><strong>To use CVODE on a GPU, Sundials should be build with the flag</strong> <code class="docutils literal notranslate"><span class="pre">CUDA_ENABLE</span></code> <strong>. A CUDA compiler also needs to be specified. Relevant information is provided in the Sundials install guide, and an automatic script is distributed with PelePhysics to ease the process. Refer to</strong> <a class="reference internal" href="GettingStarted.html#sec-getcvode"><span class="std std-ref">Dependencies</span></a>.</p>
+<p>Note that the SuiteSparse package does not support GPU architecture and is thus no longer required. Sparse linear algebra operations, when needed, are performed with the help of CUDA’s <a class="reference external" href="https://docs.nvidia.com/cuda/cusolver/index.html">cuSolver</a>.</p>
+<section id="id8">
+<h3>The GNUmakefile<a class="headerlink" href="#id8" title="Link to this heading"></a></h3>
+<p>To run on GPUs, <cite>AMREX</cite> should be build with CUDA enabled. To do so, add this line to the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code>:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>USE_CUDA   = TRUE
+</pre></div>
+</div>
+<p>This should activate the CUDA features of CVODE in <cite>PelePhysics</cite> too.</p>
+</section>
+<section id="id9">
+<h3>The input file<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
+<p>In the <code class="docutils literal notranslate"><span class="pre">inputs.3d</span></code>, the same three main keywords control the algorithm (<code class="docutils literal notranslate"><span class="pre">ode.reactor_type</span></code>, <code class="docutils literal notranslate"><span class="pre">cvode.solve_type</span></code>, <code class="docutils literal notranslate"><span class="pre">ode.analytical_jacobian</span></code>). However, note that there are less linear solver options available.</p>
+<ul class="simple">
+<li><p>Both preconditioned or non-preconditioned GMRES options are available (<code class="docutils literal notranslate"><span class="pre">cvode.solve_type</span> <span class="pre">=</span> <span class="pre">99</span></code>). The preconditioned version is triggered via the same flag as on the CPU (<code class="docutils literal notranslate"><span class="pre">ode.analytical_jacobian</span> <span class="pre">=</span> <span class="pre">1</span></code>).</p></li>
+<li><p>The user has the choice between two different sparse solvers.</p>
+<ul>
+<li><p>Sundials offers one option (the SUNLinSol_cuSolverSp_batchQR) relying upon the cuSolver to perform batched sparse QR factorizations. This version is enabled via <code class="docutils literal notranslate"><span class="pre">cvode.solve_type</span> <span class="pre">=</span> <span class="pre">5</span></code> and <code class="docutils literal notranslate"><span class="pre">ode.analytical_jacobian</span> <span class="pre">=</span> <span class="pre">1</span></code>.</p></li>
+<li><p>Another version is available via <code class="docutils literal notranslate"><span class="pre">cvode.solve_type</span> <span class="pre">=</span> <span class="pre">1</span></code> and <code class="docutils literal notranslate"><span class="pre">ode.analytical_jacobian</span> <span class="pre">=</span> <span class="pre">1</span></code>. This version relies upon a pre-computed Gauss-Jordan <a class="reference external" href="https://github.com/accelerated-odes/gauss-jordan-solver">Solver</a>, and is fairly efficient for problems of moderate size.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+<section id="grouping-cells-together">
+<h2>Grouping cells together<a class="headerlink" href="#grouping-cells-together" title="Link to this heading"></a></h2>
+<p>To take full advantage of the GPU power, many intensive operations of similar nature should be performed in parallel. In <cite>PelePhysics</cite>, this is achieved by grouping many cells together, and integrating each one in separate threads within one CVODE instance. Indeed, the flow of operations to solve one set of ODEs is very similar from one cell to the next, and one could expect limited thread divergence from this approach. Fig. <a class="reference internal" href="#fig-groupingcells"><span class="std std-numref">3</span></a> summarizes the idea. Note that the Jacobian of the group of cells is block-sparse, and any chosen integration method should take advantage of this.</p>
+<figure class="align-center" id="id10">
+<span id="fig-groupingcells"></span><a class="reference internal image-reference" href="_images/GroupingOfCells.png"><img alt="Grouping of cells" src="_images/GroupingOfCells.png" style="width: 40%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">3 </span><span class="caption-text">n cells are solved together in one CVODE instance. The big-matrix is block-sparse.</span><a class="headerlink" href="#id10" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p>In the current implementation, the number of cells that are grouped together is equal to the number of cells contained in the box under investigation within a MultiFab iteration.</p>
+</section>
+<section id="the-reacteval-c-gpu-test-case-in-details">
+<h2>The ReactEval_C_GPU test case in details<a class="headerlink" href="#the-reacteval-c-gpu-test-case-in-details" title="Link to this heading"></a></h2>
+<p>A series of tests are performed on the GPU for a mixture of methane and air, with the intent of evaluationg the performance of the chemistry solvers.
+The test case, configuration and initial conditions are similar to that described in <a class="reference internal" href="#sec-subsreactevalcvode"><span class="std std-ref">The ReactEval_C test case with CVODE in details</span></a>. The mechanism employed is the <strong>drm</strong>.</p>
+<section id="id11">
+<h3>The GNUmakefile<a class="headerlink" href="#id11" title="Link to this heading"></a></h3>
+<p>The full file reads as follows:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>PRECISION  = DOUBLE
+PROFILE    = FALSE
+
+DEBUG      = FALSE
+
+DIM        = 3
+
+COMP       = gcc
+FCOMP      = gfortran
+
+USE_MPI    = FALSE
+USE_OMP    = FALSE
+
+FUEGO_GAS  = TRUE
+
+USE_CUDA   = TRUE
+
+TINY_PROFILE = TRUE
+
+# define the location of the PELE_PHYSICS top directory
+PELE_PHYSICS_HOME    := ../../..
+
+#######################
+# this flag activates the subcycling mode in the D/Cvode routines
+DEFINES  += -DMOD_REACTOR
+
+<span class="gh">#######################</span>
+<span class="gh"># ODE solver OPTIONS on GPU: SUNDIALS</span>
+<span class="gh">#######################</span>
+# Activates use of SUNDIALS: CVODE (default)
+USE_SUNDIALS_PP = TRUE
+
+##############################################
+ifeq ($(FUEGO_GAS), TRUE)
+  Eos_Model       = Fuego
+  Chemistry_Model = drm19
+  Reactions_dir   = Fuego
+  Transport_Model   = Simple
+else
+  Eos_Model       = GammaLaw
+  Reactions_dir = Null
+  Transport_Model = Constant
+endif
+
+Bpack   := ./Make.package
+Blocs   := .
+
+include $(PELE_PHYSICS_HOME)/Testing/Exec/Make.PelePhysics
+</pre></div>
+</div>
+</section>
+<section id="id12">
+<h3>The input file<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+</section>
+<section id="the-results">
+<h3>The Results<a class="headerlink" href="#the-results" title="Link to this heading"></a></h3>
+<p>Results are summarized in Table <a class="reference internal" href="#tab-runsreactevalcvodedrmgpu"><span class="std std-numref">9</span></a>.</p>
+<span id="tab-runsreactevalcvodedrmgpu"></span><table class="docutils align-center" id="id22">
+<caption><span class="caption-number">9 </span><span class="caption-text">Summary of ReactEvalCvode_GPU runs with various algorithms (methane/air)</span><a class="headerlink" href="#id22" title="Link to this table"></a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p>Solver</p></th>
+<th class="head"><p>Direct
+Sparse I</p></th>
+<th class="head"><p>Direct
+Sparse II</p></th>
+<th class="head"><p>Iter.
+not Precond.</p></th>
+<th class="head"><p>Iter.
+Precond. (S)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>reactor_type</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-odd"><td><p>cvode.solve_type</p></td>
+<td><p>1</p></td>
+<td><p>5</p></td>
+<td><p>99</p></td>
+<td><p>99</p></td>
+</tr>
+<tr class="row-even"><td><p>ode.analytical_jacobian</p></td>
+<td><p>1</p></td>
+<td><p>1</p></td>
+<td><p>0</p></td>
+<td><p>1</p></td>
+</tr>
+<tr class="row-odd"><td><p>Run time</p></td>
+<td><p>13s</p></td>
+<td><p>20s</p></td>
+<td><p>19s</p></td>
+<td><p>36s</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="id13">
+<h2>Current Limitations<a class="headerlink" href="#id13" title="Link to this heading"></a></h2>
+<p>The current GPU implementation of CVODE relies on the launch of many kernels from the host. As such, a CVODE instance does not live <em>directly</em> on the GPU; rather, the user is in charge of identifying and delegating computation-intensive part of the RHS, Jacobian evaluation, etc.
+The current implementation thus suffers from the cost of data movement, and parallelization is limited due to required device synchronizations within CVODE.</p>
+<aside class="footnote-list brackets">
+<aside class="footnote brackets" id="foot1" role="doc-footnote">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id4">1</a><span class="fn-bracket">]</span></span>
+<p>NOTE that only one cell at a time should be integrated with CVODE right now. The vectorized version on CPU is still WIP and not properly implemented for all linear solvers so that no computational gain should be expected from solving several cells at a time.</p>
+</aside>
+</aside>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="IntroductionToCvode.html" class="btn btn-neutral float-left" title="A brief introduction to CVODE" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="QSS.html" class="btn btn-neutral float-right" title="Analytically reduced chemistry via quasi-steady state (QSS) assumption in PelePhysics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

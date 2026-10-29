@@ -1,0 +1,280 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CEPTR: Chemistry Evaluation for Pele Through Recasting &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Transport" href="Transport.html" />
+    <link rel="prev" title="Analytically reduced chemistry via quasi-steady state (QSS) assumption in PelePhysics" href="QSS.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="Chemistry.html">Chemistry</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="IntroductionToCvode.html">A brief introduction to CVODE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html">CVODE implementation in <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#cvode-implementation-in-pelephysics-on-gpu">CVODE implementation in <cite>PelePhysics</cite> on GPU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html">Analytically reduced chemistry via quasi-steady state (QSS) assumption in <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">CEPTR: Chemistry Evaluation for Pele Through Recasting</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#software-requirements">Software requirements</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#usage">Usage</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#generating-yaml-chemistry-files-converting-from-chemkin-files">Generating YAML chemistry files: converting from CHEMKIN files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#generating-pele-compatible-mechanisms-for-a-single-chemistry">Generating Pele-compatible mechanisms for a single chemistry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#generating-a-reduced-qss-chemistry-file">Generating a reduced, QSS chemistry file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#batched-generation-of-pele-compatible-mechanisms">Batched generation of Pele-compatible mechanisms</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="Chemistry.html">Chemistry</a></li>
+      <li class="breadcrumb-item active">CEPTR: Chemistry Evaluation for Pele Through Recasting</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/Ceptr.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ceptr-chemistry-evaluation-for-pele-through-recasting">
+<span id="sec-ceptr"></span><h1>CEPTR: Chemistry Evaluation for Pele Through Recasting<a class="headerlink" href="#ceptr-chemistry-evaluation-for-pele-through-recasting" title="Link to this heading"></a></h1>
+<p>We use CEPTR to generate C++ mechanism files from <a class="reference external" href="https://cantera.org">Cantera</a> YAML chemistry files. CEPTR is a python package part of the PelePhysics source code.</p>
+<section id="software-requirements">
+<span id="sec-ceptr-software"></span><h2>Software requirements<a class="headerlink" href="#software-requirements" title="Link to this heading"></a></h2>
+<p>The CEPTR package uses <a class="reference external" href="https://python-poetry.org/docs/#installation">poetry</a> to manage the Python dependencies. Poetry is therefore required to use CEPTR and can typically be installed through system package managers (e.g. HomeBrew) or following the instructions in poetry’s documentation.</p>
+<p>To install CEPTR dependencies:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ cd ${PELE_PHYSICS_HOME}/Support/ceptr
+$ poetry update
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Note that the install requires a specific Python version, which is specified in the <code class="docutils literal notranslate"><span class="pre">Support/ceptr/pyproject.toml</span></code>. If a compatible version exists in your system then poetry will try to find and use it. Otherwise, think about using a <a class="reference external" href="https://conda.io/projects/conda/en/latest/user-guide/getting-started.html">conda</a> environment to manage packages and their dependencies without tampering with your system.</p>
+</div>
+</section>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h2>
+<section id="generating-yaml-chemistry-files-converting-from-chemkin-files">
+<h3>Generating YAML chemistry files: converting from CHEMKIN files<a class="headerlink" href="#generating-yaml-chemistry-files-converting-from-chemkin-files" title="Link to this heading"></a></h3>
+<p id="sec-convertck">We rely on Cantera’s <code class="docutils literal notranslate"><span class="pre">ck2yaml</span></code> utility to convert CHEMKIN files to the Cantera YAML format:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ cd ${PELE_PHYSICS_HOME}/Support/ceptr
+$ poetry run ck2yaml --input=${PATH_TO_CHEMKIN_DIR}/mechanism.inp --thermo=${PATH_TO_CHEMKIN_DIR}/therm.dat --transport=${PATH_TO_CHEMKIN_DIR}/tran.dat --permissive
+</pre></div>
+</div>
+<p>Of course, the files <code class="docutils literal notranslate"><span class="pre">tran.dat</span></code> and <code class="docutils literal notranslate"><span class="pre">therm.dat</span></code> are optional if already included in the <code class="docutils literal notranslate"><span class="pre">mechanism.inp</span></code> file.</p>
+</section>
+<section id="generating-pele-compatible-mechanisms-for-a-single-chemistry">
+<h3>Generating Pele-compatible mechanisms for a single chemistry<a class="headerlink" href="#generating-pele-compatible-mechanisms-for-a-single-chemistry" title="Link to this heading"></a></h3>
+<p>There are three ways to use CEPTR to generate C++ mechanism files for a given chemistry.</p>
+<ol class="arabic">
+<li><p>Using CEPTR directly:</p>
+<p>Executed from the <code class="docutils literal notranslate"><span class="pre">${PELE_PHYSICS_HOME}/Support/ceptr</span></code> directory, the most general usage of CEPTR is:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ poetry run convert -f ${PELEPHYSICS_HOME}/Mechanisms/${chemistry}/mechanism.yaml \
+  --chemistry {chemistry-type} \
+  --gas_name {gas-name} \
+  --interface_name {interface-name} \
+  --plog_pressure {value in Pa}
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">--chemistry</span></code> (or <code class="docutils literal notranslate"><span class="pre">-c</span></code>) argument allows users to convey if the <code class="docutils literal notranslate"><span class="pre">${chemistry}</span></code> of interest is either one of two valid options, namely, <code class="docutils literal notranslate"><span class="pre">homogeneous</span></code> or <code class="docutils literal notranslate"><span class="pre">heterogeneous</span></code>. The default value for <code class="docutils literal notranslate"><span class="pre">{chemistry-type}</span></code> is <code class="docutils literal notranslate"><span class="pre">homogeneous</span></code>.
+The <code class="docutils literal notranslate"><span class="pre">--gas_name</span></code> argument allows users to specify the names of the homogeneous phase to use, as several different ones can be defined in the corresponding <code class="docutils literal notranslate"><span class="pre">mechanism.yaml</span></code> file (under the <code class="docutils literal notranslate"><span class="pre">phases:</span></code> item). The default value for <code class="docutils literal notranslate"><span class="pre">{gas-name}</span></code> is <code class="docutils literal notranslate"><span class="pre">gas</span></code>.
+Finally, the <code class="docutils literal notranslate"><span class="pre">--interface_name</span></code> arguments allow users to specify the name of the gas-solid interface, also prescribed in the corresponding <code class="docutils literal notranslate"><span class="pre">mechanism.yaml</span></code> file. The default value for <code class="docutils literal notranslate"><span class="pre">{interface-name}</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<p>Note that if <code class="docutils literal notranslate"><span class="pre">--chemistry</span> <span class="pre">heterogeneous</span></code> is specified, the user must necessarily specify a corresponding <code class="docutils literal notranslate"><span class="pre">{interface-name}</span></code>.</p>
+<p>An example of directly using CEPTR for homogeneous mechanisms is:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ cd ${PELE_PHYSICS_HOME}/Support/ceptr
+$ poetry run convert -f ${PELE_PHYSICS_HOME}/Mechanisms/LiDryer/mechanism.yaml
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>CEPTR interpretations of heterogeneous mechanisms is currently a work in progress.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>CEPTR offers only partial support for mechanisms with pressure-dependent Arrhenius (PLOG) reactions.
+These reactions are fixed to a constant pressure, specified with the <code class="docutils literal notranslate"><span class="pre">--plog_pressure</span></code> argument,
+in the CEPTR-generated source code. Mechanisms with PLOG reactions generated in this way are limited
+in validity to that specific pressure and would not be suitable for compressible flows with significant
+pressure variation. For that reason, source code for these mechanisms is saved in pressure-specific directories, for
+example <code class="docutils literal notranslate"><span class="pre">${PELE_PHYSICS_HOME}/Mechanisms/POLIMI2020/1_000atm/</span></code>.</p>
+</div>
+</li>
+<li><p>Using a helper script in the directory containing the <code class="docutils literal notranslate"><span class="pre">mechanism.yaml</span></code> file:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ ./convert.sh
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>It is possible that using this option will require for you to have a valid Cantera installed somewhere. Again, we strongly suggest using a <a class="reference external" href="https://conda.io/projects/conda/en/latest/user-guide/getting-started.html">conda</a> environment to install all required package. A simple ceptr environment can be generated using the following yaml script:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ name: ceptr
+$ channels:
+$ - conda-forge
+$ dependencies:
+$ - python=3.10
+$ - cantera
+</pre></div>
+</div>
+</div>
+</li>
+<li><p>Using a helper script in the <code class="docutils literal notranslate"><span class="pre">Mechanisms</span></code> directory:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ bash ${PELE_PHYSICS_HOME}/Mechanisms/converter.sh -f ./LiDryer/mechanism.yaml
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="generating-a-reduced-qss-chemistry-file">
+<h3>Generating a reduced, QSS chemistry file<a class="headerlink" href="#generating-a-reduced-qss-chemistry-file" title="Link to this heading"></a></h3>
+<p>The first step consists in generating a QSS chemistry YAML file from a skeletal or a detailed YAML file. To do so, one needs: the mechanism YAML file <code class="docutils literal notranslate"><span class="pre">skeletal.yaml</span></code>, as well as a list of non-QSS species, <code class="docutils literal notranslate"><span class="pre">non_qssa_list.yaml</span></code>. The following command will generate a QSS YAML file, <code class="docutils literal notranslate"><span class="pre">qssa.yaml</span></code>:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ cd ${PELE_PHYSICS_HOME}/Support/ceptr
+$ poetry run qssa -f ${PATH_TO_YAML}/skeletal.yaml -n ${PATH_TO_YAML}/non_qssa_list.yaml
+</pre></div>
+</div>
+<p>The full list of options is:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ poetry run qssa -h
+usage: qssa [-h] -f FNAME -n NQSSA [-m {0,1,2}] [-v]
+
+Mechanism converter
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -f FNAME, --fname FNAME
+                        Mechanism file
+  -n NQSSA, --nqssa NQSSA
+                        Non-QSSA species list
+  -m {0,1,2}, --method {0,1,2}
+                        QSSA method (default: 2)
+  -v, --visualize       Visualize quadratic coupling and QSSA dependencies
+</pre></div>
+</div>
+<p>For a detailed description of these options and a further information on the way QSS mechanism are treated in CEPTR the reader may consult <a class="reference internal" href="QSS.html#sec-qss"><span class="std std-ref">the QSS section</span></a>.</p>
+<p>To generate a QSS C++ mechanism from the <code class="docutils literal notranslate"><span class="pre">.yaml</span></code> file thus created, tailored to your needs, please refer to Tutorials <a class="reference internal" href="Tutorials.html#sec-tutqss1"><span class="std std-ref">Generating NC12H26 QSS mechanism with analytical jacobian</span></a> and <a class="reference internal" href="Tutorials.html#sec-tutqss2"><span class="std std-ref">Generating NC12H26 QSS mechanism without analytical jacobian</span></a>.</p>
+</section>
+<section id="batched-generation-of-pele-compatible-mechanisms">
+<h3>Batched generation of Pele-compatible mechanisms<a class="headerlink" href="#batched-generation-of-pele-compatible-mechanisms" title="Link to this heading"></a></h3>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If you are using batched generation as outlined here, it will automatically use multiprocessing to generate the files in parallel using all CPUs detected on the machine. If you want to change that you can pass the optional argument <code class="docutils literal notranslate"><span class="pre">-n</span> <span class="pre">NPCU</span></code>, wheren <code class="docutils literal notranslate"><span class="pre">NCPU</span></code> is an integer indicating the number of processes you want to use.</p>
+</div>
+<p>For non-reduced chemistries, CEPTR can take a file with a list of <code class="docutils literal notranslate"><span class="pre">mechanism.yaml</span></code> files to convert:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ cd ${PELE_PHYSICS_HOME}/Support/ceptr
+$ poetry run convert -l ${PELE_PHYSICS_HOME}/Mechanisms/list_mech
+</pre></div>
+</div>
+<p>For reduced chemistries, CEPTR can take a file with a list of <code class="docutils literal notranslate"><span class="pre">qssa.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">qssa_input.toml</span></code> to convert:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ cd ${PELE_PHYSICS_HOME}/Support/ceptr
+$ poetry run convert -lq ${PELE_PHYSICS_HOME}/Mechanisms/list_qss_mech
+</pre></div>
+</div>
+<p>For generating <code class="docutils literal notranslate"><span class="pre">qssa.yaml</span></code> for reduced chemistries, CEPTR can take a file with a list of <code class="docutils literal notranslate"><span class="pre">skeletal.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">non_qssa_list.yaml</span></code>:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ cd ${PELE_PHYSICS_HOME}/Support/ceptr
+$ poetry run qssa -lq ${PELE_PHYSICS_HOME}/Mechanisms/list_qss_mech
+</pre></div>
+</div>
+<p>To generate all mechanisms:</p>
+<div class="highlight-rst notranslate"><div class="highlight"><pre><span></span>$ poetry run convert -l ${PELE_PHYSICS_HOME}/Mechanisms/list_mech
+$ poetry run qssa -lq ${PELE_PHYSICS_HOME}/Mechanisms/list_qss_mech
+$ poetry run convert -lq ${PELE_PHYSICS_HOME}/Mechanisms/list_qss_mech
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="QSS.html" class="btn btn-neutral float-left" title="Analytically reduced chemistry via quasi-steady state (QSS) assumption in PelePhysics" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Transport.html" class="btn btn-neutral float-right" title="Transport" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

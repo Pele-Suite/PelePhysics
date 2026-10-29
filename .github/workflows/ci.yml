@@ -1,0 +1,189 @@
+name: PelePhysics
+on:
+   push:
+     branches: [development]
+   pull_request:
+     branches: [development]
+
+jobs:
+  Formatting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: DoozyX/clang-format-lint-action@v0.13
+        with:
+          source: './Eos ./Transport ./Reactions ./Source ./Utility ./Testing ./Support/Fuego/Mechanism/Models'
+          exclude: '.'
+          extensions: 'H,h,cpp'
+          clangFormatVersion: 13
+
+  Pythia:
+    needs: Formatting
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [3.8]
+        poetry-version: [1.1.7]
+    defaults:
+      run:
+        working-directory: ${{github.workspace}}/Support/Fuego/Pythia
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{matrix.python-version}}
+      - name: Run image
+        uses: abatilo/actions-poetry@v2.0.0
+        with:
+          poetry-version: ${{matrix.poetry-version}}
+      - name: Install Dependencies using Poetry
+        run: poetry install
+      - name: Formatting with black
+        run: poetry run black --check .
+      - name: Sort imports with isort
+        run: poetry run isort --check-only --diff .
+      - name: Run tests
+        run: poetry run bash -c "cd ../Mechanism/Models/air && ./make-mechanism.sh"
+
+  Transport-EOS-Reactions:
+    needs: Formatting
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        comp: [gnu, llvm, cuda, hip, dpcpp]
+        include:
+          - comp: gnu
+            amrex_build_args: 'COMP=gnu'
+            dependency_cmds:
+          - comp: llvm
+            amrex_build_args: 'COMP=llvm'
+            dependency_cmds:
+          - comp: cuda
+            amrex_build_args: 'COMP=gnu USE_CUDA=TRUE'
+            dependency_cmds: '.github/workflows/dependencies/dependencies_cuda.sh'
+          - comp: hip
+            amrex_build_args: 'USE_HIP=TRUE AMD_ARCH=gfx908 LIBRARY_LOCATIONS=/opt/rocm/lib'
+            dependency_cmds: '.github/workflows/dependencies/dependencies_hip.sh'
+          - comp: dpcpp
+            amrex_build_args: 'USE_DPCPP=TRUE'
+            dependency_cmds: '.github/workflows/dependencies/dependencies_dpcpp.sh'
+    steps:
+      - name: Cancel previous runs
+        uses: styfle/cancel-workflow-action@0.6.0
+        with:
+          access_token: ${{github.token}}
+      - name: Checkout PelePhysics
+        uses: actions/checkout@v2
+        with:
+          path: PelePhysics-${{matrix.comp}}
+      - name: Checkout AMReX
+        uses: actions/checkout@v2
+        with:
+          repository: AMReX-Codes/amrex
+          path: AMReX-${{matrix.comp}}
+      - name: Set Environment Variables
+        run: |
+          echo "AMREX_HOME=${{github.workspace}}/AMReX-${{matrix.comp}}" >> $GITHUB_ENV
+          echo "PELE_PHYSICS_HOME=${{github.workspace}}/PelePhysics-${{matrix.comp}}" >> $GITHUB_ENV
+          echo "TRANSPORT_WORKING_DIRECTORY=${{github.workspace}}/PelePhysics-${{matrix.comp}}/Testing/Exec/TranEval" >> $GITHUB_ENV
+          echo "EOS_WORKING_DIRECTORY=${{github.workspace}}/PelePhysics-${{matrix.comp}}/Testing/Exec/EosEval" >> $GITHUB_ENV
+          echo "REACT_WORKING_DIRECTORY=${{github.workspace}}/PelePhysics-${{matrix.comp}}/Testing/Exec/ReactEval" >> $GITHUB_ENV
+          echo "IGNDELAY_WORKING_DIRECTORY=${{github.workspace}}/PelePhysics-${{matrix.comp}}/Testing/Exec/IgnitionDelay" >> $GITHUB_ENV
+          echo "NPROCS=$(nproc)" >> $GITHUB_ENV
+          if [ "${{matrix.comp}}" == 'cuda' ]; then \
+            echo "CUDA_HOME=/usr/local/cuda-11.2" >> $GITHUB_ENV; \
+            echo "LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64:${LD_LIBRARY_PATH}" >> $GITHUB_ENV; \
+            echo "/usr/local/cuda-11.2/bin" >> $GITHUB_PATH; \
+          fi
+      - name: Dependencies
+        working-directory: ${{env.TRANSPORT_WORKING_DIRECTORY}}
+        run: |
+          if [ "${{matrix.comp}}" == 'cuda' ]; then \
+            ${{github.workspace}}/PelePhysics-${{matrix.comp}}/${{matrix.dependency_cmds}}; \
+            echo "CUDA_HOME=${CUDA_HOME}"; \
+            ls ${CUDA_HOME} > /dev/null; \
+            which nvcc || echo "nvcc not in PATH!"; \
+          fi
+          if [ "${{matrix.comp}}" == 'hip' ]; then \
+            ${{github.workspace}}/PelePhysics-${{matrix.comp}}/${{matrix.dependency_cmds}}; \
+            source /etc/profile.d/rocm.sh
+            which hipcc || echo "hipcc not in PATH!"; \
+          fi
+          if [ "${{matrix.comp}}" == 'dpcpp' ]; then \
+            ${{github.workspace}}/PelePhysics-${{matrix.comp}}/${{matrix.dependency_cmds}}; \
+            source /opt/intel/oneapi/setvars.sh || true
+            which dpcpp || echo "dpcpp not in PATH!"; \
+          fi
+          cmake --version
+          make TPL ${{matrix.amrex_build_args}};
+      - name: Test Transport
+        working-directory: ${{env.TRANSPORT_WORKING_DIRECTORY}}
+        run: |
+          echo "::add-matcher::${{github.workspace}}/PelePhysics-${{matrix.comp}}/.github/problem-matchers/gcc.json"
+          if [ "${{matrix.comp}}" == 'hip' ]; then source /etc/profile.d/rocm.sh; fi;
+          if [ "${{matrix.comp}}" == 'dpcpp' ]; then source /opt/intel/oneapi/setvars.sh || true; fi;
+          for TYPE in Constant Simple Sutherland; do \
+            printf "\n-------- ${TYPE} --------\n"; \
+            make -j ${{env.NPROCS}} Transport_Model=${TYPE} TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}; \
+            if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
+              ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_${TYPE}; \
+            fi; \
+            make realclean; \
+            if [ $? -ne 0 ]; then exit 1; fi; \
+          done
+      - name: Test EOS
+        working-directory: ${{env.EOS_WORKING_DIRECTORY}}
+        run: |
+          echo "::add-matcher::${{github.workspace}}/PelePhysics-${{matrix.comp}}/.github/problem-matchers/gcc.json"
+          if [ "${{matrix.comp}}" == 'hip' ]; then source /etc/profile.d/rocm.sh; fi;
+          if [ "${{matrix.comp}}" == 'dpcpp' ]; then source /opt/intel/oneapi/setvars.sh || true; fi;
+          for TYPE in Fuego GammaLaw; do \
+            if [ "${TYPE}" == 'Fuego' ]; then CHEMISTRY=LiDryer; else CHEMISTRY=Null; fi; \
+            printf "\n-------- ${TYPE} --------\n"; \
+            make -j ${{env.NPROCS}} Eos_Model=${TYPE} Chemistry_Model=${CHEMISTRY} TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}; \
+            if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
+              ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d; \
+            fi; \
+            make realclean; \
+            if [ $? -ne 0 ]; then exit 1; fi; \
+          done
+      - name: Test Reactions
+        working-directory: ${{env.REACT_WORKING_DIRECTORY}}
+        run: |
+          echo "::add-matcher::${{github.workspace}}/PelePhysics-${{matrix.comp}}/.github/problem-matchers/gcc.json"
+          if [ "${{matrix.comp}}" == 'hip' ]; then source /etc/profile.d/rocm.sh; fi;
+          if [ "${{matrix.comp}}" == 'dpcpp' ]; then source /opt/intel/oneapi/setvars.sh || true; fi;
+          make -j ${{env.NPROCS}} Eos_Model=Fuego Chemistry_Model=drm19 TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}
+          if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
+            for TYPE in Cvode Arkode RK64; do \
+              printf "\n-------- ${TYPE} --------\n"; \
+              ./Pele3d.${{matrix.comp}}.TPROF.ex inputs.3d_Array4 ode.dt=1.e-05 ode.ndt=100 chem_integrator="Reactor${TYPE}"; \
+              ./Pele3d.${{matrix.comp}}.TPROF.ex inputs.3d_1dArray ode.dt=1.e-05 ode.ndt=100 chem_integrator="Reactor${TYPE}"; \
+              if [ $? -ne 0 ]; then exit 1; fi; \
+            done \
+          fi;
+          make realclean
+          make -j ${{env.NPROCS}} Eos_Model=Fuego Chemistry_Model=LiDryer TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}
+          if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
+            for TYPE in Cvode Arkode RK64; do \
+              printf "\n-------- ${TYPE} --------\n"; \
+               ./Pele3d.${{matrix.comp}}.TPROF.ex inputs.3d_Array4 ode.dt=1.e-05 ode.ndt=100 chem_integrator="Reactor${TYPE}"; \
+               ./Pele3d.${{matrix.comp}}.TPROF.ex inputs.3d_1dArray ode.dt=1.e-05 ode.ndt=100 chem_integrator="Reactor${TYPE}"; \
+              if [ $? -ne 0 ]; then exit 1; fi; \
+            done \
+          fi
+          make realclean
+      - name: Test Ignition delay
+        working-directory: ${{env.IGNDELAY_WORKING_DIRECTORY}}
+        run: |
+          echo "::add-matcher::${{github.workspace}}/PelePhysics-${{matrix.comp}}/.github/problem-matchers/gcc.json"
+          if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
+              python -m pip install --upgrade pip
+              pip install numpy
+              make -j ${{env.NPROCS}} Eos_Model=Fuego Chemistry_Model=dodecane_lu TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}
+              bash exec_ignDelay.sh
+              python check_ignDelay.py
+              if [ $? -ne 0 ]; then exit 1; fi; \
+          fi;
+          make realclean

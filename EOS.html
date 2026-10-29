@@ -1,0 +1,364 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Equation of State &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Spray" href="Spray.html" />
+    <link rel="prev" title="Thermodynamics" href="Thermodynamics.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Chemistry.html">Chemistry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Equation of State</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#gammalaw">GammaLaw</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fuego">Fuego</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#soave-redlich-kwong-srk">Soave-Redlich-Kwong (SRK)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#mixing-rules">Mixing rules</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#thermodynamic-properties">Thermodynamic Properties</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#specific-heat">Specific heat</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#internal-energy-and-enthalpy">Internal energy and Enthalpy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#speed-of-sound">Speed of Sound</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#species-enthalpy">Species enthalpy</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#chemical-potential">Chemical potential</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#other-primitive-variable-derivatives">Other primitive variable derivatives</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Equation of State</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/EOS.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="equation-of-state">
+<span id="sec-eos"></span><h1>Equation of State<a class="headerlink" href="#equation-of-state" title="Link to this heading"></a></h1>
+<p>PelePhysics allows the user to use different equation of state (EOS) as the constitutive equation and close the compressible Navier-Stokes system of equations. All the routines needed to fully define an EOS are implemented through PelePhysics module. Available models include:</p>
+<ul class="simple">
+<li><p>A simple <code class="docutils literal notranslate"><span class="pre">GammaLaw</span></code> model for a single component perfect gas</p></li>
+<li><p>An ideal gas mixture model (similar to the CHEMKIN-II approach) labeled <code class="docutils literal notranslate"><span class="pre">Fuego</span></code></p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">Soave-Redlich-Kwong</span></code> cubic equation of state; <code class="docutils literal notranslate"><span class="pre">Peng-Robinson</span></code> support was started in the original Fortran version of the code but stalled and is not supported.</p></li>
+</ul>
+<p>Examples of EOS implementation can be seen in <code class="docutils literal notranslate"><span class="pre">PelePhysics/Eos</span></code>. The choice between these Eos models is made at compile time. When using GNUmake, this is done by setting the <code class="docutils literal notranslate"><span class="pre">Eos_Model</span></code> parameter in the <code class="docutils literal notranslate"><span class="pre">GNUmakefile</span></code>.</p>
+<p>The following sections will fully describe the implementation of Soave-Redlich-Kwong, a non-ideal cubic EOS, for a general mixture of species. Some examples of the old Fortran implementation of the code are given; these have since been ported to C++. Integration with CEPTR, for a chemical mechanism described in a chemkin format, will also be highlighted. For an advanced user interested in implementing a new EOS this chapter should provide a good starting point.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>For the flow solvers in the Pele suite, the SRK EOS is presently only supported in PeleC, and not PeleLM(eX).</p>
+</div>
+<section id="gammalaw">
+<h2>GammaLaw<a class="headerlink" href="#gammalaw" title="Link to this heading"></a></h2>
+<p>This EOS corresponds to a single component perfect gas, i.e. a gas that follows <span class="math notranslate nohighlight">\(p = \rho \hat{R} T\)</span> and <span class="math notranslate nohighlight">\(e = c_v T\)</span>, with constant <span class="math notranslate nohighlight">\(c_v\)</span>, which together imply that <span class="math notranslate nohighlight">\(p = (\gamma - 1)\rho e\)</span>, where <span class="math notranslate nohighlight">\(\gamma = c_p / c_v\)</span>. The values of the relevant physical properties (<span class="math notranslate nohighlight">\(\gamma = 1.4\)</span>, <span class="math notranslate nohighlight">\(MW=28.97\)</span> g/mol) are chosen to correspond to air at standard conditions and are set in <code class="docutils literal notranslate"><span class="pre">PelePhysics/Source/PhysicsConstants.H</span></code>.</p>
+<p>When the GammaLaw EOS is used, the <code class="docutils literal notranslate"><span class="pre">Chemistry_Model</span></code> should be set to <code class="docutils literal notranslate"><span class="pre">Null</span></code>.</p>
+</section>
+<section id="fuego">
+<h2>Fuego<a class="headerlink" href="#fuego" title="Link to this heading"></a></h2>
+<p>This is a multi-component ideal gas EOS to be used for mutli-component (reacting) calculations with any <code class="docutils literal notranslate"><span class="pre">Chemistry_Model</span></code> besides <code class="docutils literal notranslate"><span class="pre">Null</span></code>. The gas mixture follows <span class="math notranslate nohighlight">\(p = \rho \hat{R} T\)</span>, but with <span class="math notranslate nohighlight">\(h(T) \equiv \sum Y_i h_i(T)\)</span> and <span class="math notranslate nohighlight">\(h_i(T)\)</span> computed based on <a class="reference external" href="https://ntrs.nasa.gov/citations/20020085330">NASA polynomials</a> that are included in the <code class="docutils literal notranslate"><span class="pre">Chemistry_Model</span></code>.</p>
+</section>
+<section id="soave-redlich-kwong-srk">
+<h2>Soave-Redlich-Kwong (SRK)<a class="headerlink" href="#soave-redlich-kwong-srk" title="Link to this heading"></a></h2>
+<p>The cubic model is built on top of the ideal gas models. It should be used for multi-component (reacting) calculations where the pressure is sufficiently high that real gas effects are important; there is a significant computational cost penalty relative ideal gas calculations. Note that the function to compute the analytical Jacobian of the chemical system using the SRK EOS has not been implemented, so this EOS is not compatible with reaction integrators that rely on computing the analytical Jacobian. Any additional parameters (e.g., attractions, repulsions, critical states) are either included in the underlying Fuego database used to generate the source file model implementation, or else are inferred from the input model data.</p>
+<p>SRK EOS as a function of Pressure (p), Temperature(T), and <span class="math notranslate nohighlight">\(\tau\)</span> (specific volume) is given by</p>
+<div class="math notranslate nohighlight">
+\[p = R T \sum \frac{Y_k}{W_k} \frac{1}{\tau - b_m} - \frac{a_m}{\tau(\tau + b_m)}\]</div>
+<p>where <span class="math notranslate nohighlight">\(Y_k\)</span> are species mass fractions, <span class="math notranslate nohighlight">\(R\)</span> is the universal gas constant, and
+<span class="math notranslate nohighlight">\(b_m\)</span> and <span class="math notranslate nohighlight">\(a_m\)</span> are mixture repulsion and attraction terms, respectively.</p>
+<section id="mixing-rules">
+<h3>Mixing rules<a class="headerlink" href="#mixing-rules" title="Link to this heading"></a></h3>
+<p>For a mixture of species, the following mixing rules are used to compute <span class="math notranslate nohighlight">\(b_m\)</span> and <span class="math notranslate nohighlight">\(a_m\)</span>.</p>
+<div class="math notranslate nohighlight">
+\[a_m = \sum_{ij} Y_i Y_j \alpha_i \alpha_j \;\;\;  b_m = \sum_k Y_k b_k\]</div>
+<p>where <span class="math notranslate nohighlight">\(b_i\)</span> and <span class="math notranslate nohighlight">\(a_i\)</span> for each species is defined using critical pressure and temperature.</p>
+<div class="math notranslate nohighlight">
+\[a_i(T) = 0.42748 \frac{\left(R T_{c,i} \right)^2}{W_i^2 p_{c,i}} \bar{a}_i \left(T/T_{c,i}\right) \;\;\;
+b_i = 0.08664 \frac{R T_{c,i}}{W_i p_{c,i}}\]</div>
+<p>where</p>
+<div class="math notranslate nohighlight">
+\[\bar{a}_i (T/T_{c,i}) = \left(1 + \mathcal{A} \left[ f\left( \omega_i \right) \left(1-\sqrt{T/T_{c,i}} \right ) \right] \right)^2\]</div>
+<p>where <span class="math notranslate nohighlight">\(\omega_i\)</span> are the accentric factors and</p>
+<div class="math notranslate nohighlight">
+\[f\left( \omega_i \right) = 0.48508 + 1.5517 \omega_i - 0.151613 \omega_{i}^2\]</div>
+<p>For chemically unstable species such as radicals, critical temperatures and pressures are not available.
+For species where critical properties are not available, we use the Lennard-Jones potential for that species to construct attractive and repulsive coefficients.</p>
+<div class="math notranslate nohighlight">
+\[T_{c,i} = 1.316 \frac{\epsilon_i}{k_b} \;\;\;  a_i(T_{c,i}) = 5.55 \frac{\epsilon_i \sigma_i^3}{m_i^2} \;\;\;
+\mathrm{and} \;\;\; b_i = 0.855 \frac{\sigma_i^3}{m_i}\]</div>
+<p>where <span class="math notranslate nohighlight">\(\sigma_i\)</span>, <span class="math notranslate nohighlight">\(\epsilon_i\)</span> are the Lennard-Jones potential molecular diameter and well-depth, respectively,
+<span class="math notranslate nohighlight">\(m_i\)</span> the molecular mass, and <span class="math notranslate nohighlight">\(k_b\)</span> is Boltzmann’s constant.</p>
+<p>In terms of implementation, a routine called <cite>MixingRuleAmBm</cite> can be found in the SRK eos implementation. The following code block shows the subroutine which receives species mass fractions and temperature as input. The outputs of this routine are <span class="math notranslate nohighlight">\(b_m\)</span> and <span class="math notranslate nohighlight">\(a_m\)</span> .</p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nspecies</span>
+<span class="w">  </span><span class="n">Tr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">T</span><span class="o">*</span><span class="n">oneOverTc</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+<span class="w">  </span><span class="n">amloc</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w">  </span><span class="p">(</span><span class="mf">1.0d0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Fomega</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0d0</span><span class="o">-</span><span class="nb">sqrt</span><span class="p">(</span><span class="n">Tr</span><span class="p">)))</span><span class="w"> </span><span class="o">*</span><span class="n">sqrtAsti</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+<span class="w">  </span><span class="n">bm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bm</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">massFrac</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">*</span><span class="n">Bi</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+<span class="k">enddo</span>
+<span class="k">do </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nspecies</span>
+<span class="w">   </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nspecies</span>
+
+<span class="w">      </span><span class="n">am</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">am</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">massFrac</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">*</span><span class="n">massFrac</span><span class="p">(</span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">amloc</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">*</span><span class="n">amloc</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+
+<span class="w">   </span><span class="k">end do</span>
+<span class="k">end do</span>
+</pre></div>
+</div>
+</section>
+<section id="thermodynamic-properties">
+<h3>Thermodynamic Properties<a class="headerlink" href="#thermodynamic-properties" title="Link to this heading"></a></h3>
+<p>Most of the thermodynamic properties can be calculated from the equation of state and involve derivatives of various thermodynamic quantities and of EOS parameters. In the following, some of these thermodynamic properties for SRK and the corresponding routines are presented.</p>
+<section id="specific-heat">
+<h4>Specific heat<a class="headerlink" href="#specific-heat" title="Link to this heading"></a></h4>
+<p>For computing mixture specific heat at constant volume and pressure, the ideal gas contribution and the departure from the ideal gas are computed. Specific heat at constant volume can be computed using the following</p>
+<div class="math notranslate nohighlight">
+\[c_v = \left( \frac{\partial e_m}{\partial T}\right)_{\tau,Y}\]</div>
+<p>For SRK EOS, the formula for <span class="math notranslate nohighlight">\(c_v\)</span> reduces to</p>
+<div class="math notranslate nohighlight">
+\[c_v = c_v^{id} - T \frac{\partial^2 a_m}{\partial T^2} \frac{1}{b_m} ln ( 1 + \frac{b_m}{\tau})\]</div>
+<p>where <span class="math notranslate nohighlight">\(c_v^{id}\)</span> is the specific heat at constant volume. Mixture specific heat at constant volume is implemented through the routine <cite>SRK_EOS_GetMixtureCv</cite></p>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="k">subroutine </span><span class="n">SRK_EOS_GetMixtureCv</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+<span class="k">implicit none</span>
+<span class="k">type</span><span class="w"> </span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state</span>
+<span class="kt">real</span><span class="p">(</span><span class="n">amrex_real</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tau</span><span class="p">,</span><span class="w"> </span><span class="n">K1</span>
+
+<span class="n">state</span><span class="w"> </span><span class="p">%</span><span class="w"> </span><span class="n">wbar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.d0</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nb">sum</span><span class="p">(</span><span class="n">state</span><span class="w"> </span><span class="p">%</span><span class="w"> </span><span class="n">massfrac</span><span class="p">(:)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">inv_mwt</span><span class="p">(:))</span>
+
+<span class="k">call </span><span class="n">MixingRuleAmBm</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">massFrac</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">am</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span><span class="p">)</span>
+
+<span class="n">tau</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0d0</span><span class="o">/</span><span class="n">state</span><span class="p">%</span><span class="n">rho</span>
+
+<span class="c">! Derivative of the EOS AM w.r.t Temperature - needed for calculating enthalpy, Cp, Cv and internal energy</span>
+<span class="k">call </span><span class="n">Calc_dAmdT</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">massFrac</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">am</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">dAmdT</span><span class="p">)</span>
+
+<span class="c">! Second Derivative of the EOS AM w.r.t Temperature - needed for calculating enthalpy, Cp, Cv and internal energy</span>
+<span class="k">call </span><span class="n">Calc_d2AmdT2</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">massFrac</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">d2AmdT2</span><span class="p">)</span>
+
+<span class="c">! Ideal gas specific heat at constant volume</span>
+<span class="k">call </span><span class="n">ckcvbs</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="p">%</span><span class="w"> </span><span class="n">massfrac</span><span class="p">,</span><span class="w"> </span><span class="n">iwrk</span><span class="p">,</span><span class="w"> </span><span class="n">rwrk</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="p">%</span><span class="w"> </span><span class="n">cv</span><span class="p">)</span>
+
+<span class="c">! Real gas specific heat at constant volume</span>
+<span class="n">state</span><span class="p">%</span><span class="n">cv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">cv</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="o">*</span><span class="n">state</span><span class="p">%</span><span class="n">d2AmdT2</span><span class="o">*</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0d0</span><span class="o">/</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span><span class="p">)</span><span class="o">*</span><span class="nb">log</span><span class="p">(</span><span class="mf">1.0d0</span><span class="o">+</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span><span class="o">/</span><span class="n">tau</span><span class="p">)</span>
+
+<span class="k">end subroutine </span><span class="n">SRK_EOS_GetMixtureCv</span>
+</pre></div>
+</div>
+<p>Specific heat at constant pressure is given by</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}c_p = \left( \frac{\partial h_m}{\partial T}\right)_{p,Y}   \;\; \\
+c_p =  \frac{\partial h_m}{\partial T} - \frac {\frac{\partial h}{\partial \tau}} {\frac{\partial p}{\partial \tau}} \frac{\partial p}{\partial T}\end{split}\]</div>
+<p>where all the derivatives in the above expression for SRK EOS are given by</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\frac{\partial p}{\partial T} = \sum Y_k / W_k  \frac{R}{\tau-b_m} - \frac{\partial a_m}{\partial T} \frac{1}{\tau(\tau +b_m)} \\
+\frac{\partial p}{\partial \tau} = -\sum Y_k / W_k  \frac{R T}{(\tau-b_m)^2} + \frac{a_m (2 \tau + b_m)}{[\tau(\tau +b_m)]^2} \\
+\frac{\partial h_m}{\partial \tau} = -\left(T \frac{\partial a_m}{\partial T}  - a_m \right) \frac{1}{\tau(\tau+b_m)} + \frac{a_m}{(\tau+b_m)^2} -\sum Y_k / W_k  \frac{R T b_m}{(\tau-b_m)^2}  \\
+\frac{\partial h_m}{\partial T} = c_p^{id} +T \frac{\partial^2 a_m}{\partial T^2} \frac{1}{b_m} ln ( 1 + \frac{b_m}{\tau}) - \frac{\partial a_m}{\partial T} \frac{1}{\tau+b_m} +\sum Y_k / W_k  \frac{R b_m}{\tau-b_m}\end{split}\]</div>
+<div class="highlight-fortran notranslate"><div class="highlight"><pre><span></span><span class="k">subroutine </span><span class="n">SRK_EOS_GetMixtureCp</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+<span class="k">implicit none</span>
+<span class="k">type</span><span class="w"> </span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state</span>
+<span class="kt">real</span><span class="p">(</span><span class="n">amrex_real</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tau</span><span class="p">,</span><span class="w"> </span><span class="n">K1</span>
+<span class="kt">real</span><span class="p">(</span><span class="n">amrex_real</span><span class="p">)</span><span class="w"> </span><span class="p">:</span><span class="n">var</span><span class="p">:</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">Cpig</span>
+<span class="kt">real</span><span class="p">(</span><span class="n">amrex_real</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eosT1Denom</span><span class="p">,</span><span class="w"> </span><span class="n">eosT2Denom</span><span class="p">,</span><span class="w"> </span><span class="n">eosT3Denom</span>
+<span class="kt">real</span><span class="p">(</span><span class="n">amrex_real</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">InvEosT1Denom</span><span class="p">,</span><span class="n">InvEosT2Denom</span><span class="p">,</span><span class="n">InvEosT3Denom</span>
+<span class="kt">real</span><span class="p">(</span><span class="n">amrex_real</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dhmdT</span><span class="p">,</span><span class="n">dhmdtau</span>
+<span class="kt">real</span><span class="p">(</span><span class="n">amrex_real</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">Rm</span>
+
+<span class="n">state</span><span class="w"> </span><span class="p">%</span><span class="w"> </span><span class="n">wbar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.d0</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nb">sum</span><span class="p">(</span><span class="n">state</span><span class="w"> </span><span class="p">%</span><span class="w"> </span><span class="n">massfrac</span><span class="p">(:)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">inv_mwt</span><span class="p">(:))</span>
+
+<span class="k">call </span><span class="n">MixingRuleAmBm</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">massFrac</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">am</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span><span class="p">)</span>
+
+<span class="n">tau</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0d0</span><span class="o">/</span><span class="n">state</span><span class="p">%</span><span class="n">rho</span>
+
+<span class="c">! Derivative of the EOS AM w.r.t Temperature - needed for calculating enthalpy, Cp, Cv and internal energy</span>
+<span class="k">call </span><span class="n">Calc_dAmdT</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">massFrac</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">dAmdT</span><span class="p">)</span>
+
+<span class="c">! Second Derivative of the EOS AM w.r.t Temperature - needed for calculating enthalpy, Cp, Cv and internal energy</span>
+<span class="k">call </span><span class="n">Calc_d2AmdT2</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">massFrac</span><span class="p">,</span><span class="n">state</span><span class="p">%</span><span class="n">d2AmdT2</span><span class="p">)</span>
+
+<span class="n">K1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0d0</span><span class="o">/</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span><span class="p">)</span><span class="o">*</span><span class="nb">log</span><span class="p">(</span><span class="mf">1.0d0</span><span class="o">+</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span><span class="o">/</span><span class="n">tau</span><span class="p">)</span>
+
+<span class="n">eosT1Denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tau</span><span class="o">-</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span>
+<span class="n">eosT2Denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tau</span><span class="o">*</span><span class="p">(</span><span class="n">tau</span><span class="o">+</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span><span class="p">)</span>
+<span class="n">eosT3Denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tau</span><span class="o">+</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span>
+
+<span class="n">InvEosT1Denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0d0</span><span class="o">/</span><span class="n">eosT1Denom</span>
+<span class="n">InvEosT2Denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0d0</span><span class="o">/</span><span class="n">eosT2Denom</span>
+<span class="n">InvEosT3Denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0d0</span><span class="o">/</span><span class="n">eosT3Denom</span>
+
+<span class="n">Rm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">Ru</span><span class="o">/</span><span class="n">state</span><span class="p">%</span><span class="n">wbar</span><span class="p">)</span>
+
+<span class="c">! Derivative of Pressure w.r.t to Temperature</span>
+<span class="n">state</span><span class="p">%</span><span class="n">dPdT</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Rm</span><span class="o">*</span><span class="n">InvEosT1Denom</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">dAmdT</span><span class="o">*</span><span class="n">InvEosT2Denom</span>
+
+<span class="c">! Derivative of Pressure w.r.t to tau (specific volume)</span>
+<span class="n">state</span><span class="p">%</span><span class="n">dpdtau</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">Rm</span><span class="o">*</span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="o">*</span><span class="n">InvEosT1Denom</span><span class="o">*</span><span class="n">InvEosT1Denom</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">am</span><span class="o">*</span><span class="p">(</span><span class="mf">2.0</span><span class="o">*</span><span class="n">tau</span><span class="o">+</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span><span class="p">)</span><span class="o">*</span><span class="n">InvEosT2Denom</span><span class="o">*</span><span class="n">InvEosT2Denom</span>
+
+<span class="c">! Ideal gas specific heat at constant pressure</span>
+<span class="k">call </span><span class="n">ckcpbs</span><span class="p">(</span><span class="n">state</span><span class="w"> </span><span class="p">%</span><span class="w"> </span><span class="n">T</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="w"> </span><span class="p">%</span><span class="w"> </span><span class="n">massfrac</span><span class="p">,</span><span class="w"> </span><span class="n">iwrk</span><span class="p">,</span><span class="w"> </span><span class="n">rwrk</span><span class="p">,</span><span class="n">Cpig</span><span class="p">)</span>
+
+<span class="c">! Derivative of enthalpy w.r.t to Temperature</span>
+<span class="n">dhmdT</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Cpig</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="o">*</span><span class="n">state</span><span class="p">%</span><span class="n">d2AmdT2</span><span class="o">*</span><span class="n">K1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">dAmdT</span><span class="o">*</span><span class="n">InvEosT3Denom</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Rm</span><span class="o">*</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span><span class="o">*</span><span class="n">InvEosT1Denom</span>
+
+<span class="c">! Derivative of enthalpy w.r.t to tau (specific volume)</span>
+<span class="n">dhmdtau</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="o">*</span><span class="n">state</span><span class="p">%</span><span class="n">dAmdT</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">am</span><span class="p">)</span><span class="o">*</span><span class="n">InvEosT2Denom</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">am</span><span class="o">*</span><span class="n">InvEosT3Denom</span><span class="o">*</span><span class="n">InvEosT3Denom</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">   </span><span class="n">Rm</span><span class="o">*</span><span class="n">state</span><span class="p">%</span><span class="n">T</span><span class="o">*</span><span class="n">state</span><span class="p">%</span><span class="n">bm</span><span class="o">*</span><span class="n">InvEosT1Denom</span><span class="o">*</span><span class="n">InvEosT1Denom</span>
+
+<span class="c">! Real gas specific heat at constant pressure</span>
+<span class="n">state</span><span class="p">%</span><span class="n">cp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dhmdT</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">dhmdtau</span><span class="o">/</span><span class="n">state</span><span class="p">%</span><span class="n">dpdtau</span><span class="p">)</span><span class="o">*</span><span class="n">state</span><span class="p">%</span><span class="n">dPdT</span>
+
+<span class="k">end subroutine </span><span class="n">SRK_EOS_GetMixtureCp</span>
+</pre></div>
+</div>
+</section>
+<section id="internal-energy-and-enthalpy">
+<h4>Internal energy and Enthalpy<a class="headerlink" href="#internal-energy-and-enthalpy" title="Link to this heading"></a></h4>
+<p>Similarly mixture internal energy for SRK EOS is given by</p>
+<div class="math notranslate nohighlight">
+\[e_m = \sum_k Y_k e_k^{id} + \left( T  \frac{\partial a_m}{\partial T}  - a_m \right)\frac{1}{b_m} ln \left( 1 + \frac{b_m}{\tau}\right)\]</div>
+<p>and mixture enthalpy <span class="math notranslate nohighlight">\(h_m = e + p \tau\)</span></p>
+<div class="math notranslate nohighlight">
+\[h_m = \sum_k Y_k h_k^{id} + \left ( T \frac{\partial a_m}{\partial T} - a_m \right) \frac{1}{b_m} \ln \left( 1 + \frac{b_m}{\tau}\right) + R T \sum \frac{Y_k}{W_k} \frac{b_m}{\tau -b_m} - \frac{a_m}{\tau + b_m}\]</div>
+<p>and the implementation can be found in the routine <cite>SRK_EOS_GetMixture_H</cite>.</p>
+</section>
+<section id="speed-of-sound">
+<h4>Speed of Sound<a class="headerlink" href="#speed-of-sound" title="Link to this heading"></a></h4>
+<p>The sound speed for SRK EOS is given by</p>
+<div class="math notranslate nohighlight">
+\[a^2 = -\frac{c_p}{c_v} \tau^2  \frac{\partial p}{\partial \tau}\]</div>
+</section>
+<section id="species-enthalpy">
+<h4>Species enthalpy<a class="headerlink" href="#species-enthalpy" title="Link to this heading"></a></h4>
+<p>For computation of kinetics and transport fluxes we will also need the species partial enthalpies and the chemical potential.  The species enthalpies for SRK EOS are given by</p>
+<div class="math notranslate nohighlight">
+\[h_k = \frac{\partial h_m}{\partial Y_k } - \frac {\frac{\partial h}{\partial \tau}} {\frac{\partial p}{\partial \tau}} \frac{\partial p}{\partial Y_k}\]</div>
+<p>where</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\frac{\partial h_m}{\partial Y_k } &amp;=  h_k^{id} + (T \frac{\partial^2 a_m}{\partial T \partial Y_k}  - \frac{\partial a_m }{\partial Y_k}) \frac{1}{b_m} \ln\left(1+ \frac{b_m}{\tau}\right) \\&amp;-\left(T \frac{\partial a_m}{\partial T}  - a_m \right) \left[ \frac{1}{b_m^2} \ln\left(1+ \frac{b_m}{\tau}\right) - \frac{1}{b_m(\tau+b_m)} \right ] \frac{\partial b_m}{\partial Y_k} \nonumber \\&amp;+ \frac{a_m}{(\tau+b_m)^2}  \frac{\partial b_m}{\partial Y_k} - \frac{1}{\tau+b_m}  \frac{\partial a_m}{\partial Y_k} + 1 / W_k  \frac{R T b_m}{\tau-b_m}\\&amp;+\sum_i \frac{Y_i}{W_i} R T \left( \frac{1}{\tau -b_m} + \frac{b_m}{(\tau-b_m)^2} \right) \frac{ \partial b_m}{\partial Y_k}\end{split}\]</div>
+<div class="math notranslate nohighlight">
+\[\begin{split}\frac{\partial p}{\partial Y_k} &amp;= R T \frac{1}{W_k} \frac{1}{\tau - b_m} - \frac{\partial a_m}{\partial Y_k} \frac{1}{\tau(\tau + b_m)} \\&amp;+\left(R T \sum \frac{Y_i}{W_i} \frac{1}{(\tau - b_m)^2} + \frac{a_m}{\tau(\tau + b_m)^2} \right ) \frac{\partial b_m}{\partial Y_k}\end{split}\]</div>
+</section>
+<section id="chemical-potential">
+<h4>Chemical potential<a class="headerlink" href="#chemical-potential" title="Link to this heading"></a></h4>
+<p>The chemical potentials are the derivative of the free energy with respect to composition.  Here the free energy <cite>f`</cite> is given by</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}f &amp;= \sum_i Y_i (e_i^{id} - T s_i^{id,*}) +  \sum_i \frac{Y_i R T}{W_i} ln (\frac{Y_i R T}{W_i \tau p^{st}})  \nonumber \\ &amp;+ \sum_i \frac{Y_i R T}{W_i} ln (\frac{\tau}{\tau-b_m}) -  a_m \frac{1}{b_m}ln (1+ \frac{b_m}{\tau})  \nonumber \\ &amp;= \sum_i Y_i (e_i^{id} - T s_i^{id,*}) +  \sum_i \frac{Y_i R T}{W_i} ln (\frac{Y_i R T}{W_i (\tau-b_m) p^{st}} )- a_m \frac{1}{b_m} ln (1+ \frac{b_m}{\tau})  \nonumber\end{split}\]</div>
+<p>Then</p>
+<div class="math notranslate nohighlight">
+\[\begin{split}\mu_k &amp;= \frac{\partial f}{\partial Y_k} = e_k^{id} - T s_k^{id,*}  + \frac{RT}{W_k} ln (\frac{Y_k R T}{W_k (\tau-b_m) p^{st}}) + \frac{RT}{W_k} +  \frac{RT}{\bar{W}} \frac{1}{\tau-b_m} \frac {\partial b_m}{\partial Y_k} \nonumber \\
+&amp;- \frac{1}{b_m} ln(1 + \frac{b_m}{\tau}) \frac{\partial a_m}{\partial Y_k}+ \frac{a_m}{b_m^2} ln(1 + \frac{b_m}{\tau}) \frac{\partial b_m}{\partial Y_k}- \frac{a_m}{b_m} \frac{1}{\tau+b_m} \frac{\partial b_m}{\partial Y_k}\end{split}\]</div>
+</section>
+<section id="other-primitive-variable-derivatives">
+<h4>Other primitive variable derivatives<a class="headerlink" href="#other-primitive-variable-derivatives" title="Link to this heading"></a></h4>
+<p>The Godunov (FV) algorithm also needs some derivatives to express source terms in terms of primitive variables. In particular one needs</p>
+<div class="math notranslate nohighlight">
+\[\left . \frac{\partial p}{\partial \rho} \right|_{e,Y} =-\tau^2 \left( \frac{\partial p}{\partial \tau}- \frac {\frac{\partial e}{\partial \tau}} {\frac{\partial e}{\partial T}} \frac{\partial p}{\partial T} \right )\]</div>
+<p>and</p>
+<div class="math notranslate nohighlight">
+\[\left . \frac{\partial p}{\partial e} \right|_{\rho,Y} = \frac{1}{c_v} \frac{\partial p}{\partial T}\]</div>
+<p>All of the terms needed to evaluate this quantity are known except for</p>
+<div class="math notranslate nohighlight">
+\[\frac{\partial e}{\partial \tau} = \frac{1}{\tau ( \tau + b_m)} \left( a_m - T  \frac{\partial a_m}{\partial T}  \right) \;\; .\]</div>
+</section>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Thermodynamics.html" class="btn btn-neutral float-left" title="Thermodynamics" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Spray.html" class="btn btn-neutral float-right" title="Spray" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,256 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A brief introduction to CVODE &mdash; PelePhysics 2022.10 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/mywrap.css?v=d9e67d65" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=bf7b0411"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="CVODE implementation in PelePhysics" href="CvodeInPP.html" />
+    <link rel="prev" title="Chemistry" href="Chemistry.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            PelePhysics
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Documentation contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="GettingStarted.html"><cite>PelePhysics</cite> Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Introduction.html">Introduction</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="Chemistry.html">Chemistry</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">A brief introduction to CVODE</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#numerical-methods-overview">Numerical methods overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#linear-algebra">Linear Algebra</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#error-control-step-sizing-order-determination">Error control, step-sizing, order determination</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html">CVODE implementation in <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="CvodeInPP.html#cvode-implementation-in-pelephysics-on-gpu">CVODE implementation in <cite>PelePhysics</cite> on GPU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="QSS.html">Analytically reduced chemistry via quasi-steady state (QSS) assumption in <cite>PelePhysics</cite></a></li>
+<li class="toctree-l2"><a class="reference internal" href="Ceptr.html">CEPTR: Chemistry Evaluation for Pele Through Recasting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="Transport.html">Transport</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Thermodynamics.html">Thermodynamics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="EOS.html">Equation of State</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Spray.html">Spray</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Soot.html">Soot</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Utility.html">Utility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Support.html">Support</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Tutorials.html">Tutorials</a></li>
+<li class="toctree-l1"><a class="reference internal" href="DeveloperGuide.html">Developer Guidelines</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">PelePhysics</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="Chemistry.html">Chemistry</a></li>
+      <li class="breadcrumb-item active">A brief introduction to CVODE</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/IntroductionToCvode.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="a-brief-introduction-to-cvode">
+<h1>A brief introduction to CVODE<a class="headerlink" href="#a-brief-introduction-to-cvode" title="Link to this heading"></a></h1>
+<p>CVODE is part of a software family called sundials for SUite of Nonlinear and DIfferential / ALgebraic equation Solver <a class="reference internal" href="#llnl2005" id="id1"><span>[LLNL2005]</span></a>.</p>
+<p><strong>The version used with PelePhysics for the tests presented in this document is v4.0.2. This does not mean this is the recommended version to link with PelePhysics. Always refer to</strong> <a class="reference internal" href="GettingStarted.html#sec-getcvode"><span class="std std-ref">Dependencies</span></a> <strong>to know which versions of CVODE/SuiteSparse to use !!</strong></p>
+<p>In the following, details pertaining to the methods implemented in <cite>PelePhysics</cite> are provided.
+The interested user is referred to the very exhaustive <a class="reference external" href="https://computation.llnl.gov/sites/default/files/public/cv_guide.pdf">CVODE User-guide</a> for more information.</p>
+<p><cite>Most of this section is adapted from the v4.1.0 Cvode Documentation.</cite></p>
+<section id="numerical-methods-overview">
+<span id="sec-nmo"></span><h2>Numerical methods overview<a class="headerlink" href="#numerical-methods-overview" title="Link to this heading"></a></h2>
+<p>The methods implemented in CVODE are variable-order, variable-step <cite>multistep</cite> methods, based on formulas of the form</p>
+<div class="math notranslate nohighlight">
+\[\sum_{i=0}^{K_1} \alpha_{n,i} y^{n-i} + h_n \sum_{i=0}^{K_2} \beta_{n,i} \dot{y}^{n-i} = 0\]</div>
+<p>Here the <span class="math notranslate nohighlight">\(y^n\)</span> are computed approximations to <span class="math notranslate nohighlight">\(y(t_n)\)</span>, and <span class="math notranslate nohighlight">\(h_n = t_n-t_{n-1}\)</span> is the step size.
+For stiff problems, CVODE includes the Backward Differentiation Formulas (BDF) in so-called fixed-leading coefficient (FLC) form,
+given by <span class="math notranslate nohighlight">\(K_1=q\)</span> and <span class="math notranslate nohighlight">\(K_2= 0\)</span>, with order <span class="math notranslate nohighlight">\(q\)</span> varying between 1 and 5.  The coefficients are uniquely determined by the method type,
+its order, the recent history of the step sizes, and the normalization <span class="math notranslate nohighlight">\(\alpha_{n,0}=-1\)</span> <a class="reference internal" href="#byrne1975" id="id2"><span>[BYRNE1975]</span></a>, <a class="reference internal" href="#jac1980" id="id3"><span>[JAC1980]</span></a>.</p>
+<p>A nonlinear system must be solved (approximately) at each integration step.  This nonlinear system can be formulated as a root-finding problem</p>
+<div class="math notranslate nohighlight">
+\[F(y^{n}) = y^n - h_n \beta_{n,0} f(t_n,y^{n}) - a_n = 0\]</div>
+<p>where <span class="math notranslate nohighlight">\(a_n = \sum_{i&gt;0} (\alpha_{n,i} y^{n-i} + h_n\beta_{n,i} \dot{y}^{n-i})\)</span>. CVODE provides several non-linear solver choices.
+By default, CVODE solves this problem with a Newton iteration, which requires the solution of linear systems</p>
+<div class="math notranslate nohighlight" id="equation-eqc">
+<span class="eqno">(1)<a class="headerlink" href="#equation-eqc" title="Link to this equation"></a></span>\[M[y^{n(m+1)} - y^{n(m)}] = -F(y^{n(m)})\]</div>
+<p>in which</p>
+<div class="math notranslate nohighlight">
+\[M \approx I-\gamma J, \; \; \; J = \frac{\partial f}{ \partial y}, \;\;\; and \;\;\; \gamma =  h_n \beta_{n,0}\]</div>
+</section>
+<section id="linear-algebra">
+<span id="sec-subslinalg"></span><h2>Linear Algebra<a class="headerlink" href="#linear-algebra" title="Link to this heading"></a></h2>
+<p>To find the solution of the linear system <a class="reference internal" href="#equation-eqc">(1)</a>; CVODE provides several linear solver choices.
+The linear solver modules distributed with Sundials are organized in two families, a <cite>direct</cite> family comprising direct linear solvers
+for dense, banded, or sparse matrices, and a <cite>spils</cite> family comprising scaled preconditioned iterative (Krylov) linear solvers.
+The solvers offered through these modules that are of interest to us are:</p>
+<ul class="simple">
+<li><p>a dense direct solver</p></li>
+<li><p>a sparse direct solver interface using the <cite>KLU</cite> sparse solver library</p></li>
+<li><p>SPGMR, a scaled -possibly preconditioned- GMRES (Generalized Minimal Residual method) solver <a class="reference internal" href="#brown1990" id="id4"><span>[BROWN1990]</span></a></p></li>
+</ul>
+<p>When using a dense direct solver, the user has the option to specify an Analytical Jacobian.
+If none is provided, a difference quotients is performed. When a sparse direct solver is employed however,
+the user <strong>must</strong> specify an analytical Jacobian. All of these options have been enabled in <cite>PelePhysics</cite>.</p>
+<p>For large stiff systems,  where direct methods are often not feasible, the combination of a BDF integrator and a <cite>preconditioned</cite> Krylov method
+yields a powerful tool. In this case, the linear solve is <cite>matrix-free</cite>, and the default Newton iteration is an
+<cite>Inexact</cite> Newton iteration, in which <span class="math notranslate nohighlight">\(M\)</span> is applied with matrix-vector products <span class="math notranslate nohighlight">\(Jv\)</span> obtained by either difference quotients
+or a user-supplied routine. In <cite>PelePhysics</cite>, it is possible to use either a non-preconditioned or a preconditioned GMRES solver.
+In the latter case, the preconditioner can be either specified in a dense or sparse format (if the KLU library is linked to CVODE),
+and it is provided in the form of a Jacobian approximation, based on the work of <a class="reference internal" href="#mcnenly2015" id="id5"><span>[McNenly2015]</span></a>.</p>
+</section>
+<section id="error-control-step-sizing-order-determination">
+<h2>Error control, step-sizing, order determination<a class="headerlink" href="#error-control-step-sizing-order-determination" title="Link to this heading"></a></h2>
+<p>In the process of controlling errors at various levels, CVODE uses a weighted root-mean-square norm,
+denoted <span class="math notranslate nohighlight">\(|| \bullet ||_{WRMS}\)</span>, for all error-like quantities. The multiplicative weights used are based
+on the current solution and on the relative and absolute tolerances input by the user, namely</p>
+<div class="math notranslate nohighlight">
+\[W_i= \frac{1}{[rtol |y_i|+atol_i]}\]</div>
+<p>Because <span class="math notranslate nohighlight">\(1/W_i\)</span> represents a tolerance in the component <span class="math notranslate nohighlight">\(y_i\)</span>, a vector whose norm is 1 is regarded as small.
+In <cite>PelePhysics</cite>, both these tolerances are fixed to a value of <span class="math notranslate nohighlight">\(1.0e-10\)</span>.</p>
+<p>A critical part of CVODE - making it an ODE <cite>solver</cite> rather than just an ODE method, is its control
+of the local error. At every step, the local error is estimated and required to satisfy tolerance conditions,
+and the step is redone with reduced step size whenever that error test fails.
+Note that in <cite>PelePhysics</cite>, the first time step is always forced to <span class="math notranslate nohighlight">\(1.0e-9\)</span>.</p>
+<p>In addition to adjusting the step size to meet the local error test, CVODE periodically adjusts the order,
+with the goal of maximizing the step size. The integration starts out at order 1 and varies the order dynamically after that.
+The basic idea is to pick the order <span class="math notranslate nohighlight">\(q\)</span> for which a polynomial of order <span class="math notranslate nohighlight">\(q\)</span> best fits the discrete data involved
+in the multistep method. In <cite>PelePhysics</cite>, the maximum order is limited to 2 for stability reasons.</p>
+<p>The various algorithmic features of CVODE are inherited from VODE and VODPK, and are documented in <a class="reference internal" href="#vode1989" id="id6"><span>[VODE1989]</span></a> and <a class="reference internal" href="#brown1990" id="id7"><span>[BROWN1990]</span></a>.
+They are also summarized in the <a class="reference external" href="https://computation.llnl.gov/sites/default/files/public/cv_guide.pdf">CVODE User-guide</a> as well as in <a class="reference internal" href="#llnl2005" id="id9"><span>[LLNL2005]</span></a>.</p>
+<div role="list" class="citation-list">
+<div class="citation" id="llnl2005" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>LLNL2005<span class="fn-bracket">]</span></span>
+<span class="backrefs">(<a role="doc-backlink" href="#id1">1</a>,<a role="doc-backlink" href="#id9">2</a>)</span>
+<ol class="upperalpha simple">
+<li><ol class="upperalpha simple" start="3">
+<li><p>Hindmarsh, P. N. Brown, K. E. Grant, S. L. Lee, R. Serban, D. E. Shumaker, and C. S. Woodward. SUNDIALS: Suite of nonlinear and differential/algebraic-equation solvers. ACM Transactions on Mathematical Software (TOMS), 31(3):363-396, 2005.</p></li>
+</ol>
+</li>
+</ol>
+</div>
+<div class="citation" id="byrne1975" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id2">BYRNE1975</a><span class="fn-bracket">]</span></span>
+<ol class="upperalpha simple" start="7">
+<li><ol class="upperalpha simple" start="4">
+<li><p>Byrne, A. C. Hindmarsh. A polyalgorithm for the numerical solution of ordinary differential equations. ACM Transactions on Mathematical Software (TOMS), 1(1):71-96, 1975.</p></li>
+</ol>
+</li>
+</ol>
+</div>
+<div class="citation" id="jac1980" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id3">JAC1980</a><span class="fn-bracket">]</span></span>
+<ol class="upperalpha simple" start="11">
+<li><p>R Jackson and R. Sacks-Davis. An alternative implementation of variable step-size multistep formulas for stiff odes. ACM Transactions on Mathematical Software (TOMS), 6(3):295–318, 1980.</p></li>
+</ol>
+</div>
+<div class="citation" id="brown1990" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>BROWN1990<span class="fn-bracket">]</span></span>
+<span class="backrefs">(<a role="doc-backlink" href="#id4">1</a>,<a role="doc-backlink" href="#id7">2</a>)</span>
+<ol class="upperalpha simple" start="16">
+<li><ol class="upperalpha simple" start="14">
+<li><p>Brown and Y. Saad. Hybrid krylov methods for nonlinear systems of equations. SIAM Journal on Scientific and Statistical Computing, 11(3):450–481, 1990.</p></li>
+</ol>
+</li>
+</ol>
+</div>
+<div class="citation" id="mcnenly2015" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id5">McNenly2015</a><span class="fn-bracket">]</span></span>
+<ol class="upperalpha simple" start="13">
+<li><ol class="upperalpha simple" start="10">
+<li><p>McNenly, R. A. Whitesides, and D. L. Flowers. Faster solvers for large kinetic mechanisms using adaptive preconditioners. Proceedings of the Combustion Institute, 35(1):581–587, 2015.</p></li>
+</ol>
+</li>
+</ol>
+</div>
+<div class="citation" id="vode1989" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id6">VODE1989</a><span class="fn-bracket">]</span></span>
+<ol class="upperalpha simple" start="16">
+<li><ol class="upperalpha simple" start="14">
+<li><p>Brown, G. D. Byrne, and A. C. Hindmarsh. VODE, a variable-coefficient ODE solver. SIAM journal on scientific and statistical computing, 10(5):1038-1051, 1989.</p></li>
+</ol>
+</li>
+</ol>
+</div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Chemistry.html" class="btn btn-neutral float-left" title="Chemistry" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="CvodeInPP.html" class="btn btn-neutral float-right" title="CVODE implementation in PelePhysics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AMReX Copyright (c) 2022, The Regents of the University of California, through Lawrence Berkeley National Laboratory and the Alliance for Sustainable Energy, LLC., through National Renewable Energy Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy).  All rights reserved..</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
