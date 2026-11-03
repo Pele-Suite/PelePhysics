@@ -103,10 +103,12 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
       }
 
       for (int idim = 0; idim < 2; ++idim) {
-        tp[n].dx[idim] = probsize[idim] / amrex::Real(npts[idim] - 1);
+        tp[n].dx[idim] =
+          probsize[idim] / static_cast<amrex::Real>(npts[idim] - 1);
         tp[n].dxinv[idim] = 1.0 / tp[n].dx[idim];
       }
-      AMREX_D_TERM(, , tp[n].dx[2] = probsize[2] / amrex::Real(npts[2]);)
+      AMREX_D_TERM(
+        , , tp[n].dx[2] = probsize[2] / static_cast<amrex::Real>(npts[2]);)
       AMREX_D_TERM(, , tp[n].dxinv[2] = 1.0 / tp[n].dx[2];)
 
       // The following is relative to the injection face:
@@ -138,7 +140,8 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
         amrex::IntVect(
           AMREX_D_DECL(npts[0] - 1, npts[1] - 1, tp[n].nplane - 1)));
 
-      tp[n].sdata = new amrex::FArrayBox(sbx, 3, amrex::The_Async_Arena());
+      tp[n].sdata = std::make_unique<amrex::FArrayBox>(
+        sbx, AMREX_SPACEDIM, amrex::The_Async_Arena());
 
       AMREX_D_TERM(, , tp[n].kmax = npts[2];)
 
@@ -601,7 +604,8 @@ TurbInflow::file_coordinate(
   // reproduces the file bit for bit.
   const amrex::Real idx = (xi - a_tp.pboxlo[idim]) * a_tp.dxinv[idim] + 0.5;
   const amrex::Real idx_round = std::round(idx);
-  if (std::abs(idx - idx_round) < amrex::Real(1.0e-8)) {
+  constexpr amrex::Real snap_tol = 1.0e-8;
+  if (std::abs(idx - idx_round) < snap_tol) {
     xi = a_tp.pboxlo[idim] + (idx_round - 0.5) * a_tp.dx[idim];
   }
   return xi;
@@ -623,7 +627,7 @@ TurbInflow::set_turb(
 
   amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     // From z-normal box index to data box index
-    int idx[3] = {0};
+    amrex::GpuArray<int, 3> idx{};
     idx[transDir1] = i;
     idx[transDir2] = j;
     idx[normDir] = k;
@@ -718,7 +722,7 @@ TurbInflow::read_turb_planes(TurbParm& a_tp, amrex::Real z)
     a_tp.szhi = a_tp.planeTimes[a_tp.izhi - 1]; // need one plane forward in
                                                 // time for interpolating
   } else {
-    a_tp.izlo = (int)(floor(z * a_tp.dxinv[2] - 0.5)) -
+    a_tp.izlo = static_cast<int>(std::floor(z * a_tp.dxinv[2] - 0.5)) -
                 1; // read one extra earlier tplane to prevent rereading
     a_tp.izhi = a_tp.izlo + a_tp.nplane - 1;
     a_tp.szlo = (static_cast<amrex::Real>(a_tp.izlo) + 0.5) * a_tp.dx[2];
@@ -781,14 +785,12 @@ TurbInflow::fill_turb_plane(
   const auto& bx = v.box();
   const auto& vd = v.array();
 
-  amrex::Gpu::DeviceVector<amrex::Real> x_dev(x.size());
-  amrex::Gpu::DeviceVector<amrex::Real> y_dev(y.size());
-  amrex::Gpu::copyAsync(
-    amrex::Gpu::hostToDevice, x.begin(), x.end(), x_dev.begin());
-  amrex::Gpu::copyAsync(
-    amrex::Gpu::hostToDevice, y.begin(), y.end(), y_dev.begin());
-  amrex::Real* xd = x_dev.data();
-  amrex::Real* yd = y_dev.data();
+  // Freed by a stream callback once the kernel below is done with them, so
+  // no synchronization is needed before they go out of scope
+  amrex::Gpu::AsyncArray<amrex::Real> x_dev(x.data(), x.size());
+  amrex::Gpu::AsyncArray<amrex::Real> y_dev(y.data(), y.size());
+  const amrex::Real* xd = x_dev.data();
+  const amrex::Real* yd = y_dev.data();
 
   amrex::Real velScale = (a_tp.side == amrex::Orientation::high)
                            ? -a_tp.turb_scale_vel
@@ -804,7 +806,7 @@ TurbInflow::fill_turb_plane(
   const auto& tile_per = a_tp.tile_periodic;
   const auto& periodicity = a_tp.periodicity;
   const bool lininterp = a_tp.interp_type == TurbInterpType::linear;
-  amrex::Real cz[3];
+  amrex::GpuArray<amrex::Real, 3> cz{};
   int k0 = -1;
   if (a_tp.istimeplanes) {
     AMREX_ALWAYS_ASSERT(
@@ -822,9 +824,9 @@ TurbInflow::fill_turb_plane(
     cz[2] = (z - t0) * (z - t1) / ((t2 - t0) * (t2 - t1));
   } else {
     amrex::Real zz =
-      (z - szlo) * dxinv[2];    // How many dz away from the left side ?
-    k0 = (int)(std::floor(zz)); // What's the closest point ?
-    zz -= amrex::Real(k0);
+      (z - szlo) * dxinv[2]; // How many dz away from the left side ?
+    k0 = static_cast<int>(std::floor(zz)); // What's the closest point ?
+    zz -= static_cast<amrex::Real>(k0);
     cz[0] =
       lininterp ? 1.0 - zz : 0.5 * (zz - 1.0) * (zz - 2.0); // Weight of k0
     cz[1] = lininterp ? zz : zz * (2.0 - zz);               // Weight of k0 + 1
@@ -832,8 +834,10 @@ TurbInflow::fill_turb_plane(
   }
 
   amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-    amrex::Real cx[3], cy[3], ydata[3];
-    amrex::Real zdata[3][3];
+    amrex::GpuArray<amrex::Real, 3> cx{};
+    amrex::GpuArray<amrex::Real, 3> cy{};
+    amrex::GpuArray<amrex::Real, 3> ydata{};
+    amrex::GpuArray<amrex::GpuArray<amrex::Real, 3>, 3> zdata{};
 
     const amrex::Real x_from_pboxlo = xd[i - bx.smallEnd(0)] - pboxlo[0];
     amrex::Real xx =
@@ -843,10 +847,10 @@ TurbInflow::fill_turb_plane(
     amrex::Real yy =
       (y_from_pboxlo)*dxinv[1] +
       0.5; // from 1st cell center (ghost cell so 1/2 dx outside of pbox)
-    int i0 = (int)(std::floor(xx));
-    int j0 = (int)(std::floor(yy));
-    xx -= amrex::Real(i0);
-    yy -= amrex::Real(j0);
+    int i0 = static_cast<int>(std::floor(xx));
+    int j0 = static_cast<int>(std::floor(yy));
+    xx -= static_cast<amrex::Real>(i0);
+    yy -= static_cast<amrex::Real>(j0);
     // Wrap if needed
     if (tile_per) {
       i0 = (i0 % npboxcells[0] + npboxcells[0]) % npboxcells[0];
@@ -899,7 +903,5 @@ TurbInflow::fill_turb_plane(
       }
     }
   });
-  amrex::Gpu::synchronize(); // Ensure that DeviceVector's don't leave scope
-                             // early
 }
 } // namespace pele::physics::turbinflow

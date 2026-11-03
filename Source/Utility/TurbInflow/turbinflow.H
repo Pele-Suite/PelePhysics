@@ -1,10 +1,14 @@
 #ifndef TURBINFLOW_H
 #define TURBINFLOW_H
 
+#include <AMReX.H>
 #include <AMReX_FArrayBox.H>
+#include <AMReX_GpuAsyncArray.H>
 #include <AMReX_GpuMemory.H>
 #include <AMReX_Geometry.H>
 #include <AMReX_ParmParse.H>
+
+#include <memory>
 
 // Relative to this header so that a build which lists TurbInflow but not
 // Source/Utility/MeshMap among its include directories still compiles.
@@ -58,11 +62,12 @@ struct TurbParm
     0.0; // Enable to offset the location in the turb file
 
   int nplane = 32; // Number of turb planes stored at once in memory
-  amrex::FArrayBox* sdata = nullptr; // Currently loaded chunk of turb data
-  int izlo = -1;                     // Currently loaded low plane
-  int izhi = -1;                     // Currently loaded high plane
-  amrex::Real szlo = -1.0e12;        // Position of the current chunk low plane
-  amrex::Real szhi = -1.0e11;        // Position of the current chunk high plane
+  std::unique_ptr<amrex::FArrayBox>
+    sdata;                    // Currently loaded chunk of turb data
+  int izlo = -1;              // Currently loaded low plane
+  int izhi = -1;              // Currently loaded high plane
+  amrex::Real szlo = -1.0e12; // Position of the current chunk low plane
+  amrex::Real szhi = -1.0e11; // Position of the current chunk high plane
 
   amrex::IntVect periodicity{AMREX_D_DECL(1, 1, 1)};
   bool istimeplanes = false; // false indicates turb data is periodic normal to
@@ -116,7 +121,22 @@ struct TurbInflow
 public:
   TurbInflow() = default;
 
-  ~TurbInflow() = default;
+  // The plane chunks live in an AMReX arena.  A TurbInflow that outlives
+  // amrex::Finalize (e.g. PeleC's static member) must not free them then:
+  // release them instead, as the memory is gone with the arena anyway.
+  ~TurbInflow()
+  {
+    if (!amrex::Initialized()) {
+      for (auto& t : tp) {
+        static_cast<void>(t.sdata.release());
+      }
+    }
+  }
+
+  TurbInflow(const TurbInflow&) = delete;
+  TurbInflow& operator=(const TurbInflow&) = delete;
+  TurbInflow(TurbInflow&&) = default;
+  TurbInflow& operator=(TurbInflow&&) = default;
 
   void init(amrex::Geometry const& geom);
 
