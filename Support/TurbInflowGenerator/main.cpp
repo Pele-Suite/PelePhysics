@@ -9,6 +9,9 @@ print_usage(int, char* argv[])
   std::cerr << argv[0]
             << " type=<turb_box, periodic_plt, diag_frame_planes>"
                " ofile=<output directory name>\n";
+  std::cerr << "   Optional for type=diag_frame_planes and periodic_plt:\n";
+  std::cerr << "      scalars=<plt variables to store next to the velocity,"
+               " e.g. 'temp Y(N2)'>\n";
   std::cerr << "   Additional inputs for type=diag_frame_planes:\n";
   std::cerr << "      ifiles=<list of DiagFramePlanes to include>\n";
   std::cerr << "      level=<AMR level from DiagFramePlanes to use, DEF=0>\n";

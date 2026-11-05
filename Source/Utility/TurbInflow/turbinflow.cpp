@@ -152,7 +152,8 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
 
       // Optional trailers.  Everything a legacy reader consumes ends with the
       // plane times, so anything appended after them is invisible to older
-      // code.  Each trailer starts with a keyword token.
+      // code.  Each trailer starts with a keyword token; they may come in
+      // any order.
       //
       // Mesh mapping.  A file without it is, by declaration, uniform in
       // physical position.  Format (one line per transverse direction, in
@@ -170,8 +171,52 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
       // p2 = p3 = 0.  A trailer marks the file as uniform in the precursor's
       // Xi coordinate rather than in physical position; add_turb() inverts
       // the map before indexing the file.
+      //
+      // Scalar fields, stored in DAT like the velocity components (one FAB
+      // per plane, same box) after them:
+      //
+      //   SCALARS_V1 <nscal>
+      //   <name_1> ... <name_nscal>
+      //   <offset>   (nscal * kmax lines, scalar-major: all the planes of
+      //               the first scalar, then of the second, ...)
+      //
+      // Names are free-form tokens (no white space); their meaning is up to
+      // the solver, e.g. PeleLMeX plotfile names such as temp or Y(N2).
       std::string token;
       while (is >> token) {
+        if (token == "SCALARS_V1") {
+          AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+            tp[n].nscal == 0,
+            "TurbInflow::init(): duplicate SCALARS_V1 trailer in " +
+              turb_header);
+          is >> tp[n].nscal;
+          AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+            is.good() && tp[n].nscal > 0,
+            "TurbInflow::init(): malformed SCALARS_V1 trailer in " +
+              turb_header);
+          tp[n].scal_names.resize(tp[n].nscal);
+          for (auto& name : tp[n].scal_names) {
+            is >> name;
+          }
+          tp[n].scal_offset.resize(
+            static_cast<size_t>(tp[n].nscal) * tp[n].kmax);
+          for (auto& off : tp[n].scal_offset) {
+            is >> off;
+          }
+          AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+            !is.fail(),
+            "TurbInflow::init(): SCALARS_V1 trailer of " + turb_header +
+              " is truncated (expected nscal names and nscal*kmax offsets)");
+          if (tp[n].verbose > 0) {
+            amrex::Print() << "   " << tp_list[n] << " carries " << tp[n].nscal
+                           << " scalar field(s):";
+            for (const auto& name : tp[n].scal_names) {
+              amrex::Print() << " " << name;
+            }
+            amrex::Print() << "\n";
+          }
+          continue;
+        }
         if (token != "MESHMAP_V1" && token != "MESHMAP_V2") {
           amrex::Print() << "TurbInflow: WARNING ignoring unrecognised "
                             "trailing content in "
@@ -244,14 +289,13 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
         }
       }
 
-      // Plane chunk
+      // Plane chunk: the velocity components, then the scalars
       amrex::Box sbx(
         amrex::IntVect(AMREX_D_DECL(0, 0, 0)),
         amrex::IntVect(
           AMREX_D_DECL(npts[0] - 1, npts[1] - 1, tp[n].nplane - 1)));
-
       tp[n].sdata = std::make_unique<amrex::FArrayBox>(
-        sbx, AMREX_SPACEDIM, amrex::The_Async_Arena());
+        sbx, AMREX_SPACEDIM + tp[n].nscal, amrex::The_Async_Arena());
 
       // Center the turbulence.  For a physically-uniform file turb_center
       // is in case units and the file is placed around it.  For a
@@ -332,6 +376,38 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
     }
     turbinflow_initialized = true;
   }
+
+  // The scalars of a face come from one file: scalar_sampler() returns a
+  // single view, and summing scalars like velocity fluctuations would be
+  // meaningless.
+  for (int a = 0; a < n_tp; ++a) {
+    for (int b = a + 1; b < n_tp; ++b) {
+      AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+        !(tp[a].nscal > 0 && tp[b].nscal > 0 && tp[a].dir == tp[b].dir &&
+          tp[a].side == tp[b].side),
+        "TurbInflow::init(): turbinflows " + tp_list[a] + " and " + tp_list[b] +
+          " both carry scalar fields on the same face");
+    }
+  }
+}
+
+bool
+TurbInflow::has_scalars() const
+{
+  return std::any_of(
+    tp.begin(), tp.end(), [](const TurbParm& t) { return t.nscal > 0; });
+}
+
+amrex::Vector<std::string>
+TurbInflow::scalar_names(
+  const int dir, const amrex::Orientation::Side& side) const
+{
+  for (const auto& tpn : tp) {
+    if (tpn.dir == dir && tpn.side == side && tpn.nscal > 0) {
+      return tpn.scal_names;
+    }
+  }
+  return {};
 }
 
 TurbFileSampler
@@ -340,6 +416,7 @@ TurbInflow::file_sampler(TurbParm& a_tp, const amrex::Real z)
   TurbFileSampler s;
   prepare_planes(a_tp, z, s.cz, s.k0);
 
+  s.nscal = a_tp.nscal;
   s.sd = a_tp.sdata->const_array();
   for (int d = 0; d < 2; ++d) {
     s.npboxcells[d] = a_tp.npboxcells[d];
@@ -354,9 +431,23 @@ TurbInflow::file_sampler(TurbParm& a_tp, const amrex::Real z)
   s.tile_periodic = a_tp.tile_periodic;
   s.extrap_nonperiodic = a_tp.extrap_nonperiodic;
   s.lininterp = a_tp.interp_type == TurbInterpType::linear;
+  s.scale_loc = a_tp.turb_scale_loc;
   s.has_map = a_tp.has_map;
   s.map = a_tp.map;
   return s;
+}
+
+TurbFileSampler
+TurbInflow::scalar_sampler(
+  const int dir, const amrex::Orientation::Side& side, const amrex::Real time)
+{
+  AMREX_ALWAYS_ASSERT(turbinflow_initialized);
+  for (auto& tpn : tp) {
+    if (tpn.dir == dir && tpn.side == side && tpn.nscal > 0) {
+      return file_sampler(tpn, sampling_position(tpn, time));
+    }
+  }
+  return TurbFileSampler{};
 }
 
 amrex::Real
@@ -653,13 +744,18 @@ TurbInflow::read_one_turb_plane(TurbParm& a_tp, int iplane, int k)
   dstBox.setSmall(AMREX_SPACEDIM - 1, iplane);
   dstBox.setBig(AMREX_SPACEDIM - 1, iplane);
 
-  for (int n = 0; n < AMREX_SPACEDIM; ++n) {
+  // Velocity components, then the scalars (SCALARS_V1 trailer)
+  for (int n = 0; n < AMREX_SPACEDIM + a_tp.nscal; ++n) {
 
-    const long offset_idx = k + (n * a_tp.kmax);
+    const bool is_vel = n < AMREX_SPACEDIM;
+    const auto& offsets = is_vel ? a_tp.offset : a_tp.scal_offset;
+    const long offset_idx =
+      k + ((is_vel ? n : n - AMREX_SPACEDIM) * static_cast<long>(a_tp.kmax));
     AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-      offset_idx < a_tp.offset.size(), "Bad turb fab offset idx");
+      offset_idx < static_cast<long>(offsets.size()),
+      "Bad turb fab offset idx");
 
-    const long start = a_tp.offset[offset_idx];
+    const long start = offsets[offset_idx];
     ifs.seekg(start, std::ios::beg);
 
     if (!ifs.good()) {
