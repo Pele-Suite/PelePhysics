@@ -8,6 +8,7 @@
 #include <AMReX_Geometry.H>
 #include <AMReX_ParmParse.H>
 
+#include <cmath>
 #include <memory>
 
 // Relative to this header so that a build which lists TurbInflow but not
@@ -41,6 +42,155 @@
 namespace pele::physics::turbinflow {
 
 AMREX_ENUM(TurbInterpType, linear, quadratic);
+
+/**
+ * \brief Device-callable view of the plane chunk of one turbulence file at
+ *        one through-plane position: the interpolation of the file.
+ *
+ * Obtained from TurbInflow::file_sampler() right before use: it points at the
+ * plane chunk currently loaded in memory and holds the through-plane weights
+ * for the requested position, so it is invalidated by the next load of that
+ * file's planes.  Trivially copyable, so it can be captured by value in a
+ * kernel or a boundary-fill functor.
+ */
+struct TurbFileSampler
+{
+  amrex::Array4<const amrex::Real> sd;
+
+  amrex::GpuArray<int, 2> npboxcells = {{0, 0}};
+  amrex::GpuArray<amrex::Real, 2> pboxlo = {{0.0, 0.0}};
+  amrex::GpuArray<amrex::Real, 2> pboxsize = {{0.0, 0.0}};
+  amrex::GpuArray<amrex::Real, 2> dx = {{0.0, 0.0}};
+  amrex::GpuArray<amrex::Real, 2> dxinv = {{0.0, 0.0}};
+  amrex::GpuArray<int, 2> periodicity = {{1, 1}};
+  bool tile_periodic = false;
+  bool extrap_nonperiodic = false;
+  bool lininterp = false;
+
+  // Through-plane stencil: planes k0, k0+1, k0+2 with weights cz
+  int k0 = 0;
+  amrex::GpuArray<amrex::Real, 3> cz = {{0.0, 0.0, 0.0}};
+
+  bool has_map = false;
+  pele::physics::MeshMapEvaluator map{};
+  amrex::GpuArray<amrex::Real, 2> map_xi_lo = {{0.0, 0.0}};
+  amrex::GpuArray<amrex::Real, 2> map_xi_hi = {{0.0, 0.0}};
+
+  //! Transverse interpolation stencil of one position, shared by all the
+  //! components sampled there
+  struct Stencil
+  {
+    amrex::GpuArray<int, 2> i0{};
+    amrex::GpuArray<amrex::GpuArray<amrex::Real, 3>, 2> c{};
+  };
+
+  /**
+   * \brief Locate a position given in file coordinates (see
+   *        file_coordinate()).
+   *
+   * Returns false when it lies outside the file (and the file is not tiled
+   * there), so that the caller can fall back to its own boundary value.
+   */
+  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE bool locate_file(
+    const amrex::Real xf1, const amrex::Real xf2, Stencil& st) const noexcept
+  {
+    const amrex::GpuArray<amrex::Real, 2> xf = {xf1, xf2};
+    for (int d = 0; d < 2; ++d) {
+      const amrex::Real from_lo = xf[d] - pboxlo[d];
+      const bool inside = (from_lo >= 0.0 && from_lo < pboxsize[d]) ||
+                          (tile_periodic && periodicity[d] != 0);
+      if (!inside) {
+        return false;
+      }
+      if (
+        (from_lo < 0.5 * dx[d] || from_lo > pboxsize[d] - dx[d]) &&
+        (periodicity[d] == 0) && !extrap_nonperiodic) {
+        amrex::Error(
+          "TurbInflow interp stencil touches ghost cell for nonperiodic "
+          "direction and extrap_nonperiodic option not used");
+      }
+      // From the first cell center (ghost cell, 1/2 dx outside of pbox)
+      amrex::Real ff = from_lo * dxinv[d] + 0.5;
+      int i0 = static_cast<int>(std::floor(ff));
+      ff -= static_cast<amrex::Real>(i0);
+      if (tile_periodic) {
+        i0 = (i0 % npboxcells[d] + npboxcells[d]) % npboxcells[d];
+      }
+      st.i0[d] = i0;
+      st.c[d][0] = lininterp ? 1.0 - ff : 0.5 * (ff - 1.0) * (ff - 2.0);
+      st.c[d][1] = lininterp ? ff : ff * (2.0 - ff);
+      st.c[d][2] = lininterp ? 0.0 : 0.5 * ff * (ff - 1.0);
+    }
+    return true;
+  }
+
+  //! Coordinate in the file of a position (already scaled to file units)
+  //! along transverse direction \p d: the identity for a file that is uniform
+  //! in physical position, the inverse of the file's map for a mesh-mapped
+  //! one (with the tile_periodic wrap applied first).
+  [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real
+  file_coordinate(const int d, const amrex::Real x_file_phys) const noexcept
+  {
+    if (!has_map) {
+      return x_file_phys;
+    }
+    const amrex::Real xi_lo = map_xi_lo[d];
+    const amrex::Real xi_hi = map_xi_hi[d];
+    const amrex::Real x_lo = map.x_phys_from_xi(d, xi_lo, xi_lo, xi_hi);
+    const amrex::Real x_hi = map.x_phys_from_xi(d, xi_hi, xi_lo, xi_hi);
+
+    amrex::Real x = x_file_phys;
+    if (tile_periodic && periodicity[d] != 0) {
+      // Tiled: bring x into the file's physical period before inverting.
+      // The inverse clamps to [x_lo, x_hi], which would otherwise collapse
+      // every tiled copy onto the edge of the file.
+      const amrex::Real period = x_hi - x_lo;
+      x -= std::floor((x - x_lo) / period) * period;
+    } else if (x < x_lo || x >= x_hi) {
+      // Outside the file's physical extent.  A physically-uniform file leaves
+      // such positions unfilled (the range test of the interpolation); keep
+      // that behaviour rather than let the clamped inverse pin them to the
+      // edge row, by returning a Xi coordinate that is outside the box
+      // whatever turb_center shifted pboxlo to (|shift| <= pboxsize/2).
+      return (x < x_lo) ? xi_lo - pboxsize[d] : xi_hi + pboxsize[d];
+    }
+
+    amrex::Real xi = map.xi_from_x_phys(d, x, xi_lo, xi_hi);
+
+    // When the target's map and Xi grid coincide with the file's, xi lands on
+    // a file cell centre up to the round-off of the inverse (log/atanh, or
+    // the Newton tolerance for InteriorStretch).  Snap it so that the
+    // interpolation weights collapse exactly and the same-map case
+    // reproduces the file bit for bit.
+    const amrex::Real idx = (xi - pboxlo[d]) * dxinv[d] + 0.5;
+    const amrex::Real idx_round = std::round(idx);
+    constexpr amrex::Real snap_tol = 1.0e-8;
+    if (std::abs(idx - idx_round) < snap_tol) {
+      xi = pboxlo[d] + (idx_round - 0.5) * dx[d];
+    }
+    return xi;
+  }
+
+  //! Value of chunk component \p n at a located position
+  [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real
+  component(const Stencil& st, const int n) const noexcept
+  {
+    amrex::GpuArray<amrex::Real, 3> ydata{};
+    for (int ii = 0; ii <= 2; ++ii) {
+      amrex::GpuArray<amrex::Real, 3> zdata{};
+      for (int jj = 0; jj <= 2; ++jj) {
+        const int i = st.i0[0] + ii;
+        const int j = st.i0[1] + jj;
+        zdata[jj] = cz[0] * sd(i, j, k0, n) + cz[1] * sd(i, j, k0 + 1, n) +
+                    cz[2] * sd(i, j, k0 + 2, n);
+      }
+      ydata[ii] =
+        st.c[1][0] * zdata[0] + st.c[1][1] * zdata[1] + st.c[1][2] * zdata[2];
+    }
+    return st.c[0][0] * ydata[0] + st.c[0][1] * ydata[1] +
+           st.c[0][2] * ydata[2];
+  }
+};
 
 struct TurbParm
 {
@@ -274,19 +424,28 @@ public:
 
   static void read_one_turb_plane(TurbParm& a_tp, int iplane, int k);
 
-  static void fill_turb_plane(
+  //! Through-plane sampling position of \p a_tp at \p time: the plane time
+  //! for time-plane files, else the convected distance (file units).
+  static amrex::Real sampling_position(const TurbParm& a_tp, amrex::Real time);
+
+  //! Make sure the planes around \p z are loaded and return the
+  //! through-plane stencil (planes k0..k0+2 of sdata, weights cz).
+  static void prepare_planes(
     TurbParm& a_tp,
+    amrex::Real z,
+    amrex::GpuArray<amrex::Real, 3>& cz,
+    int& k0);
+
+  //! Load the planes around through-plane position \p z and return the
+  //! sampler of \p a_tp's file there.  Host only; used on the device.
+  static TurbFileSampler file_sampler(TurbParm& a_tp, amrex::Real z);
+
+  static void fill_turb_plane(
+    const TurbParm& a_tp,
+    const TurbFileSampler& sampler,
     const amrex::Vector<amrex::Real>& x,
     const amrex::Vector<amrex::Real>& y,
-    amrex::Real z,
     amrex::FArrayBox& v);
-
-  //! Turbulence-file coordinate of a physical position (already in file
-  //! units) along transverse direction \p idim of \p a_tp: the identity
-  //! for a physically-uniform file, the inverse of the file's map for a
-  //! mesh-mapped one (with the tile_periodic wrap applied first).
-  static amrex::Real
-  file_coordinate(const TurbParm& a_tp, int idim, amrex::Real x_file_phys);
 
   //! Smallest and largest physical transverse spacing of \p a_tp's file in
   //! case units, per transverse direction.
