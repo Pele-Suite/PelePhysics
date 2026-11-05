@@ -445,8 +445,8 @@ struct SimpleTransport
     // Requesting chit with the mixture model is a caller error: the model is
     // a runtime option, so check tparm->conductivity_model at setup. It is
     // trapped in DEBUG builds and otherwise yields chit = 0.
-    AMREX_ASSERT(!(
-      wtr_get_chit && tparm->conductivity_model == ConductivityModel::Mixture));
+    AMREX_ASSERT(
+      !wtr_get_chit || tparm->conductivity_model != ConductivityModel::Mixture);
     if (
       wtr_get_chit && (chit != nullptr) &&
       tparm->conductivity_model == ConductivityModel::Mixture) {
