@@ -2,11 +2,26 @@
 
 import bisect
 import itertools
+import warnings
 
 import numpy as np
 from cantera.speciesthermo import Nasa9PolyMultiTempRegion, NasaPoly2
 
 import ceptr.writer as cw
+
+# Exponents of T in the cp/R basis of each polynomial form
+CP_EXPONENTS = {"nasa7": np.arange(0, 5), "nasa9": np.arange(-2, 5)}
+# h and s are pinned to their original values at this temperature when smoothing
+SMOOTH_TREF = 298.15
+# Sample points per temperature range in the smoothing fit
+SMOOTH_NSAMPLES = 200
+# Jumps at a polynomial break above these limits are treated as bad input data
+SMOOTH_MAX_JUMPS = {"cp/R": 0.5, "h/RT": 0.05, "s/R": 0.05}
+# Jumps above these limits are reported by the continuity check. They sit above the
+# rounding of published coefficients, which is around 1e-6 for cp, h and s.
+CONTINUITY_TOLS = {"cp/R": 1e-3, "dcp/RdT": 1e-6, "h/RT": 1e-3, "s/R": 1e-3}
+# Largest relative change in cp that smoothing may make to a species
+SMOOTH_MAX_CP_ERROR = 0.05
 
 
 def thermo(fstream, mechanism, species_info, syms=None):
@@ -259,6 +274,272 @@ def analyze_thermodynamics(mechanism, species_list):
         models.append(dct)
 
     return models
+
+
+def thermo_zones(model):
+    """Return the temperature bounds and per-range coefficients of a model.
+
+    Coefficients are ordered by increasing temperature range, each holding the
+    cp/R coefficients followed by the enthalpy and entropy constants. Returns
+    None for a model with a single polynomial, which has no break to smooth.
+    """
+    if model_type(model) == "nasa7":
+        high, low = model.coeffs[1:8], model.coeffs[8:15]
+        # Same test as analyze_thermodynamics, which emits one polynomial for these
+        if np.allclose(high, low, atol=1e-22):
+            return None
+        return [model.min_temp, model.coeffs[0], model.max_temp], [low, high]
+
+    order = _zone_order(model)
+    if len(order) < 2:
+        return None
+    lows = [model.coeffs[1 + 11 * x] for x in order]
+    highs = [model.coeffs[2 + 11 * x] for x in order]
+    assert lows[1:] == highs[:-1], "NASA9 temperature ranges must be contiguous."
+    return lows + highs[-1:], [model.coeffs[3 + 11 * x : 12 + 11 * x] for x in order]
+
+
+def _zone_order(model):
+    """Return NASA9 zone indices by increasing temperature."""
+    nzones = int(model.coeffs[0])
+    return sorted(range(nzones), key=lambda x: model.coeffs[1 + 11 * x])
+
+
+def _with_zones(model, coeffs):
+    """Return a copy of a model with new per-range coefficients."""
+    new_coeffs = np.array(model.coeffs)
+    if model_type(model) == "nasa7":
+        new_coeffs[8:15], new_coeffs[1:8] = coeffs
+    else:
+        for x, zone in zip(_zone_order(model), coeffs):
+            new_coeffs[3 + 11 * x : 12 + 11 * x] = zone
+    return type(model)(
+        model.min_temp, model.max_temp, model.reference_pressure, new_coeffs
+    )
+
+
+def _cp_r(exps, coeffs, temp):
+    """Evaluate cp/R."""
+    return sum(a * temp ** float(e) for a, e in zip(coeffs, exps))
+
+
+def _dcp_r_dt(exps, coeffs, temp):
+    """Evaluate d(cp/R)/dT."""
+    return sum(e * a * temp ** float(e - 1) for a, e in zip(coeffs, exps))
+
+
+def _h_rt(exps, coeffs, temp):
+    """Evaluate h/RT."""
+    integral = sum(
+        a * (np.log(temp) if e == -1 else temp ** float(e + 1) / (e + 1))
+        for a, e in zip(coeffs, exps)
+    )
+    return (integral + coeffs[len(exps)]) / temp
+
+
+def _s_r(exps, coeffs, temp):
+    """Evaluate s/R."""
+    integral = sum(
+        a * (np.log(temp) if e == 0 else temp ** float(e) / e)
+        for a, e in zip(coeffs, exps)
+    )
+    return integral + coeffs[len(exps) + 1]
+
+
+def break_jumps(exps, bounds, coeffs):
+    """Return the largest absolute jumps in each property across polynomial breaks."""
+    jumps = dict.fromkeys(("cp/R", "dcp/RdT", "h/RT", "s/R"), 0.0)
+    funcs = {"cp/R": _cp_r, "dcp/RdT": _dcp_r_dt, "h/RT": _h_rt, "s/R": _s_r}
+    for temp, low, high in zip(bounds[1:-1], coeffs, coeffs[1:]):
+        for name, func in funcs.items():
+            jumps[name] = max(
+                jumps[name], abs(func(exps, high, temp) - func(exps, low, temp))
+            )
+    return jumps
+
+
+def _fit_c1_cp(exps, bounds, coeffs):
+    """Fit cp/R over all ranges, with value and slope continuous at each break.
+
+    This is an equality-constrained least-squares problem, solved through its KKT
+    system. Temperature is scaled to keep that system well conditioned.
+    """
+    scale = 1000.0
+    nexps, nzones = len(exps), len(coeffs)
+
+    def basis(temp, deriv=0):
+        temp = np.atleast_1d(temp) / scale
+        if deriv == 0:
+            return np.stack([temp ** float(e) for e in exps], axis=1)
+        return np.stack([e * temp ** float(e - 1) for e in exps], axis=1)
+
+    lhs = np.zeros((SMOOTH_NSAMPLES * nzones, nexps * nzones))
+    rhs = np.zeros(SMOOTH_NSAMPLES * nzones)
+    for k, zone in enumerate(coeffs):
+        temps = np.linspace(bounds[k], bounds[k + 1], SMOOTH_NSAMPLES)
+        rows = slice(k * SMOOTH_NSAMPLES, (k + 1) * SMOOTH_NSAMPLES)
+        lhs[rows, k * nexps : (k + 1) * nexps] = basis(temps)
+        rhs[rows] = _cp_r(exps, zone, temps)
+
+    constraints = np.zeros((2 * (nzones - 1), nexps * nzones))
+    for k, temp in enumerate(bounds[1:-1]):
+        for deriv in (0, 1):
+            row = basis(temp, deriv)[0]
+            constraints[2 * k + deriv, k * nexps : (k + 1) * nexps] = row
+            constraints[2 * k + deriv, (k + 1) * nexps : (k + 2) * nexps] = -row
+
+    ncons = constraints.shape[0]
+    kkt = np.block(
+        [[lhs.T @ lhs, constraints.T], [constraints, np.zeros((ncons, ncons))]]
+    )
+    solution = np.linalg.solve(kkt, np.concatenate([lhs.T @ rhs, np.zeros(ncons)]))
+    fitted = solution[: nexps * nzones].reshape(nzones, nexps)
+    return fitted * scale ** (-exps.astype(float))
+
+
+def smooth_coefficients(exps, bounds, coeffs):
+    """Return coefficients giving C1 cp and C2 enthalpy and entropy across breaks.
+
+    Heat capacity is refit with its value and slope continuous at each break, and
+    the breaks themselves do not move. The integration constants reproduce the
+    original h and s at SMOOTH_TREF (or the nearest temperature in range), then
+    carry continuity of h and s out to the other ranges.
+    """
+    fitted = _fit_c1_cp(exps, bounds, coeffs)
+    nexps = len(exps)
+    smoothed = [np.concatenate([zone, [0.0, 0.0]]) for zone in fitted]
+
+    def match_constants(idx, temp, target):
+        smoothed[idx][nexps] = (
+            _h_rt(exps, target, temp) - _h_rt(exps, smoothed[idx], temp)
+        ) * temp
+        smoothed[idx][nexps + 1] = _s_r(exps, target, temp) - _s_r(
+            exps, smoothed[idx], temp
+        )
+
+    tref = np.clip(SMOOTH_TREF, bounds[0], bounds[-1])
+    pinned = min(bisect.bisect_right(bounds, tref) - 1, len(coeffs) - 1)
+    match_constants(pinned, tref, coeffs[pinned])
+    for idx in range(pinned + 1, len(coeffs)):
+        match_constants(idx, bounds[idx], smoothed[idx - 1])
+    for idx in range(pinned - 1, -1, -1):
+        match_constants(idx, bounds[idx + 1], smoothed[idx + 1])
+    return smoothed
+
+
+def _jumps_over(jumps, limits):
+    """Describe the jumps over their limits, or return an empty string if none are."""
+    return ", ".join(
+        f"{name} jump {jumps[name]:.3g} > {limit:g}"
+        for name, limit in limits.items()
+        if jumps[name] > limit
+    )
+
+
+def check_thermo_continuity(mechanism):
+    """Warn if thermodynamic polynomials are not C1 at their temperature breaks."""
+    bad_data = []
+    worst = {name: (0.0, None) for name in CONTINUITY_TOLS}
+    nspecies = 0
+    nflagged = 0
+    for species in mechanism.species():
+        zones = thermo_zones(species.thermo)
+        if zones is None:
+            continue
+        nspecies += 1
+        jumps = break_jumps(CP_EXPONENTS[model_type(species.thermo)], *zones)
+        if not _jumps_over(jumps, CONTINUITY_TOLS):
+            continue
+        nflagged += 1
+        for name in worst:
+            if jumps[name] > worst[name][0]:
+                worst[name] = (jumps[name], species.name)
+        bad = _jumps_over(jumps, SMOOTH_MAX_JUMPS)
+        if bad:
+            bad_data.append(f"{species.name}: {bad}")
+
+    if not nflagged:
+        return
+
+    largest = ", ".join(
+        f"{name} {jump:.3g} ({name_sp})"
+        for name, (jump, name_sp) in worst.items()
+        if jump > CONTINUITY_TOLS[name]
+    )
+    message = (
+        f"{nflagged} of {nspecies} multi-range species in {mechanism.source} are not C1"
+        f" at their temperature breaks. Largest jumps: {largest}."
+    )
+    if bad_data:
+        details = "\n  ".join(bad_data)
+        message += (
+            f"\nThese jumps are too large to be smoothed, so check the data of these"
+            f" species:\n  {details}\nThen rerun CEPTR with --smooth_thermo to refit"
+            " the polynomials."
+        )
+    else:
+        message += " Rerun CEPTR with --smooth_thermo to refit the polynomials."
+    warnings.warn(message, stacklevel=2)
+
+
+def smooth_thermo(mechanism):
+    """Refit the thermodynamic polynomials of a mechanism in place to be C1.
+
+    Raises ValueError, before changing anything, if a species has jumps too large
+    to be anything but bad input data, or would need too large a change in cp. A
+    refit would otherwise hide such an error by spreading it over the whole range.
+    """
+    updates = {}
+    errors = []
+    worst_cp_error = 0.0
+    for species in mechanism.species():
+        model = species.thermo
+        mtype = model_type(model)
+        zones = thermo_zones(model)
+        if zones is None:
+            continue
+        bounds, coeffs = zones
+        exps = CP_EXPONENTS[mtype]
+
+        jumps = break_jumps(exps, bounds, coeffs)
+        bad = _jumps_over(jumps, SMOOTH_MAX_JUMPS)
+        if bad:
+            errors.append(f"{species.name}: {bad}")
+            continue
+
+        smoothed = smooth_coefficients(exps, bounds, coeffs)
+        cp_error = 0.0
+        for k, (old, new) in enumerate(zip(coeffs, smoothed)):
+            temps = np.linspace(bounds[k], bounds[k + 1], SMOOTH_NSAMPLES)
+            old_cp = _cp_r(exps, old, temps)
+            cp_error = max(
+                cp_error,
+                np.max(np.abs(_cp_r(exps, new, temps) - old_cp) / np.abs(old_cp)),
+            )
+        if cp_error > SMOOTH_MAX_CP_ERROR:
+            errors.append(
+                f"{species.name}: cp change {cp_error:.3g} >"
+                f" {SMOOTH_MAX_CP_ERROR:g}"
+            )
+            continue
+
+        worst_cp_error = max(worst_cp_error, cp_error)
+        updates[species.name] = (species, _with_zones(model, smoothed))
+
+    if errors:
+        details = "\n  ".join(errors)
+        raise ValueError(
+            "Cannot smooth thermodynamic data, check these species in the"
+            f" mechanism:\n  {details}"
+        )
+
+    for name, (species, model) in updates.items():
+        species.thermo = model
+        mechanism.modify_species(mechanism.species_index(name), species)
+    print(
+        f"Smoothed thermodynamic data of {len(updates)} species, largest change in"
+        f" cp {100 * worst_cp_error:.3g}%"
+    )
 
 
 def generate_thermo_routine(

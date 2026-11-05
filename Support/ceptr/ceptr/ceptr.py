@@ -9,6 +9,7 @@ from multiprocessing import Pool, cpu_count
 import cantera as ct
 
 import ceptr.converter as converter
+import ceptr.thermo as cth
 
 
 def parse_lst_file(lst):
@@ -57,6 +58,7 @@ def convert(
     gas_name,
     interface_name,
     plog_pressure,
+    smooth_thermo=False,
 ):
     """Convert a mechanism file."""
     print(f"""Converting file {fname}""")
@@ -72,6 +74,19 @@ def convert(
     mechanism = (
         ct.Solution(fname) if mechanism_is_homogeneous else interface.adjacent[gas_name]
     )
+
+    if smooth_thermo:
+        if not mechanism_is_homogeneous:
+            raise NotImplementedError(
+                "--smooth_thermo does not support heterogeneous chemistry."
+            )
+        cth.smooth_thermo(mechanism)
+        fpath = pathlib.Path(fname)
+        smoothed = fpath.with_name(f"{fpath.stem}_smoothed{fpath.suffix}")
+        mechanism.write_yaml(smoothed, header=True)
+        print(f"Wrote smoothed mechanism to {smoothed}")
+    elif mechanism_is_homogeneous:
+        cth.check_thermo_continuity(mechanism)
 
     conv = converter.Converter(
         mechanism,
@@ -95,6 +110,7 @@ def convert_lst(
     chemistry,
     gas_name,
     interface_name,
+    smooth_thermo=False,
 ):
     """Convert mechanisms from a file containing a list of directories."""
     mechnames, plog_pressures = parse_lst_file(lst)
@@ -111,6 +127,7 @@ def convert_lst(
                 repeat(gas_name),
                 repeat(interface_name),
                 plog_pressures,
+                repeat(smooth_thermo),
             ),
         )
 
@@ -122,6 +139,7 @@ def convert_lst_qss(
     chemistry,
     gas_name,
     interface_name,
+    smooth_thermo=False,
 ):
     """Convert QSS mechanisms from a file of directories and format input."""
     mechnames, qss_format_inputs, plog_pressures = parse_qss_lst_file(lst)
@@ -138,6 +156,7 @@ def convert_lst_qss(
                 repeat(gas_name),
                 repeat(interface_name),
                 plog_pressures,
+                repeat(smooth_thermo),
             ),
         )
 
@@ -214,6 +233,13 @@ def main():
         default=None,
     )
 
+    parser.add_argument(
+        "--smooth_thermo",
+        action="store_true",
+        help="Refit thermodynamic polynomials so cp is C1 and h and s are C2 across"
+        + " their temperature breaks, and write the result to <mechanism>_smoothed.yaml",
+    )
+
     args = parser.parse_args()
 
     if args.chemistry == "heterogeneous":
@@ -231,6 +257,7 @@ def main():
             args.gas_name,
             args.interface_name,
             args.plog_pressure,
+            args.smooth_thermo,
         )
     elif args.lst:
         convert_lst(
@@ -242,6 +269,7 @@ def main():
             args.chemistry,
             args.gas_name,
             args.interface_name,
+            args.smooth_thermo,
         )
     elif args.lst_qss:
         convert_lst_qss(
@@ -251,6 +279,7 @@ def main():
             args.chemistry,
             args.gas_name,
             args.interface_name,
+            args.smooth_thermo,
         )
     end = time.time()
     print(f"CEPTR run time: {end-start:.2f} s")
