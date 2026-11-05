@@ -90,6 +90,18 @@ There are three ways to use CEPTR to generate C++ mechanism files for a given ch
      $ bash ${PELE_PHYSICS_HOME}/Mechanisms/converter.sh -f ./LiDryer/mechanism.yaml
 
 
+Smoothing thermodynamic polynomials
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+NASA polynomials are usually fit separately over each temperature range, so properties can jump at the temperature breaks and the slope of ``cp`` generally does. For homogeneous chemistry, CEPTR warns when a mechanism is not C1 at its breaks. To refit the polynomials, add ``--smooth_thermo``::
+
+     $ poetry run convert -f ${PELE_PHYSICS_HOME}/Mechanisms/LiDryer/mechanism.yaml --smooth_thermo
+
+This refits ``cp`` with its value and slope continuous at each break, which makes ``cp`` C1 and ``h``, ``s`` and ``g`` C2. The breaks do not move, and ``h`` and ``s`` keep their original values at 298.15 K, or at the lowest temperature of the species if that is higher. The input file is not changed: the refit mechanism is written to ``mechanism_smoothed.yaml`` so that Cantera can use the same data as the generated code.
+
+The refit changes results slightly and changes the generated files of nearly every mechanism, so it is off by default. CEPTR stops with an error rather than smoothing a species whose jumps are large enough to suggest bad input data (above 0.5 in ``cp/R`` or 0.05 in ``h/RT`` or ``s/R``), or whose ``cp`` would change by more than 5%. The data for such a species needs correcting in the mechanism first.
+
+
 Generating a reduced, QSS chemistry file
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
