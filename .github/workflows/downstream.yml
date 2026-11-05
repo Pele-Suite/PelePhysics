@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   Detect-Changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       has-source-changes: ${{ steps.changes.outputs.src }}
     steps:
@@ -38,7 +38,7 @@ jobs:
     needs: Detect-Changes
     if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     name: PeleLMeX GNU MPI Run [FlameSheet]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       {CXXFLAGS: "-Werror -Wshadow -Woverloaded-virtual -Wunreachable-code"}
 
@@ -86,7 +86,7 @@ jobs:
     needs: Detect-Changes
     if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     name: PeleC GNU MPI Run [PMF]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       {CXXFLAGS: "-Werror -Wshadow -Woverloaded-virtual -Wunreachable-code"}
 
