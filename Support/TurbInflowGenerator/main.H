@@ -26,8 +26,8 @@ void turbinflow_from_turb_box(std::ofstream& ifsd, std::ofstream& ifsh);
  * the file is tagged as uniform in the precursor's computational (Xi)
  * coordinate.  \p probDomain is the plotfile's (Xi-space) problem domain and
  * \p dim_map the plotfile axes that become the file's transverse directions
- * 0 and 1 and its normal 2.  Writes nothing without a mapping.  Must be the
- * last thing written to HDR.
+ * 0 and 1 and its normal 2.  Writes nothing without a mapping.  Must come
+ * after the plane offsets and times.
  */
 void write_meshmap_trailer(
   std::ofstream& ifsh,
