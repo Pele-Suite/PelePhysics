@@ -101,41 +101,47 @@ turbinflow_from_diag_frame_planes(std::ofstream& ifsd, std::ofstream& ifsh)
   Vector<Real> fileTimes(nf);
   IntVect periodicity{perio[0], perio[1], 0};
   IntVect dim_map{0, 1, 2};
+
+  // Extract plane k of plotfile component comp and append it to DAT, its
+  // offset to HDR
+  auto write_plane = [&](const int comp, const int k, const bool get_time) {
+    pele::physics::pltfilemanager::PltFileManager pltfile(ifiles[k]);
+    if (get_time) {
+      fileTimes[k] = pltfile.getTime();
+      int Nlevels = pltfile.getNlev();
+      AMREX_ALWAYS_ASSERT(save_level >= 0 && save_level < Nlevels);
+    }
+
+    // Dummy MultiFab with 1 Fab and 2 ghost cells
+    BoxArray bxs{domain};
+    DistributionMapping dm{bxs, 1};
+    MultiFab mf{bxs, dm, 1, {0, 0, 0}};
+    Geometry geom{domain, probDomain, coord_sys, perio};
+    pltfile.fillPatchFromPlt(save_level, geom, comp, 0, 1, mf);
+    Box tbx{{0, 0, 0}, {bg[0] + 2, bg[1] + 2, 0}};
+    FArrayBox TMP(tbx, 1);
+    TMP.setVal(1.2e34);
+
+    const auto& pltarr = mf[0].const_array();
+    const auto& planearr = TMP.array();
+
+    ParallelFor(tbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      const IntVect idx_plane{i, j, k};
+      const IntVect idx_plt =
+        index_mapper(idx_plane, dim_map, domain, periodicity);
+      planearr(idx_plane) = pltarr(idx_plt);
+    });
+    ifsh << ifsd.tellp() << std::endl;
+    TMP.writeOn(ifsd);
+    amrex::Print() << "for comp = " << comp << " and k = " << k
+                   << ": minval = " << TMP.min(0) << ", maxval = " << TMP.max(0)
+                   << std::endl;
+  };
+
   for (int d = 0; d < varidx.size(); ++d) {
     std::cout << "Loading component " << d << " ... " << std::endl;
-
     for (int k = 0; k < nf; ++k) {
-      pele::physics::pltfilemanager::PltFileManager pltfile(ifiles[k]);
-      if (d == 0) {
-        fileTimes[k] = pltfile.getTime();
-        int Nlevels = pltfile.getNlev();
-        AMREX_ALWAYS_ASSERT(save_level >= 0 && save_level < Nlevels);
-      }
-
-      // Dummy MultiFab with 1 Fab and 2 ghost cells
-      BoxArray bxs{domain};
-      DistributionMapping dm{bxs, 1};
-      MultiFab mf{bxs, dm, 1, {0, 0, 0}};
-      Geometry geom{domain, probDomain, coord_sys, perio};
-      pltfile.fillPatchFromPlt(save_level, geom, varidx[d], 0, 1, mf);
-      Box tbx{{0, 0, 0}, {bg[0] + 2, bg[1] + 2, 0}};
-      FArrayBox TMP(tbx, 1);
-      TMP.setVal(1.2e34);
-
-      const auto& pltarr = mf[0].const_array();
-      const auto& planearr = TMP.array();
-
-      ParallelFor(tbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        const IntVect idx_plane{i, j, k};
-        const IntVect idx_plt =
-          index_mapper(idx_plane, dim_map, domain, periodicity);
-        planearr(idx_plane) = pltarr(idx_plt);
-      });
-      ifsh << ifsd.tellp() << std::endl;
-      TMP.writeOn(ifsd);
-      amrex::Print() << "for d = " << d << " and k = " << k
-                     << ": minval = " << TMP.min(0)
-                     << ", maxval = " << TMP.max(0) << std::endl;
+      write_plane(varidx[d], k, d == 0);
     }
     std::cout << "done" << std::endl;
   }

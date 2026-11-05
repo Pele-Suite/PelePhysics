@@ -103,10 +103,12 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
       }
 
       for (int idim = 0; idim < 2; ++idim) {
-        tp[n].dx[idim] = probsize[idim] / amrex::Real(npts[idim] - 1);
+        tp[n].dx[idim] =
+          probsize[idim] / static_cast<amrex::Real>(npts[idim] - 1);
         tp[n].dxinv[idim] = 1.0 / tp[n].dx[idim];
       }
-      AMREX_D_TERM(, , tp[n].dx[2] = probsize[2] / amrex::Real(npts[2]);)
+      AMREX_D_TERM(
+        , , tp[n].dx[2] = probsize[2] / static_cast<amrex::Real>(npts[2]);)
       AMREX_D_TERM(, , tp[n].dxinv[2] = 1.0 / tp[n].dx[2];)
 
       // The following is relative to the injection face:
@@ -133,13 +135,6 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
           tp[n].nplane, tp[n].nplane, amrex::min<int>(tp[n].nplane, npts[2]));
       }
 
-      amrex::Box sbx(
-        amrex::IntVect(AMREX_D_DECL(0, 0, 0)),
-        amrex::IntVect(
-          AMREX_D_DECL(npts[0] - 1, npts[1] - 1, tp[n].nplane - 1)));
-
-      tp[n].sdata = new amrex::FArrayBox(sbx, 3, amrex::The_Async_Arena());
-
       AMREX_D_TERM(, , tp[n].kmax = npts[2];)
 
       // Offset for each plane in Binary TurbFile
@@ -155,11 +150,13 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
         }
       }
 
-      // Optional trailer.  Everything a legacy reader consumes ends with the
+      // Optional trailers.  Everything a legacy reader consumes ends with the
       // plane times, so anything appended after them is invisible to older
-      // code and a file without it is, by declaration, uniform in physical
-      // position.  Format (one line per transverse direction, in the file's
-      // own transverse order):
+      // code.  Each trailer starts with a keyword token.
+      //
+      // Mesh mapping.  A file without it is, by declaration, uniform in
+      // physical position.  Format (one line per transverse direction, in
+      // the file's own transverse order):
       //
       //   MESHMAP_V2
       //   <kind> <p> <p2> <p3> <q> <xi_lo> <xi_hi>
@@ -174,7 +171,16 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
       // Xi coordinate rather than in physical position; add_turb() inverts
       // the map before indexing the file.
       std::string token;
-      if ((is >> token) && (token == "MESHMAP_V1" || token == "MESHMAP_V2")) {
+      while (is >> token) {
+        if (token != "MESHMAP_V1" && token != "MESHMAP_V2") {
+          amrex::Print() << "TurbInflow: WARNING ignoring unrecognised "
+                            "trailing content in "
+                         << turb_header << " starting at '" << token << "'\n";
+          break;
+        }
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+          !tp[n].has_map,
+          "TurbInflow::init(): duplicate MESHMAP trailer in " + turb_header);
         const bool v2 = (token == "MESHMAP_V2");
         int kind[2] = {0, 0};
         for (int idim = 0; idim < 2; ++idim) {
@@ -236,11 +242,16 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
                             "coordinate (map kind "
                          << kind[0] << ")\n";
         }
-      } else if (!token.empty() && !is.eof()) {
-        amrex::Print() << "TurbInflow: WARNING ignoring unrecognised trailing "
-                          "content in "
-                       << turb_header << " starting at '" << token << "'\n";
       }
+
+      // Plane chunk
+      amrex::Box sbx(
+        amrex::IntVect(AMREX_D_DECL(0, 0, 0)),
+        amrex::IntVect(
+          AMREX_D_DECL(npts[0] - 1, npts[1] - 1, tp[n].nplane - 1)));
+
+      tp[n].sdata = std::make_unique<amrex::FArrayBox>(
+        sbx, AMREX_SPACEDIM, amrex::The_Async_Arena());
 
       // Center the turbulence.  For a physically-uniform file turb_center
       // is in case units and the file is placed around it.  For a
@@ -321,6 +332,45 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
     }
     turbinflow_initialized = true;
   }
+}
+
+TurbFileSampler
+TurbInflow::file_sampler(TurbParm& a_tp, const amrex::Real z)
+{
+  TurbFileSampler s;
+  prepare_planes(a_tp, z, s.cz, s.k0);
+
+  s.sd = a_tp.sdata->const_array();
+  for (int d = 0; d < 2; ++d) {
+    s.npboxcells[d] = a_tp.npboxcells[d];
+    s.pboxlo[d] = a_tp.pboxlo[d];
+    s.pboxsize[d] = a_tp.pboxsize[d];
+    s.dx[d] = a_tp.dx[d];
+    s.dxinv[d] = a_tp.dxinv[d];
+    s.periodicity[d] = a_tp.periodicity[d];
+    s.map_xi_lo[d] = a_tp.map_xi_lo[d];
+    s.map_xi_hi[d] = a_tp.map_xi_hi[d];
+  }
+  s.tile_periodic = a_tp.tile_periodic;
+  s.extrap_nonperiodic = a_tp.extrap_nonperiodic;
+  s.lininterp = a_tp.interp_type == TurbInterpType::linear;
+  s.has_map = a_tp.has_map;
+  s.map = a_tp.map;
+  return s;
+}
+
+amrex::Real
+TurbInflow::sampling_position(const TurbParm& a_tp, const amrex::Real time)
+{
+  if (a_tp.istimeplanes) {
+    return time + a_tp.time_shift;
+  }
+  if (a_tp.convected_distance >= 0.0) {
+    // Through-plane position supplied as a physical convected distance
+    // (e.g. the time-integrated inlet velocity); turb_conv_vel is bypassed.
+    return a_tp.convected_distance * a_tp.turb_scale_loc;
+  }
+  return (time + a_tp.time_shift) * a_tp.turb_conv_vel * a_tp.turb_scale_loc;
 }
 
 bool
@@ -536,75 +586,23 @@ TurbInflow::add_turb(
       // once by the caller.  For a mesh-mapped file the scaled physical
       // position is then inverted through the file's map into the
       // precursor's Xi coordinate, which is what indexes the file.
+      const TurbFileSampler sampler =
+        file_sampler(tpn, sampling_position(tpn, time));
       amrex::Vector<amrex::Real> x(turbBox.size()[0]), y(turbBox.size()[1]);
       for (int i = 0; i < static_cast<int>(x.size()); ++i) {
-        x[i] = file_coordinate(tpn, 0, x_phys[i] * tpn.turb_scale_loc);
+        x[i] = sampler.file_coordinate(0, x_phys[i] * tpn.turb_scale_loc);
       }
       for (int j = 0; j < static_cast<int>(y.size()); ++j) {
-        y[j] = file_coordinate(tpn, 1, y_phys[j] * tpn.turb_scale_loc);
+        y[j] = sampler.file_coordinate(1, y_phys[j] * tpn.turb_scale_loc);
       }
 
       // Get the turbulence
-      amrex::Real z;
-      if (tpn.istimeplanes) {
-        z = time + tpn.time_shift;
-      } else if (tpn.convected_distance >= 0.0) {
-        // Through-plane position supplied as a physical convected distance
-        // (e.g. the time-integrated inlet velocity); turb_conv_vel is bypassed.
-        z = tpn.convected_distance * tpn.turb_scale_loc;
-      } else {
-        z = (time + tpn.time_shift) * tpn.turb_conv_vel * tpn.turb_scale_loc;
-      }
-      fill_turb_plane(tpn, x, y, z, v);
+      fill_turb_plane(tpn, sampler, x, y, v);
     }
   }
 
   // Moving it into data
   set_turb(dir, tdir1, tdir2, v, data, dcomp);
-}
-
-amrex::Real
-TurbInflow::file_coordinate(
-  const TurbParm& a_tp, int idim, amrex::Real x_file_phys)
-{
-  if (!a_tp.has_map) {
-    return x_file_phys;
-  }
-  const amrex::Real xi_lo = a_tp.map_xi_lo[idim];
-  const amrex::Real xi_hi = a_tp.map_xi_hi[idim];
-  const amrex::Real x_lo = a_tp.map.x_phys_from_xi(idim, xi_lo, xi_lo, xi_hi);
-  const amrex::Real x_hi = a_tp.map.x_phys_from_xi(idim, xi_hi, xi_lo, xi_hi);
-
-  amrex::Real x = x_file_phys;
-  if (a_tp.tile_periodic && a_tp.periodicity[idim] != 0) {
-    // Tiled: bring x into the file's physical period before inverting.
-    // The inverse clamps to [x_lo, x_hi], which would otherwise collapse
-    // every tiled copy onto the edge of the file.
-    const amrex::Real period = x_hi - x_lo;
-    x -= std::floor((x - x_lo) / period) * period;
-  } else if (x < x_lo || x >= x_hi) {
-    // Outside the file's physical extent.  A physically-uniform file leaves
-    // such positions unfilled (fill_turb_plane's range test); keep that
-    // behaviour rather than let the clamped inverse pin them to the edge
-    // row, by returning a Xi coordinate that is outside the box whatever
-    // turb_center shifted pboxlo to (|shift| <= pboxsize/2).
-    const amrex::Real away = a_tp.pboxsize[idim];
-    return (x < x_lo) ? xi_lo - away : xi_hi + away;
-  }
-
-  amrex::Real xi = a_tp.map.xi_from_x_phys(idim, x, xi_lo, xi_hi);
-
-  // When the target's map and Xi grid coincide with the file's, xi lands on
-  // a file cell centre up to the round-off of the inverse (log/atanh, or
-  // the Newton tolerance for InteriorStretch).  Snap it so that the
-  // interpolation weights collapse exactly and the same-map case
-  // reproduces the file bit for bit.
-  const amrex::Real idx = (xi - a_tp.pboxlo[idim]) * a_tp.dxinv[idim] + 0.5;
-  const amrex::Real idx_round = std::round(idx);
-  if (std::abs(idx - idx_round) < amrex::Real(1.0e-8)) {
-    xi = a_tp.pboxlo[idim] + (idx_round - 0.5) * a_tp.dx[idim];
-  }
-  return xi;
 }
 
 void
@@ -623,7 +621,7 @@ TurbInflow::set_turb(
 
   amrex::ParallelFor(box, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     // From z-normal box index to data box index
-    int idx[3] = {0};
+    amrex::GpuArray<int, 3> idx{};
     idx[transDir1] = i;
     idx[transDir2] = j;
     idx[normDir] = k;
@@ -718,7 +716,7 @@ TurbInflow::read_turb_planes(TurbParm& a_tp, amrex::Real z)
     a_tp.szhi = a_tp.planeTimes[a_tp.izhi - 1]; // need one plane forward in
                                                 // time for interpolating
   } else {
-    a_tp.izlo = (int)(floor(z * a_tp.dxinv[2] - 0.5)) -
+    a_tp.izlo = static_cast<int>(std::floor(z * a_tp.dxinv[2] - 0.5)) -
                 1; // read one extra earlier tplane to prevent rereading
     a_tp.izhi = a_tp.izlo + a_tp.nplane - 1;
     a_tp.szlo = (static_cast<amrex::Real>(a_tp.izlo) + 0.5) * a_tp.dx[2];
@@ -745,12 +743,8 @@ TurbInflow::read_turb_planes(TurbParm& a_tp, amrex::Real z)
 }
 
 void
-TurbInflow::fill_turb_plane(
-  TurbParm& a_tp,
-  const amrex::Vector<amrex::Real>& x,
-  const amrex::Vector<amrex::Real>& y,
-  amrex::Real z,
-  amrex::FArrayBox& v)
+TurbInflow::prepare_planes(
+  TurbParm& a_tp, amrex::Real z, amrex::GpuArray<amrex::Real, 3>& cz, int& k0)
 {
   // If time_periodic is enabled and istimeplanes, wrap the time value
   if (a_tp.istimeplanes && a_tp.time_periodic && a_tp.kmax > 0) {
@@ -778,34 +772,8 @@ TurbInflow::fill_turb_plane(
     read_turb_planes(a_tp, z);
   }
 
-  const auto& bx = v.box();
-  const auto& vd = v.array();
-
-  amrex::Gpu::DeviceVector<amrex::Real> x_dev(x.size());
-  amrex::Gpu::DeviceVector<amrex::Real> y_dev(y.size());
-  amrex::Gpu::copyAsync(
-    amrex::Gpu::hostToDevice, x.begin(), x.end(), x_dev.begin());
-  amrex::Gpu::copyAsync(
-    amrex::Gpu::hostToDevice, y.begin(), y.end(), y_dev.begin());
-  amrex::Real* xd = x_dev.data();
-  amrex::Real* yd = y_dev.data();
-
-  amrex::Real velScale = (a_tp.side == amrex::Orientation::high)
-                           ? -a_tp.turb_scale_vel
-                           : a_tp.turb_scale_vel;
-  const auto& npboxcells = a_tp.npboxcells;
-  const auto& pboxlo = a_tp.pboxlo;
-  const auto& pboxsize = a_tp.pboxsize;
-  const auto& szlo = a_tp.szlo;
-  const auto& dxinv = a_tp.dxinv;
-  const auto& dx = a_tp.dx;
-  const auto& sd = a_tp.sdata->array();
-  const auto& ext_nonper = a_tp.extrap_nonperiodic;
-  const auto& tile_per = a_tp.tile_periodic;
-  const auto& periodicity = a_tp.periodicity;
   const bool lininterp = a_tp.interp_type == TurbInterpType::linear;
-  amrex::Real cz[3];
-  int k0 = -1;
+  k0 = -1;
   if (a_tp.istimeplanes) {
     AMREX_ALWAYS_ASSERT(
       z >= a_tp.planeTimes[a_tp.izlo] && z <= a_tp.planeTimes[a_tp.izhi]);
@@ -822,84 +790,46 @@ TurbInflow::fill_turb_plane(
     cz[2] = (z - t0) * (z - t1) / ((t2 - t0) * (t2 - t1));
   } else {
     amrex::Real zz =
-      (z - szlo) * dxinv[2];    // How many dz away from the left side ?
-    k0 = (int)(std::floor(zz)); // What's the closest point ?
-    zz -= amrex::Real(k0);
+      (z - a_tp.szlo) * a_tp.dxinv[2]; // How many dz away from the left side ?
+    k0 = static_cast<int>(std::floor(zz)); // What's the closest point ?
+    zz -= static_cast<amrex::Real>(k0);
     cz[0] =
       lininterp ? 1.0 - zz : 0.5 * (zz - 1.0) * (zz - 2.0); // Weight of k0
     cz[1] = lininterp ? zz : zz * (2.0 - zz);               // Weight of k0 + 1
     cz[2] = lininterp ? 0.0 : 0.5 * zz * (zz - 1.0);        // Weight of k0 + 2
   }
+}
+
+void
+TurbInflow::fill_turb_plane(
+  const TurbParm& a_tp,
+  const TurbFileSampler& sampler,
+  const amrex::Vector<amrex::Real>& x,
+  const amrex::Vector<amrex::Real>& y,
+  amrex::FArrayBox& v)
+{
+  const auto& bx = v.box();
+  const auto& vd = v.array();
+
+  // Freed by a stream callback once the kernel below is done with them, so
+  // no synchronization is needed before they go out of scope
+  amrex::Gpu::AsyncArray<amrex::Real> x_dev(x.data(), x.size());
+  amrex::Gpu::AsyncArray<amrex::Real> y_dev(y.data(), y.size());
+  const amrex::Real* xd = x_dev.data();
+  const amrex::Real* yd = y_dev.data();
+
+  const TurbFileSampler s = sampler; // by-value capture for the device
+  amrex::Real velScale = (a_tp.side == amrex::Orientation::high)
+                           ? -a_tp.turb_scale_vel
+                           : a_tp.turb_scale_vel;
 
   amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-    amrex::Real cx[3], cy[3], ydata[3];
-    amrex::Real zdata[3][3];
-
-    const amrex::Real x_from_pboxlo = xd[i - bx.smallEnd(0)] - pboxlo[0];
-    amrex::Real xx =
-      (x_from_pboxlo)*dxinv[0] +
-      0.5; // from 1st cell center (ghost cell so 1/2 dx outside of pbox)
-    const amrex::Real y_from_pboxlo = yd[j - bx.smallEnd(1)] - pboxlo[1];
-    amrex::Real yy =
-      (y_from_pboxlo)*dxinv[1] +
-      0.5; // from 1st cell center (ghost cell so 1/2 dx outside of pbox)
-    int i0 = (int)(std::floor(xx));
-    int j0 = (int)(std::floor(yy));
-    xx -= amrex::Real(i0);
-    yy -= amrex::Real(j0);
-    // Wrap if needed
-    if (tile_per) {
-      i0 = (i0 % npboxcells[0] + npboxcells[0]) % npboxcells[0];
-      j0 = (j0 % npboxcells[1] + npboxcells[1]) % npboxcells[1];
-    }
-    cx[0] = lininterp ? 1.0 - xx : 0.5 * (xx - 1.0) * (xx - 2.0);
-    cy[0] = lininterp ? 1.0 - yy : 0.5 * (yy - 1.0) * (yy - 2.0);
-    cx[1] = lininterp ? xx : xx * (2.0 - xx);
-    cy[1] = lininterp ? yy : yy * (2.0 - yy);
-    cx[2] = lininterp ? 0.0 : 0.5 * xx * (xx - 1.0);
-    cy[2] = lininterp ? 0.0 : 0.5 * yy * (yy - 1.0);
-
-    if (
-      (x_from_pboxlo >= 0.0 && x_from_pboxlo < pboxsize[0]) ||
-      (tile_per && periodicity[0] != 0)) {
-      if (
-        (x_from_pboxlo < 0.5 * dx[0] || x_from_pboxlo > pboxsize[0] - dx[0]) &&
-        (periodicity[0] == 0) && !ext_nonper) {
-        amrex::Error(
-          "TurbInflow interp stencil touches ghost cell for nonperiodic "
-          "direction and extrap_nonperiodic option not used");
-      }
-      if (
-        (y_from_pboxlo >= 0.0 && y_from_pboxlo < pboxsize[1]) ||
-        (tile_per && periodicity[1] != 0)) {
-        if (
-          (y_from_pboxlo < 0.5 * dx[1] ||
-           y_from_pboxlo > pboxsize[1] - dx[1]) &&
-          (periodicity[1] == 0) && !ext_nonper) {
-          amrex::Error(
-            "TurbInflow interp stencil touches ghost cell for nonperiodic "
-            "direction and extrap_nonperiodic option not used");
-        }
-
-        for (int n = 0; n < AMREX_SPACEDIM; ++n) {
-          for (int ii = 0; ii <= 2; ++ii) {
-            for (int jj = 0; jj <= 2; ++jj) {
-              zdata[ii][jj] = cz[0] * sd(i0 + ii, j0 + jj, k0, n) +
-                              cz[1] * sd(i0 + ii, j0 + jj, k0 + 1, n) +
-                              cz[2] * sd(i0 + ii, j0 + jj, k0 + 2, n);
-            }
-          }
-          for (int ii = 0; ii <= 2; ++ii) {
-            ydata[ii] = cy[0] * zdata[ii][0] + cy[1] * zdata[ii][1] +
-                        cy[2] * zdata[ii][2];
-          }
-          vd(i, j, k, n) +=
-            velScale * (cx[0] * ydata[0] + cx[1] * ydata[1] + cx[2] * ydata[2]);
-        }
+    TurbFileSampler::Stencil st;
+    if (s.locate_file(xd[i - bx.smallEnd(0)], yd[j - bx.smallEnd(1)], st)) {
+      for (int n = 0; n < AMREX_SPACEDIM; ++n) {
+        vd(i, j, k, n) += velScale * s.component(st, n);
       }
     }
   });
-  amrex::Gpu::synchronize(); // Ensure that DeviceVector's don't leave scope
-                             // early
 }
 } // namespace pele::physics::turbinflow
