@@ -115,6 +115,10 @@ input file. The currently supported data types are :
 For all of the above data types, an ``ofile`` keyword must be specified, which is the name of the directory where the
 output files will be saved. After successful execution, the output directory should contain two files: ``HDR`` and ``DAT``.
 
+For ``periodic_plt`` and ``diag_frame_plane``, scalar fields of the input plt files can be stored next to the velocity with the
+``scalars`` keyword, e.g. ``scalars="temp Y(O2) Y(N2)"``. They are written after the velocity data and declared by a ``SCALARS_V1``
+trailer in ``HDR`` (see :ref:`Scalar fields <sec_turbinflow_scalars>`); readers that predate it ignore them.
+
 MechanismPAH
 ============
 

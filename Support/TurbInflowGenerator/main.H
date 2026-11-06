@@ -34,6 +34,20 @@ void write_meshmap_trailer(
   const amrex::RealBox& probDomain,
   const amrex::IntVect& dim_map);
 
+/**
+ * Plotfile components of the scalar fields requested with the input
+ * scalars = <name> ... (e.g. temp Y(N2)), in that order.  Aborts if one is
+ * missing from \p varlist.
+ */
+amrex::Vector<int> find_scalar_vars(const amrex::Vector<std::string>& varlist);
+
+/**
+ * Write the first two lines of the SCALARS_V1 trailer (count and names) to
+ * HDR; the caller then writes one plane offset per line, scalar-major.
+ * Writes nothing when no scalars are requested.
+ */
+void write_scalars_header(std::ofstream& ifsh);
+
 amrex::IntVect index_mapper(
   const amrex::IntVect& idx_in,
   const amrex::IntVect& dim_map,

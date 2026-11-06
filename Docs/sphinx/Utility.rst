@@ -151,6 +151,29 @@ inflow plane data and interpolation approaches for periodic and nonperiodic tang
 .. note:: The TurbInflow capability was not designed with embedded boundaries in mind. It can be applied for simulations using EB, but care should
           be take. Inflows should not be generated from simulations where EBs intersect the inflow plane.
 
+.. _sec_turbinflow_scalars:
+
+Scalar fields
+~~~~~~~~~~~~~
+
+A turbulence file may carry named scalar fields (for instance temperature and species mass fractions from a precursor run) next to
+the three velocity components. They share the planes, the through-plane position and the transverse interpolation of the velocity,
+but are neither scaled by ``turb_scale_vel`` nor summed over overlapping patches: at most one file per face may carry scalars.
+They are declared by a trailer after the plane times (and the optional ``MESHMAP`` trailer) in ``HDR``:
+
+::
+
+  SCALARS_V1 <nscal>
+  <name_1> ... <name_nscal>
+  <offset>     # nscal * kmax lines: all the planes of the first scalar, then of the second, ...
+
+where each offset locates one plane FAB in ``DAT`` (same box as the velocity planes). The ``TurbInflowGenerator`` writes it with its
+``scalars`` input. The names are free-form and their meaning is left to the solver. ``TurbInflow::scalar_names()`` lists them for a
+face, and ``TurbInflow::scalar_sampler()`` returns a device-callable ``TurbFileSampler`` for a face and time, whose
+``locate(x1, x2, st)`` finds a physical transverse position (false outside the file) and ``scalar(st, s)`` reads scalar ``s`` there. Solvers
+detect the capability with the ``PELEPHYSICS_TURBINFLOW_HAS_SCALARS`` macro. PeleLMeX uses it to impose ``temp`` and ``Y(<species>)``
+on its inflow faces.
+
 Non-uniform and mapped grids
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

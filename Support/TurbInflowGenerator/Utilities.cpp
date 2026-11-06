@@ -1,4 +1,5 @@
 #include "main.H"
+#include <algorithm>
 
 using namespace amrex;
 
@@ -167,4 +168,43 @@ read_csv(
       cnt++;
     }
   }
+}
+
+// Plotfile components of the scalar fields requested with
+// scalars = <name> ..., in that order (empty when none are requested)
+Vector<int>
+find_scalar_vars(const Vector<std::string>& varlist)
+{
+  ParmParse pp;
+  Vector<std::string> names;
+  pp.queryarr("scalars", names);
+  Vector<int> idx(names.size());
+  for (int s = 0; s < names.size(); ++s) {
+    const auto it = std::find(varlist.begin(), varlist.end(), names[s]);
+    if (it == varlist.end()) {
+      amrex::Abort("Requested scalar " + names[s] + " not found in plt file");
+    }
+    idx[s] = static_cast<int>(it - varlist.begin());
+  }
+  return idx;
+}
+
+void
+write_scalars_header(std::ofstream& ifsh)
+{
+  ParmParse pp;
+  Vector<std::string> names;
+  pp.queryarr("scalars", names);
+  if (names.empty()) {
+    return;
+  }
+  ifsh << "SCALARS_V1 " << names.size() << '\n';
+  const char* sep = "";
+  for (const auto& name : names) {
+    ifsh << sep << name;
+    sep = " ";
+  }
+  ifsh << '\n';
+  amrex::Print() << "Writing SCALARS_V1 trailer with " << names.size()
+                 << " scalar field(s)\n";
 }
