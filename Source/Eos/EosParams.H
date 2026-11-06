@@ -139,7 +139,7 @@ struct InitParm<eos::EosParm<eos::Manifold>>
     // Molecular weights and indices of chemical species if requested
     pp.query("has_species_mw", parm_in->m_h_parm.has_species_mw);
     if (parm_in->m_h_parm.has_species_mw) {
-      const auto* mani_data = parm_in->m_h_parm.manf_data;
+      const auto* mani_data = h_manf_data_in;
       // First find the total number of chemical species in the table
       amrex::Vector<int> spec_idx_vect;
       for (int n = 0; n < mani_data->Nvar; n++) {

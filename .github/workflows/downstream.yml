@@ -12,9 +12,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  Detect-Changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      has-source-changes: ${{ steps.changes.outputs.src }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            src:
+              - '**'
+              - '!**/*.rst'
+              - '!Docs/**'
+              - '!Source/Utility/**/*.py'
+              - '!README.md'
+              - '!CONTRIBUTING.md'
+              - '!.codespell*'
+              - '!.gitignore'
+
   PeleLMeX-FlameSheet:
+    needs: Detect-Changes
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     name: PeleLMeX GNU MPI Run [FlameSheet]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       {CXXFLAGS: "-Werror -Wshadow -Woverloaded-virtual -Wunreachable-code"}
 
@@ -29,7 +53,7 @@ jobs:
       - name: Clone PeleLMeX
         run: |
           git clone --recursive --shallow-submodules --single-branch \
-            https://github.com/AMReX-Combustion/PeleLMeX.git
+            https://github.com/Pele-Suite/PeleLMeX.git
 
       - name: Point PeleLMeX/Submodules/PelePhysics to this PR
         working-directory: PeleLMeX
@@ -59,8 +83,10 @@ jobs:
           mpirun -n 2 ./PeleLMeX2d.gnu.MPI.drm19.ex input.2d-regt amr.max_step=2 amr.plot_int=-1 amr.check_int=-1 amrex.abort_on_unused_inputs=1 amr.n_cell=32 64
 
   PeleC-PMF:
+    needs: Detect-Changes
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     name: PeleC GNU MPI Run [PMF]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       {CXXFLAGS: "-Werror -Wshadow -Woverloaded-virtual -Wunreachable-code"}
 
@@ -75,7 +101,7 @@ jobs:
       - name: Clone PeleC
         run: |
           git clone --recursive --shallow-submodules --single-branch \
-            https://github.com/AMReX-Combustion/PeleC.git
+            https://github.com/Pele-Suite/PeleC.git
 
       - name: Point PeleC/Submodules/PelePhysics to this PR
         working-directory: PeleC
@@ -94,7 +120,6 @@ jobs:
         run: |
           set -eu -o pipefail
 
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test
           sudo apt-get update
 
           sudo apt-get install -y --no-install-recommends \
@@ -129,7 +154,7 @@ jobs:
       - name: Clone PeleLMeX
         run: |
           git clone --recursive --shallow-submodules --single-branch \
-            https://github.com/AMReX-Combustion/PeleLMeX.git
+            https://github.com/Pele-Suite/PeleLMeX.git
 
       - name: Point PeleLMeX/Submodules/PelePhysics to this PR
         working-directory: PeleLMeX
@@ -173,11 +198,22 @@ jobs:
       - name: Configure
         working-directory: PeleLMeX
         run: |
+          # clang-tidy only needs the compiler frontend (parsing/AST) to run;
+          # it never executes optimized code. Building at -O3 (the default
+          # under CMAKE_BUILD_TYPE=Release) has been observed to crash the
+          # clang++ 18.1.3 frontend (SIGSEGV, exit 139) inside LLVM's
+          # InstCombine pass on some AMReX submodule files (e.g.
+          # AMReX_EB_STL_utils.cpp, AMReX_EB2_Level_STL.cpp). Forcing -O0
+          # avoids invoking the optimizer entirely, sidestepping the crash,
+          # while CMAKE_BUILD_TYPE=Release is kept so NDEBUG/asserts stay
+          # consistent with the rest of the build.
           cmake -B"${{ github.workspace }}/build-clang-tidy-lmex" \
           -DCMAKE_BUILD_TYPE:STRING=Release \
           -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
           -DCMAKE_CXX_COMPILER:STRING=clang++ \
           -DCMAKE_C_COMPILER:STRING=clang \
+          -DCMAKE_C_FLAGS_RELEASE:STRING="-O0 -DNDEBUG" \
+          -DCMAKE_CXX_FLAGS_RELEASE:STRING="-O0 -DNDEBUG" \
           -DPELE_ENABLE_EB:BOOL=OFF \
           -DPELE_ENABLE_MPI:BOOL=OFF \
           -DPELE_ENABLE_FCOMPARE_FOR_TESTS:BOOL=OFF \
@@ -231,7 +267,7 @@ jobs:
       - name: Clone PeleC
         run: |
           git clone --recursive --shallow-submodules --single-branch \
-            https://github.com/AMReX-Combustion/PeleC
+            https://github.com/Pele-Suite/PeleC
 
       - name: Point PeleC/Submodules/PelePhysics to this PR
         working-directory: PeleC
@@ -275,14 +311,26 @@ jobs:
       - name: Configure
         working-directory: PeleC
         run: |
+          # clang-tidy only needs the compiler frontend (parsing/AST) to run;
+          # it never executes optimized code. Building at -O3 (the default
+          # under CMAKE_BUILD_TYPE=Release) has been observed to crash the
+          # clang++ 18.1.3 frontend (SIGSEGV, exit 139) inside LLVM's
+          # InstCombine pass on some AMReX submodule files (e.g.
+          # AMReX_EB_STL_utils.cpp, AMReX_EB2_Level_STL.cpp). Forcing -O0
+          # avoids invoking the optimizer entirely, sidestepping the crash,
+          # while CMAKE_BUILD_TYPE=Release is kept so NDEBUG/asserts stay
+          # consistent with the rest of the build.
           cmake -B"${{ github.workspace }}/build-clang-tidy-c" \
           -DCMAKE_BUILD_TYPE:STRING=Release \
           -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
           -DCMAKE_CXX_COMPILER:STRING=clang++ \
           -DCMAKE_C_COMPILER:STRING=clang \
+          -DCMAKE_C_FLAGS_RELEASE:STRING="-O0 -DNDEBUG" \
+          -DCMAKE_CXX_FLAGS_RELEASE:STRING="-O0 -DNDEBUG" \
           -DPELE_ENABLE_MPI:BOOL=OFF \
           -DPELE_ENABLE_FCOMPARE_FOR_TESTS:BOOL=OFF \
           -DPELE_ENABLE_MASA:BOOL=OFF \
+          -DPELE_ENABLE_EB:BOOL=OFF \
           -DPELE_ENABLE_CLANG_TIDY:BOOL=ON \
           -DPELE_EXCLUDE_BUILD_IN_CI:BOOL=ON \
           -DCMAKE_CXX_COMPILER_LAUNCHER:STRING=ccache \

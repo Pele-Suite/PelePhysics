@@ -149,8 +149,12 @@ private:
   //! Lookup table containing all registered instances
   static LookupTable& table()
   {
-    static LookupTable tbl;
-    return tbl;
+    // Never destroyed: Register<T> objects with static storage duration
+    // (e.g. the dummies in BlackBoxFunction.cpp) query this table from their
+    // destructors at program exit, possibly after a function-local static
+    // table would already have been destroyed.
+    static auto* tbl = new LookupTable;
+    return *tbl;
   }
 
   Factory() = default;

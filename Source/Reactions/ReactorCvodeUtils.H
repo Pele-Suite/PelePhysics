@@ -41,7 +41,7 @@ struct CVODEUserData
   int analytical_jacobian; // Analytical Jacobian 'On' flag
   int solve_type;          // Type of linear solve for Newton direction
   int precond_type;        // Type of preconditioner (if iterative solve)
-  int NNZ; // Number of non-zero entry for sparse representations
+  int NNZ; // Number of non-zero entry per cell for sparse representations
   amrex::Real* rhoe_init = nullptr; // Initial energy (rhoE for C, rhoH for LM)
   amrex::Real* rhoesrc_ext = nullptr; // External energy forcing
   amrex::Real* rYsrc_ext = nullptr;   // External species forcing

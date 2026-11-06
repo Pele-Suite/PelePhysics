@@ -404,7 +404,7 @@ Precond_sparse(
       Numeric[tid] = klu_factor(
         colPtrs[tid], rowVals[tid], Jdata[tid], Symbolic[tid], &(Common[tid]));
     }
-    FirstTimePrecond = false;
+    udata->FirstTimePrecond = false;
   }
   BL_PROFILE_VAR_STOP(KLU_factor);
 

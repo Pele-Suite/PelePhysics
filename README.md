@@ -5,17 +5,17 @@
 
 ## Overview
 
-PelePhysics is a repository of physics databases and implementation code for use with the [Pele suite of codes](https://amrex-combustion.github.io),
-primarily the compressible solver [PeleC](https://amrex-combustion.github.io/PeleC/) and low-Mach solver [PeleLMeX](https://amrex-combustion.github.io/PeleLMeX/).
+PelePhysics is a repository of physics databases and implementation code for use with the [Pele suite of codes](https://Pele-Suite.github.io),
+primarily the compressible solver [PeleC](https://Pele-Suite.github.io/PeleC/) and low-Mach solver [PeleLMeX](https://Pele-Suite.github.io/PeleLMeX/).
 
 PelePhysics contains C++ source code for the following physics and other modules, in the `Source` directory:
 
 * *EOS*: Equation of State, include multi-species ideal and real gas options
 * *Transport*: Routines to evaluate multi-species transport properties
 * *Reactions*: Routines for substepped integration of stiff chemical systems, including with CVODE
-* *Spray*: Lagrangian spray droplet library, formerly part of [PeleMP](https://github.com/AMReX-Combustion/PeleMP)
-* *Soot*: An implementation of the Hybrid Method of Moments soot model, formerly part of [PeleMP](https://github.com/AMReX-Combustion/PeleMP)
-* *Radiation*: Radiative heat transfer model based on the spherical harmonics method, formerly [PeleRad](https://github.com/AMReX-Combustion/PeleRad)
+* *Spray*: Lagrangian spray droplet library, formerly part of [PeleMP](https://github.com/Pele-Suite/PeleMP)
+* *Soot*: An implementation of the Hybrid Method of Moments soot model, formerly part of [PeleMP](https://github.com/Pele-Suite/PeleMP)
+* *Radiation*: Radiative heat transfer model based on the spherical harmonics method, formerly [PeleRad](https://github.com/Pele-Suite/PeleRad)
 * *Utility*: Several handy modules for data management across other Pele codes
 
 Additionally, PelePhysics contains a variety of stand-alone tools to aid in Pele simulation workflows, found in the `Support` directory.
@@ -26,7 +26,7 @@ For convenience, the `Mechanisms` directory contains the CEPTR-generated source 
 Cantera and CHEMKIN format data files for each mechanism.
 
 Documentation for these various capabilities, to varying degrees, can be found in the `Docs` directory or online
-at https://amrex-combustion.github.io/PelePhysics/. The papers listed below under the Citation heading may also be valuable resources.
+at https://Pele-Suite.github.io/PelePhysics/. The papers listed below under the Citation heading may also be valuable resources.
 
 PelePhysics has two required dependencies, AMReX and SUNDIALS, which are both git submodules located the `Submodules` directory.
 The `ThirdParty` directory is used when building these submodules, and for downloading and building other optional submodules.
@@ -36,7 +36,7 @@ Finally, the `Testing` directory includes several stand-alone codes for exercisi
 ## Getting Started
 
 PelePhysics is primarily intended as a library for use with other Pele codes. For more information on how to download PelePhysics and
-its dependencies, and how to build the stand-alone test codes, consult the [online documentation](https://amrex-combustion.github.io/PelePhysics/GettingStarted.html).
+its dependencies, and how to build the stand-alone test codes, consult the [online documentation](https://Pele-Suite.github.io/PelePhysics/GettingStarted.html).
 
 ## Acknowledgment
 
@@ -98,14 +98,14 @@ PeleMP and PeleRad, please use the following [Journal of Fluids Engineering arti
 
 A full list of publications documenting the development of the Pele suite and its
 application to various reacting flow and other simulations is available on the main
-[Pele suite page](https://amrex-combustion.github.io/pubs.html). After publication,
+[Pele suite page](https://Pele-Suite.github.io/pubs.html). After publication,
 if you'd like your work to be included on that list, you can request to have it added
-[here](https://github.com/AMReX-Combustion/AMReX-Combustion.github.io/discussions/3).
+[here](https://github.com/Pele-Suite/Pele-Suite.github.io/discussions/3).
 
 ## Getting help
 
-Do you have a question ? Found an issue ? Please use the [GitHub Discussions](https://github.com/AMReX-Combustion/PelePhysics/discussions) to engage
-with the development team or open a new [GitHub issue](https://github.com/AMReX-Combustion/PelePhysics/issues) to report a bug. The development team
+Do you have a question ? Found an issue ? Please use the [GitHub Discussions](https://github.com/Pele-Suite/PelePhysics/discussions) to engage
+with the development team or open a new [GitHub issue](https://github.com/Pele-Suite/PelePhysics/issues) to report a bug. The development team
 also encourages users to take an active role in respectfully answering each other's questions in these spaces. When reporting a bug, it is helpful
 to provide as much detail as possible, including a case description and the major compile and runtime options being used. Though not required,
 it is most effective to create a fork of this repository and share a branch of that fork with a case that minimally reproduces the error.
@@ -115,7 +115,7 @@ New contributions to *PelePhysics* are welcome ! Contributing Guidelines are pro
 ## Versioning
 
 PelePhysics now uses uses a type of semantic versioning to help users navigate different versions of the code,
-which are labeled with [GitHub tags](https://github.com/AMReX-Combustion/PelePhysics/releases/). These tagged versions are not exhaustive, but they adhere to
+which are labeled with [GitHub tags](https://github.com/Pele-Suite/PelePhysics/releases/). These tagged versions are not exhaustive, but they adhere to
 the following convention. Given a version number MAJOR.MINOR.PATCH:
 1. MAJOR version for changes to key aspects of the solver affecting input/source files for all cases, when a key model is changed to significantly affect results of simulations, when a major new capability is added
 2. MINOR version for when a significant feature is added (in a backward compatible manner), accumulation of smaller features, or changes to input file compatibility for less central aspects of the solver (e.g., post-processing) or aspects not affecting all cases
@@ -158,4 +158,4 @@ If the `Pele` codes are built with `Eos_Model = Fuego`, the make system variable
 `PelePhysics` currently supports a cubic EOS model: `Soave-Redlich-Kwong`.  It is built on top of the ideal gas models, and is selected by specifying its name as the `Eos_Model` during the build (the make system requires that both `Eos_Model` and `Chemistry_Model` be specified).  Any additional parameters required for the EOS (e.g., attractions, repulsions, critical states) are either included in the underlying CEPTR database used to generate the source file model implementation, or else are inferred from the input model data.
 
 ### Model generation procedures
-This repository provides the tools necessary for generating new Pele-compatible combustion mechanisms. Please refer to the [CEPTR documentation](https://amrex-combustion.github.io/PelePhysics/Ceptr.html) for instructions on generating mechanism models. Make sure that you edit the `GNUmakefile` where you want to use this (in, e.g., `PeleC/Exec`) so that `Chemistry_Model` is `XXX`.  In `PeleC/Exec/Make.PeleC`, the model is expected to be in the folder `${PELE_PHYSICS_HOME}/Mechanisms/$(Chemistry_Model)`, and it is expected that the folder contains a `Make.package` file to include, so make sure things are where they need to be. Refer to other mechanisms for additional guidance.
+This repository provides the tools necessary for generating new Pele-compatible combustion mechanisms. Please refer to the [CEPTR documentation](https://Pele-Suite.github.io/PelePhysics/Ceptr.html) for instructions on generating mechanism models. Make sure that you edit the `GNUmakefile` where you want to use this (in, e.g., `PeleC/Exec`) so that `Chemistry_Model` is `XXX`.  In `PeleC/Exec/Make.PeleC`, the model is expected to be in the folder `${PELE_PHYSICS_HOME}/Mechanisms/$(Chemistry_Model)`, and it is expected that the folder contains a `Make.package` file to include, so make sure things are where they need to be. Refer to other mechanisms for additional guidance.

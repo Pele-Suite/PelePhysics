@@ -16,6 +16,8 @@ USE_HIP    = FALSE
 # PelePhysics
 FUEGO_GAS  = TRUE
 TINY_PROFILE = FALSE
+# Multicomponent (LCT) conductivity models of Simple transport
+USE_LCT_TRANSPORT = TRUE
 
 # define the location of the PELE_PHYSICS top directory
 PELE_PHYSICS_HOME    ?= ../../..

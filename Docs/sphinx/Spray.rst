@@ -768,7 +768,8 @@ The following table details the parameters of each test:
    +---------------+-----------------+-----------------+-----------------+-----------------+-----------------------+-----------------+-----------------+
    |``RungeJP8``   |294.15           |1.01325          |294.15           |636              |3.0                    |POSF10264        |[#runge]_        |
    +---------------+-----------------+-----------------+-----------------+-----------------+-----------------------+-----------------+-----------------+
-
+   |``Burger``     |800              |1, 10, 50        |300              |100              |0.0                    |POSF10325        |[#burger]_       |
+   +---------------+-----------------+-----------------+-----------------+-----------------+-----------------------+-----------------+-----------------+
 
 .. figure:: /Visualization/nomura_res_2025.png
    :align: center
@@ -800,6 +801,12 @@ The following table details the parameters of each test:
 
    Droplet evaporation of POSF10264 (JP8) compared to experimental measurements from Runge et al. [#runge]_ This demonstrates three different approaches: (i) A detailed non-reacting mechanism with 67 species in the liquid and gas phases, (ii) a single liquid species and corresponding single Hychem gas species, where the thermophysical properties of the liquid species are estimated using FuelLib's mixture properties, and (iii) a many-to-one mapping where 67 liquid species evaporate to a single Hychem gas species with and without the Manifold EOS. The many-to-one cases for PeleGCM and PeleMP with Antoine fit are indistinguishable on this plot.
 
+.. figure:: /Visualization/burger_jeta_res_2026.png
+   :align: center
+   :figwidth: 80%
+
+   Droplet evaporation of POSF10325 (Jet-A) compared to numerical experiments from Burger et al. [#burger]_ The PeleGCM simulations are performed using a 67-to-1 mapping (GC-to-HyChem) and the PeleMP simulations are performed using a 1-to-1 mapping with a single species representing the liquid and gas phases. The 50 bar case is not shown here as further development is needed to capture high pressure effects on liquid properties in the PeleGCM implementation. 
+
 .. [#owen] "PeleMP: The Multiphysics Solver for the Combustion Pele Adaptive Mesh Refinement Code Suite," L. D. Owen, W. Ge, M. Rieth, M. Arienti, L. Esclapez, B. S. Soriano, M. E. Mueller, M. Day, R. Sankaran, and J. H. Chen, J. Fluids Eng., vol. 146, no. 4, pp. 1-18 (2024), doi: `10.1115/1.4064494 <https://doi.org/10.1115/1.4064494>`_.
 
 .. [#gani94] "New group contribution method for estimating properties of pure compounds", L. Constantinou, and R. Gani, AIChE J., Vol. 40, No. 10, pp.1697-1710 (1994), doi: `10.1002/aic.690401011 <https://doi.org/10.1002/aic.690401011>`_.
@@ -821,3 +828,5 @@ The following table details the parameters of each test:
 .. [#daif] "Comparison of multicomponent fuel droplet vaporization experiments in forced convection with the Sirignano model", A. Daı̈f and M. Bouaziz and X. Chesneau and A. Ali Chérif, Exp. Therm. Fluid Sci., vol. 18, no. 4, pp. 282-290, Issn 0894-1777 (1998), doi: `10.1016/S0894-1777(98)10035-3 <https://doi.org/10.1016/S0894-1777(98)10035-3>`_.
 
 .. [#runge] "Low-temperature vaporization of JP-4 and JP-8 fuel droplets", T. Runge and M. Teske and C. E. Polymeropoulos, At. Sprays, vol. 8, pp. 25-44 (1998), doi: `10.1615/AtomizSpr.v8.i1.20 <https://doi.org/10.1615/AtomizSpr.v8.i1.20>`_.
+
+.. [#burger] "Droplet evaporation modeling by the distillation curve model: accounting for kerosene fuel and elevated pressures", M. Burger, R. Schmehl, K. Prommersberger, O. Schäfer, R. Koch, S. Wittig, Int. J. Heat Mass Transfer, 46.23 (2003), doi: `10.1016/S0017-9310(03)00286-2 <https://doi.org/10.1016/S0017-9310(03)00286-2>`_.

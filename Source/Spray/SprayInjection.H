@@ -92,9 +92,9 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
         if (m_verbose > 0) {
           amrex::Print() << " (last dpm time) \n";
         }
-        is_dpm >> lineno_last_dpm_time_end; // includes the last line no
+        is_dpm >> lineno_last_dpm_time_end; // one past the last line no
         lineno_current_dpm_time_begin = dummy_line_no;
-        lineno_current_dpm_time_end = lineno_last_dpm_time_end;
+        lineno_current_dpm_time_end = lineno_last_dpm_time_end - 1;
 
         // if dpm file is periodic, the next time instant is time=0
         if (spray_jet->is_dpm_periodic) {
@@ -142,6 +142,13 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
         is_dpm1 >> dummy_time >> part_loc[0] >> part_loc[1] >> part_loc[2] >>
           part_vel[0] >> part_vel[1] >> part_vel[2] >> dia >> temperature >>
           parcel_mass >> particle_mass >> nppp;
+        if (!is_dpm1) {
+          amrex::Print()
+            << "Warning: DPM file " << spray_jet->m_FluentDPMFile
+            << " has fewer data lines than its index implies (block t = "
+            << spray_jet->m_cur_inj_dpm_time << "); stopping this block\n";
+          break;
+        }
 
         amrex::ParticleLocData pld;
         std::map<std::pair<int, int>, amrex::Gpu::HostVector<ParticleType>>
@@ -197,8 +204,6 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
           p.rdata(SprayComps::pstateY) = 1.;
         }
 
-        spray_jet->m_totalInjMass += parcel_mass;
-
         // If KHRT is used, BM1 is shed mass
         // If TAB is used, BM1 is y
         p.rdata(SprayComps::pstateBM1) = 0.;
@@ -209,10 +214,14 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
 
         bool where = Where(p, pld);
         if (!where) {
-          amrex::Print() << "\n Problematic particle = " << p.pos(0) << " "
-                         << p.pos(1) << " " << p.pos(2);
-          // amrex::Abort("Bad injection particle");
+          amrex::Print()
+            << "Warning: DPM parcel outside the domain discarded (jet "
+            << spray_jet->jet_name() << ", pos = " << p.pos(0) << " "
+            << p.pos(1) << " " << p.pos(2) << ")\n";
+          continue;
         }
+
+        spray_jet->m_totalInjMass += parcel_mass;
 
         std::pair<int, int> ind(pld.m_grid, pld.m_tile);
         host_particles[ind].push_back(p);

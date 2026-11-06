@@ -4,6 +4,7 @@
 #include <AMReX_REAL.H>
 #include <AMReX_ParmParse.H>
 #include "TransportTypes.H"
+#include "TransportUtils.H"
 #include "PeleParamsGeneric.H"
 #include "EOS.H"
 
@@ -71,6 +72,20 @@ struct TransParm<EOSType, SimpleTransport>
   amrex::GpuArray<int, 3> liteSpec = {0};
   amrex::GpuArray<amrex::Real, NUM_SPECIES * NUM_FIT * 3> fittdrat = {0.0};
   amrex::GpuArray<int, NUM_SPECIES> nlin = {0};
+  // Shift applied to mass/mole fractions so that vanishing species keep a
+  // positive "trace" value: Y_tr = Y + eps * (sum(Y)/N - Y). The default is
+  // the value that was hard-coded before the option existed.
+  amrex::Real trace_epsilon{1.e-15};
+  // Number of projected standard iterations for the multicomponent
+  // diffusion matrix (2 reproduces EGlib's EGSDR1)
+  int matrix_diffusion_niter{2};
+  // Thermal conductivity model (ConductivityModel::Mixture/LCT1/LCT3) and the
+  // number of conjugate-gradient iterations for the LCT models (3 = EGlib)
+  int conductivity_model{ConductivityModel::Mixture};
+  int conductivity_niter{3};
+  // ln of the Lennard-Jones well depth of every species pair, including the
+  // polar/non-polar correction (EGlib LEVEPS), packed as binary_pair_index
+  amrex::GpuArray<amrex::Real, NUM_BINARY_PAIRS> log_epsij = {0.0};
 };
 
 template <>
@@ -103,7 +118,94 @@ struct TransParm<eos::SRK, SimpleTransport>
     Upsilonijk = {0.0};
   amrex::GpuArray<amrex::Real, NUM_SPECIES> Kappai = {0.0};
   amrex::GpuArray<amrex::Real, NUM_SPECIES> omega = {0.0};
+  amrex::Real trace_epsilon{1.e-15};
+  int matrix_diffusion_niter{2};
+  int conductivity_model{ConductivityModel::Mixture};
+  int conductivity_niter{3};
+  amrex::GpuArray<amrex::Real, NUM_BINARY_PAIRS> log_epsij = {0.0};
 };
+
+// ln(eps_ij) for every species pair: geometric mean of the well depths with
+// the polar/non-polar correction of EGlib's LEVEPS (dipoles in Debye,
+// polarizabilities in A^3, sigma in A, eps in K). Must be called after wt,
+// eps, sig, dip and pol have been loaded.
+template <typename TParm>
+inline void
+simple_transport_pair_epsilon(TParm* tparm)
+{
+  constexpr amrex::Real FAC = 1.0e-12;
+  constexpr amrex::Real BOLTZ = 1.38056e-16;
+  constexpr amrex::Real DIPMIN = 1.0e-20;
+  for (int j = 0; j < NUM_SPECIES; ++j) {
+    for (int i = 0; i <= j; ++i) {
+      const amrex::Real epsi = tparm->eps[i];
+      const amrex::Real epsj = tparm->eps[j];
+      amrex::Real epsij = std::sqrt(epsi * epsj);
+      int polar = -1, nonpolar = -1;
+      if (tparm->dip[j] < DIPMIN && tparm->dip[i] > DIPMIN) {
+        polar = i;
+        nonpolar = j;
+      } else if (tparm->dip[i] < DIPMIN && tparm->dip[j] > DIPMIN) {
+        polar = j;
+        nonpolar = i;
+      }
+      if (polar >= 0) {
+        const amrex::Real sig3p = std::pow(tparm->sig[polar], 3);
+        const amrex::Real sig3n = std::pow(tparm->sig[nonpolar], 3);
+        const amrex::Real xi =
+          1.0 + 0.25 * (tparm->pol[nonpolar] / sig3n) * (FAC / BOLTZ) *
+                  (tparm->dip[polar] * tparm->dip[polar] /
+                   (tparm->eps[polar] * sig3p)) *
+                  std::sqrt(tparm->eps[polar] / tparm->eps[nonpolar]);
+        epsij *= xi * xi;
+      }
+      tparm->log_epsij[transport::binary_pair_index(i, j)] = std::log(epsij);
+    }
+  }
+}
+
+// Read and validate the runtime options shared by all SimpleTransport
+// specializations
+template <typename TParm>
+inline void
+simple_transport_query_common(TParm* tparm)
+{
+  amrex::ParmParse pp("transport");
+  pp.query("trace_epsilon", tparm->trace_epsilon);
+  pp.query("matrix_diffusion_niter", tparm->matrix_diffusion_niter);
+  if (tparm->trace_epsilon < 1.e-30 || tparm->trace_epsilon > 1.e-6) {
+    amrex::Abort(
+      "transport.trace_epsilon must be in [1e-30, 1e-6] (default 1e-15)");
+  }
+  if (tparm->matrix_diffusion_niter < 1) {
+    amrex::Abort("transport.matrix_diffusion_niter must be >= 1 (default 2)");
+  }
+  std::string model = "mixture";
+  pp.query("conductivity_model", model);
+  if (model == "mixture") {
+    tparm->conductivity_model = ConductivityModel::Mixture;
+  } else if (model == "lct1") {
+    tparm->conductivity_model = ConductivityModel::LCT1;
+  } else if (model == "lct3") {
+    tparm->conductivity_model = ConductivityModel::LCT3;
+  } else {
+    amrex::Abort(
+      "transport.conductivity_model must be mixture (default), lct1 or lct3");
+  }
+#ifndef PELE_TRANSPORT_LCT
+  if (tparm->conductivity_model != ConductivityModel::Mixture) {
+    amrex::Abort(
+      "transport.conductivity_model = lct1/lct3 requested but the code was "
+      "built without the LCT models: build with USE_LCT_TRANSPORT = TRUE "
+      "(GNU make) or -DPELE_TRANSPORT_LCT");
+  }
+#endif
+  pp.query("conductivity_niter", tparm->conductivity_niter);
+  if (tparm->conductivity_niter < 1) {
+    amrex::Abort("transport.conductivity_niter must be >= 1 (default 3)");
+  }
+  simple_transport_pair_epsilon(tparm);
+}
 
 } // namespace transport
 
@@ -258,6 +360,7 @@ struct InitParm<transport::TransParm<EOSType, transport::SimpleTransport>>
       egtransetKTDIF(tparm->liteSpec.data());
       egtransetCOFTD(tparm->fittdrat.data());
     }
+    transport::simple_transport_query_common(tparm);
     for (int i = 0; i < NUM_SPECIES; ++i) {
       tparm->iwt[i] = 1. / tparm->wt[i];
     }
@@ -292,6 +395,7 @@ struct InitParm<transport::TransParm<eos::SRK, transport::SimpleTransport>>
     egtransetNLITE(&tparm->numLite);
     egtransetKTDIF(tparm->liteSpec.data());
     egtransetCOFTD(tparm->fittdrat.data());
+    transport::simple_transport_query_common(tparm);
 
     for (int i = 0; i < NUM_SPECIES; ++i) {
       tparm->iwt[i] = 1. / tparm->wt[i];

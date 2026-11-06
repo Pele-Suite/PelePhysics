@@ -11,9 +11,9 @@ Objectives and State-Of-The-Art
 
 What we will call the `PeleSuite` is currently composed of 3 separate codes:
 
-- `PelePhysics <https://github.com/AMReX-Combustion/PelePhysics>`_ is a repository of physics databases and implementation code for use within the other `Pele` codes. In particular, the choice of chemistry and transport models as well as associated functions and capabilities are managed in `PelePhysics`.
-- `PeleLM <https://github.com/AMReX-Combustion/PeleLM>`_ is an adaptive-mesh Low-Mach number hydrodynamics code for reacting flows. It has a sibling, `PeleLMeX <https://github.com/AMReX-Combustion/PeleLMeX>`_, that solves for the same type of flow using a subtly different numerical approach.
-- `PeleC <https://github.com/AMReX-Combustion/PeleC>`_ is an adaptive-mesh compressible hydrodynamics code for reacting flows.
+- `PelePhysics <https://github.com/Pele-Suite/PelePhysics>`_ is a repository of physics databases and implementation code for use within the other `Pele` codes. In particular, the choice of chemistry and transport models as well as associated functions and capabilities are managed in `PelePhysics`.
+- `PeleLM <https://github.com/AMReX-Combustion/PeleLM>`_ is an adaptive-mesh Low-Mach number hydrodynamics code for reacting flows. It has a sibling, `PeleLMeX <https://github.com/Pele-Suite/PeleLMeX>`_, that solves for the same type of flow using a subtly different numerical approach.
+- `PeleC <https://github.com/Pele-Suite/PeleC>`_ is an adaptive-mesh compressible hydrodynamics code for reacting flows.
 
 All three codes rely on `AMReX <https://amrex-codes.github.io/amrex>`_, which is a software frameworks that provides the data structure and enable massive parallelization.
 

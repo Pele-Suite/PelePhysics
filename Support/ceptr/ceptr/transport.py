@@ -483,6 +483,8 @@ def diffcoefs(fstream, species_info, species_transport, ntfit):
                 spec_ordered.append(spec)
                 break
 
+    # Ern & Giovangigli, Multicomponent Transport Algorithms, (1994),
+    # eqs. (6.1.3) - (6.1.8)
     # compute single constants in g/cm/s
     na = 6.02214199e23
     # conversion coefs
@@ -506,7 +508,7 @@ def diffcoefs(fstream, species_info, species_transport, ntfit):
                     + float(species_transport[spec2][2])
                 )
                 * a2cm
-            ) * xi(spec1, spec2, species_transport) ** (1.0 / 6.0)
+            ) * xi(spec1, spec2, species_transport) ** (-1.0 / 6.0)
             # eq. (4)
             m_red = spec1.weight * spec2.weight / (spec1.weight + spec2.weight) / na
             # eq. (8) & (14)
@@ -1586,8 +1588,9 @@ def f_corr(t, eps_k):
 def xi(spec1, spec2, species_transport):
     """Compute xi."""
     dipmin = 1e-20
+    # Ern & Giovangigli, Multicomponent Transport Algorithms, (1994),
+    # eq. (6.1.5)
     # 1 is polar, 2 is nonpolar
-    # err in eq. (11) ?
     if (float(species_transport[spec2][3]) < dipmin) and (
         float(species_transport[spec1][3]) > dipmin
     ):
@@ -1616,7 +1619,6 @@ def xi_bool(spec1, spec2, species_transport):
     """Compute the boolean of xi."""
     dipmin = 1e-20
     # 1 is polar, 2 is nonpolar
-    # err in eq. (11) ?
     if (float(species_transport[spec2][3]) < dipmin) and (
         float(species_transport[spec1][3]) > dipmin
     ):

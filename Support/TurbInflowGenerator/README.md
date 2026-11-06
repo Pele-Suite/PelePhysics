@@ -6,6 +6,18 @@ It has three modes:
  - Generation from a periodic 3D plt file from a PeleLMeX simulation
 
 See the PelePhysics documentation for more details on using this tool in all modes.
+
+If the PeleLMeX run that produced the planes or the plt file used a mesh
+mapping (`geometry.mesh_mapping`), copy that run's mapping lines verbatim
+into this tool's input, e.g.
+
+    geometry.mesh_mapping = TanhStretchMap
+    TanhStretchMap.beta   = 2.0 0.0 0.0
+
+The generator then appends a `MESHMAP_V2` trailer to `HDR` recording the map
+and the precursor's computational-domain bounds, and TurbInflow samples the
+file in that coordinate.  Without the trailer a file is taken to be uniform
+in physical position, which is wrong for planes from a mapped run.
 The example below described how to use it for synthetic turbulence data.
 
 First generate the data using the python script:

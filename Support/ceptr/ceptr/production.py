@@ -147,6 +147,7 @@ def production_rate(
                 f"amrex::Real g_RT_qss[{species_info.n_qssa_species}];",
             )
             cw.writer(fstream, "gibbs_qss(g_RT_qss, T);")
+        cu.write_gibbs_exp(fstream, mechanism, species_info)
 
         cw.writer(fstream)
 
@@ -180,7 +181,7 @@ def production_rate(
         for orig_idx, idx in sorted(reaction_info.idxmap.items()):
             reaction = mechanism.reaction(orig_idx)
 
-            kc_exp_arg = cu.sorted_kc_exp_arg(mechanism, species_info, reaction)
+            kc_e = cu.kc_exp(mechanism, species_info, reaction, -1)
             kc_conv_inv = cu.fkc_conv_inv(mechanism, species_info, reaction)
 
             if bool(reaction.orders):
@@ -433,24 +434,23 @@ def production_rate(
                 if alpha is None:
                     cw.writer(
                         fstream,
-                        f"qr[{idx}] *= k_f * exp(-({kc_exp_arg})) * ({kc_conv_inv});",
+                        f"qr[{idx}] *= k_f * {kc_e} * ({kc_conv_inv});",
                     )
                 else:
                     cw.writer(
                         fstream,
-                        f"qr[{idx}] *= Corr * k_f * exp(-({kc_exp_arg})) *"
-                        f" ({kc_conv_inv});",
+                        f"qr[{idx}] *= Corr * k_f * {kc_e} *" f" ({kc_conv_inv});",
                     )
             else:
                 if alpha is None:
                     cw.writer(
                         fstream,
-                        f"qr[{idx}] *= k_f * exp(-({kc_exp_arg}));",
+                        f"qr[{idx}] *= k_f * {kc_e};",
                     )
                 else:
                     cw.writer(
                         fstream,
-                        f"qr[{idx}] *= Corr * k_f * exp(-({kc_exp_arg}));",
+                        f"qr[{idx}] *= Corr * k_f * {kc_e};",
                     )
 
         cw.writer(fstream)
@@ -534,6 +534,7 @@ def production_rate(
                 f"amrex::Real g_RT_qss[{species_info.n_qssa_species}];",
             )
             cw.writer(fstream, "gibbs_qss(g_RT_qss, T);")
+        cu.write_gibbs_exp(fstream, mechanism, species_info)
         cw.writer(fstream)
 
         if species_info.n_qssa_species > 0:
@@ -580,6 +581,8 @@ def production_rate(
             kc_exp_arg, kc_exp_arg_smp = cu.sorted_kc_exp_arg(
                 mechanism, species_info, reaction, syms
             )
+
+            kc_e = cu.kc_exp(mechanism, species_info, reaction, -1)
             kc_conv_inv, kc_conv_inv_smp = cu.fkc_conv_inv(
                 mechanism, species_info, reaction, syms
             )
@@ -926,7 +929,7 @@ def production_rate(
                         cw.writer(
                             fstream,
                             "const amrex::Real qr = k_f *"
-                            f" exp(-({kc_exp_arg})) * ({kc_conv_inv}) *"
+                            f" {kc_e} * ({kc_conv_inv}) *"
                             f" ({reverse_sc});",
                         )
                     qr_smp = (
@@ -939,7 +942,7 @@ def production_rate(
                     cw.writer(
                         fstream,
                         "const amrex::Real qr = Corr * k_f *"
-                        f" exp(-({kc_exp_arg})) * ({kc_conv_inv}) *"
+                        f" {kc_e} * ({kc_conv_inv}) *"
                         f" ({reverse_sc});",
                     )
                     qr_smp = (
@@ -959,15 +962,14 @@ def production_rate(
                     else:
                         cw.writer(
                             fstream,
-                            "const amrex::Real qr = k_f *"
-                            f" exp(-({kc_exp_arg})) * ({reverse_sc});",
+                            "const amrex::Real qr = k_f *" f" {kc_e} * ({reverse_sc});",
                         )
                     qr_smp = k_f_smp * sme.exp(-(kc_exp_arg_smp)) * reverse_sc_smp
                 else:
                     cw.writer(
                         fstream,
                         "const amrex::Real qr = Corr * k_f *"
-                        f" exp(-({kc_exp_arg})) * ({reverse_sc});",
+                        f" {kc_e} * ({reverse_sc});",
                     )
                     qr_smp = (
                         corr_smp * k_f_smp * sme.exp(-(kc_exp_arg_smp)) * reverse_sc_smp
@@ -1149,6 +1151,7 @@ def production_rate_light(fstream, mechanism, species_info, reaction_info):
         cw.writer(fstream, "gibbs(g_RT, T);")
         if species_info.n_qssa_species > 0:
             cw.writer(fstream, "gibbs_qss(g_RT_qss, T);")
+        cu.write_gibbs_exp(fstream, mechanism, species_info)
         cw.writer(fstream)
 
         if species_info.n_qssa_species > 0:
@@ -1181,7 +1184,7 @@ def production_rate_light(fstream, mechanism, species_info, reaction_info):
             else:
                 reverse_sc = "0.0"
 
-            kc_exp_arg = cu.sorted_kc_exp_arg(mechanism, species_info, reaction)
+            kc_e = cu.kc_exp(mechanism, species_info, reaction, -1)
             kc_conv_inv = cu.fkc_conv_inv(mechanism, species_info, reaction)
 
             if bool(reaction.orders):
@@ -1407,14 +1410,14 @@ def production_rate_light(fstream, mechanism, species_info, reaction_info):
                         cw.writer(
                             fstream,
                             "const amrex::Real qr = k_f *"
-                            f" exp(-({kc_exp_arg})) * ({kc_conv_inv}) *"
+                            f" {kc_e} * ({kc_conv_inv}) *"
                             f" ({reverse_sc});",
                         )
                 else:
                     cw.writer(
                         fstream,
                         "const amrex::Real qr = Corr * k_f *"
-                        f" exp(-({kc_exp_arg})) * ({kc_conv_inv}) *"
+                        f" {kc_e} * ({kc_conv_inv}) *"
                         f" ({reverse_sc});",
                     )
             else:
@@ -1427,14 +1430,13 @@ def production_rate_light(fstream, mechanism, species_info, reaction_info):
                     else:
                         cw.writer(
                             fstream,
-                            "const amrex::Real qr = k_f *"
-                            f" exp(-({kc_exp_arg})) * ({reverse_sc});",
+                            "const amrex::Real qr = k_f *" f" {kc_e} * ({reverse_sc});",
                         )
                 else:
                     cw.writer(
                         fstream,
                         "const amrex::Real qr = Corr * k_f *"
-                        f" exp(-({kc_exp_arg})) * ({reverse_sc});",
+                        f" {kc_e} * ({reverse_sc});",
                     )
             remove_forward = cu.is_remove_forward(reaction_info, orig_idx)
 

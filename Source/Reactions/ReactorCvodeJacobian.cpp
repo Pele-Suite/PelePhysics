@@ -191,6 +191,7 @@ cJac_sps(
   // Temp vectors
   // Save Jac from cell to cell if more than one
   amrex::Real temp_save_lcl = 0.0;
+  amrex::Real Jmat_tmp[(NUM_SPECIES + 1) * (NUM_SPECIES + 1)] = {0.0};
   for (int tid = 0; tid < ncells; tid++) {
     // Offset in case several cells
     int offset = tid * (NUM_SPECIES + 1);
@@ -208,8 +209,8 @@ cJac_sps(
     }
     amrex::Real temp = ydata[offset + NUM_SPECIES];
 
-    // Do we recompute Jac ?
-    amrex::Real Jmat_tmp[(NUM_SPECIES + 1) * (NUM_SPECIES + 1)] = {0.0};
+    // Do we recompute Jac ? If not, Jmat_tmp holds the one from the previous
+    // cell. Always recompute on the first cell, since temp_save_lcl = 0.0
     if (fabs(temp - temp_save_lcl) > 1.0) {
       const int consP =
         static_cast<int>(reactor_type == ReactorTypes::h_reactor_type);
@@ -271,7 +272,7 @@ cJac_KLU(
   sunindextype* colptrs_tmp = SUNSparseMatrix_IndexPointers(J);
   sunindextype* rowvals_tmp = SUNSparseMatrix_IndexValues(J);
   amrex::Real* Jdata = SUNSparseMatrix_Data(J);
-  for (int i = 0; i < NNZ; i++) {
+  for (int i = 0; i < NNZ * ncells; i++) {
     rowvals_tmp[i] = rowVals[0][i];
   }
   // Fixed colPtrs
@@ -282,6 +283,7 @@ cJac_KLU(
 
   // Save Jac from cell to cell if more than one
   amrex::Real temp_save_lcl = 0.0;
+  amrex::Real Jmat_tmp[(NUM_SPECIES + 1) * (NUM_SPECIES + 1)] = {0.0};
   for (int tid = 0; tid < ncells; tid++) {
     // Offset in case several cells
     int offset = tid * (NUM_SPECIES + 1);
@@ -298,8 +300,8 @@ cJac_KLU(
     }
     amrex::Real temp = ydata[offset + NUM_SPECIES];
 
-    // Do we recompute Jac ?
-    amrex::Real Jmat_tmp[(NUM_SPECIES + 1) * (NUM_SPECIES + 1)] = {0.0};
+    // Do we recompute Jac ? If not, Jmat_tmp holds the one from the previous
+    // cell. Always recompute on the first cell, since temp_save_lcl = 0.0
     if (fabs(temp - temp_save_lcl) > 1.0) {
       const int consP = reactor_type == ReactorTypes::h_reactor_type;
       auto eos = pele::physics::PhysicsType::eos();

@@ -2917,6 +2917,25 @@ comp_qss_coeff(
 {
   const amrex::Real invT = 1.0 / T;
   const amrex::Real logT = log(T);
+  // Kc from shared exp(-g/RT) factors where no factor or partial product can
+  // overflow (checked by CEPTR on this T range); exp of the sum otherwise and
+  // in single precision
+  const bool kc_fast =
+    sizeof(amrex::Real) == sizeof(double) && T >= 200.0 && T <= 10000.0;
+  amrex::Real ge[13] = {}, inv_ge[13] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 13; ++i) {
+      ge[i] = exp(-g_RT[i]);
+      inv_ge[i] = 1.0 / ge[i];
+    }
+  }
+  amrex::Real ge_qss[4] = {}, inv_ge_qss[4] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 4; ++i) {
+      ge_qss[i] = exp(-g_RT_qss[i]);
+      inv_ge_qss[i] = 1.0 / ge_qss[i];
+    }
+  }
 
   // reference concentration: P_atm / (RT) in inverse mol/m^3
   const amrex::Real refC = 101325 / 8.31446 * invT;
@@ -2945,8 +2964,10 @@ comp_qss_coeff(
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     qf[0] = Corr * k_f[0] * (sc[1]);
-    qr[0] = Corr * k_f[0] * exp(-(g_RT[1] - g_RT[7] + g_RT_qss[0])) * (refC) *
-            (sc[7]);
+    qr[0] = Corr * k_f[0] *
+            (kc_fast ? (inv_ge[7] * ge[1] * ge_qss[0])
+                     : exp(-(g_RT[1] - g_RT[7] + g_RT_qss[0]))) *
+            (refC) * (sc[7]);
   }
 
   {
@@ -2967,8 +2988,10 @@ comp_qss_coeff(
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     qf[1] = Corr * k_f[1] * (sc[1]);
-    qr[1] = Corr * k_f[1] * exp(-(g_RT[1] - g_RT[11] + g_RT_qss[2])) * (refC) *
-            (sc[11]);
+    qr[1] = Corr * k_f[1] *
+            (kc_fast ? (ge_qss[2] * inv_ge[11] * ge[1])
+                     : exp(-(g_RT[1] - g_RT[11] + g_RT_qss[2]))) *
+            (refC) * (sc[11]);
   }
 
   {
@@ -2989,15 +3012,19 @@ comp_qss_coeff(
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     qf[2] = Corr * k_f[2] * (sc[1] * sc[11]);
-    qr[2] =
-      Corr * k_f[2] * exp(-(g_RT[1] + g_RT[11] - g_RT_qss[3])) * (refC) * (1.0);
+    qr[2] = Corr * k_f[2] *
+            (kc_fast ? (inv_ge_qss[3] * ge[11] * ge[1])
+                     : exp(-(g_RT[1] + g_RT[11] - g_RT_qss[3]))) *
+            (refC) * (1.0);
   }
 
   {
     // reaction 17: HCO + H2O <=> CO + H + H2O
     qf[3] = k_f[3] * (sc[5]);
-    qr[3] = k_f[3] * exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2])) * (refCinv) *
-            (sc[1] * sc[5] * sc[9]);
+    qr[3] = k_f[3] *
+            (kc_fast ? (ge_qss[2] * inv_ge[9] * inv_ge[1])
+                     : exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
+            (refCinv) * (sc[1] * sc[5] * sc[9]);
   }
 
   {
@@ -3005,260 +3032,336 @@ comp_qss_coeff(
     const amrex::Real Corr =
       mixture + sc[0] + (0 - 1) * sc[5] + sc[8] + (1.5 - 1) * sc[9] + sc[10];
     qf[4] = Corr * k_f[4] * (1.0);
-    qr[4] = Corr * k_f[4] * exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2])) *
+    qr[4] = Corr * k_f[4] *
+            (kc_fast ? (ge_qss[2] * inv_ge[9] * inv_ge[1])
+                     : exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
             (refCinv) * (sc[1] * sc[9]);
   }
 
   {
     // reaction 21: CH2 + O <=> H + HCO
     qf[5] = k_f[5] * (sc[2]);
-    qr[5] =
-      k_f[5] * exp(-(-g_RT[1] + g_RT[2] + g_RT_qss[0] - g_RT_qss[2])) * (sc[1]);
+    qr[5] = k_f[5] *
+            (kc_fast ? (inv_ge_qss[2] * inv_ge[1] * ge[2] * ge_qss[0])
+                     : exp(-(-g_RT[1] + g_RT[2] + g_RT_qss[0] - g_RT_qss[2]))) *
+            (sc[1]);
   }
 
   {
     // reaction 22: CH2(S) + O <=> CO + H2
     qf[6] = k_f[6] * (sc[2]);
-    qr[6] = k_f[6] * exp(-(-g_RT[0] + g_RT[2] - g_RT[9] + g_RT_qss[1])) *
+    qr[6] = k_f[6] *
+            (kc_fast ? (inv_ge[0] * inv_ge[9] * ge[2] * ge_qss[1])
+                     : exp(-(-g_RT[0] + g_RT[2] - g_RT[9] + g_RT_qss[1]))) *
             (sc[0] * sc[9]);
   }
 
   {
     // reaction 25: HCO + O <=> CO + OH
     qf[7] = k_f[7] * (sc[2]);
-    qr[7] = k_f[7] * exp(-(g_RT[2] - g_RT[4] - g_RT[9] + g_RT_qss[2])) *
+    qr[7] = k_f[7] *
+            (kc_fast ? (inv_ge[4] * ge_qss[2] * inv_ge[9] * ge[2])
+                     : exp(-(g_RT[2] - g_RT[4] - g_RT[9] + g_RT_qss[2]))) *
             (sc[4] * sc[9]);
   }
 
   {
     // reaction 26: HCO + O <=> CO2 + H
     qf[8] = k_f[8] * (sc[2]);
-    qr[8] = k_f[8] * exp(-(-g_RT[1] + g_RT[2] - g_RT[10] + g_RT_qss[2])) *
+    qr[8] = k_f[8] *
+            (kc_fast ? (ge_qss[2] * inv_ge[1] * ge[2] * inv_ge[10])
+                     : exp(-(-g_RT[1] + g_RT[2] - g_RT[10] + g_RT_qss[2]))) *
             (sc[1] * sc[10]);
   }
 
   {
     // reaction 27: CH2O + O <=> HCO + OH
     qf[9] = k_f[9] * (sc[2] * sc[11]);
-    qr[9] =
-      k_f[9] * exp(-(g_RT[2] - g_RT[4] + g_RT[11] - g_RT_qss[2])) * (sc[4]);
+    qr[9] = k_f[9] *
+            (kc_fast ? (inv_ge[4] * inv_ge_qss[2] * ge[11] * ge[2])
+                     : exp(-(g_RT[2] - g_RT[4] + g_RT[11] - g_RT_qss[2]))) *
+            (sc[4]);
   }
 
   {
     // reaction 28: CH2OH + O <=> CH2O + OH
     qf[10] = k_f[10] * (sc[2]);
-    qr[10] = k_f[10] * exp(-(g_RT[2] - g_RT[4] - g_RT[11] + g_RT_qss[3])) *
+    qr[10] = k_f[10] *
+             (kc_fast ? (inv_ge[4] * ge_qss[3] * inv_ge[11] * ge[2])
+                      : exp(-(g_RT[2] - g_RT[4] - g_RT[11] + g_RT_qss[3]))) *
              (sc[4] * sc[11]);
   }
 
   {
     // reaction 30: CH2O + O2 <=> HCO + HO2
     qf[11] = k_f[11] * (sc[3] * sc[11]);
-    qr[11] =
-      k_f[11] * exp(-(g_RT[3] - g_RT[6] + g_RT[11] - g_RT_qss[2])) * (sc[6]);
+    qr[11] = k_f[11] *
+             (kc_fast ? (ge[3] * inv_ge[6] * inv_ge_qss[2] * ge[11])
+                      : exp(-(g_RT[3] - g_RT[6] + g_RT[11] - g_RT_qss[2]))) *
+             (sc[6]);
   }
 
   {
     // reaction 36: H + HCO <=> CO + H2
     qf[12] = k_f[12] * (sc[1]);
-    qr[12] = k_f[12] * exp(-(-g_RT[0] + g_RT[1] - g_RT[9] + g_RT_qss[2])) *
+    qr[12] = k_f[12] *
+             (kc_fast ? (inv_ge[0] * ge_qss[2] * inv_ge[9] * ge[1])
+                      : exp(-(-g_RT[0] + g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
              (sc[0] * sc[9]);
   }
 
   {
     // reaction 37: CH2O + H <=> H2 + HCO
     qf[13] = k_f[13] * (sc[1] * sc[11]);
-    qr[13] =
-      k_f[13] * exp(-(-g_RT[0] + g_RT[1] + g_RT[11] - g_RT_qss[2])) * (sc[0]);
+    qr[13] = k_f[13] *
+             (kc_fast ? (inv_ge[0] * inv_ge_qss[2] * ge[11] * ge[1])
+                      : exp(-(-g_RT[0] + g_RT[1] + g_RT[11] - g_RT_qss[2]))) *
+             (sc[0]);
   }
 
   {
     // reaction 38: CH2OH + H <=> CH2O + H2
     qf[14] = k_f[14] * (sc[1]);
-    qr[14] = k_f[14] * exp(-(-g_RT[0] + g_RT[1] - g_RT[11] + g_RT_qss[3])) *
+    qr[14] = k_f[14] *
+             (kc_fast ? (inv_ge[0] * ge_qss[3] * inv_ge[11] * ge[1])
+                      : exp(-(-g_RT[0] + g_RT[1] - g_RT[11] + g_RT_qss[3]))) *
              (sc[0] * sc[11]);
   }
 
   {
     // reaction 39: CH2OH + H <=> CH3 + OH
     qf[15] = k_f[15] * (sc[1]);
-    qr[15] = k_f[15] * exp(-(g_RT[1] - g_RT[4] - g_RT[7] + g_RT_qss[3])) *
+    qr[15] = k_f[15] *
+             (kc_fast ? (inv_ge[4] * ge_qss[3] * ge[1] * inv_ge[7])
+                      : exp(-(g_RT[1] - g_RT[4] - g_RT[7] + g_RT_qss[3]))) *
              (sc[4] * sc[7]);
   }
 
   {
     // reaction 40: CH2OH + H <=> CH2(S) + H2O
     qf[16] = k_f[16] * (sc[1]);
-    qr[16] =
-      k_f[16] * exp(-(g_RT[1] - g_RT[5] - g_RT_qss[1] + g_RT_qss[3])) * (sc[5]);
+    qr[16] = k_f[16] *
+             (kc_fast ? (ge_qss[3] * ge[1] * inv_ge_qss[1] * inv_ge[5])
+                      : exp(-(g_RT[1] - g_RT[5] - g_RT_qss[1] + g_RT_qss[3]))) *
+             (sc[5]);
   }
 
   {
     // reaction 44: CH2 + OH <=> CH2O + H
     qf[17] = k_f[17] * (sc[4]);
-    qr[17] = k_f[17] * exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[0])) *
+    qr[17] = k_f[17] *
+             (kc_fast ? (ge[4] * inv_ge[11] * inv_ge[1] * ge_qss[0])
+                      : exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[0]))) *
              (sc[1] * sc[11]);
   }
 
   {
     // reaction 45: CH2(S) + OH <=> CH2O + H
     qf[18] = k_f[18] * (sc[4]);
-    qr[18] = k_f[18] * exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[1])) *
+    qr[18] = k_f[18] *
+             (kc_fast ? (ge[4] * inv_ge[11] * inv_ge[1] * ge_qss[1])
+                      : exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[1]))) *
              (sc[1] * sc[11]);
   }
 
   {
     // reaction 46: CH3 + OH <=> CH2 + H2O
     qf[19] = k_f[19] * (sc[4] * sc[7]);
-    qr[19] =
-      k_f[19] * exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[0])) * (sc[5]);
+    qr[19] = k_f[19] *
+             (kc_fast ? (ge[4] * ge[7] * inv_ge_qss[0] * inv_ge[5])
+                      : exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[0]))) *
+             (sc[5]);
   }
 
   {
     // reaction 47: CH3 + OH <=> CH2(S) + H2O
     qf[20] = k_f[20] * (sc[4] * sc[7]);
-    qr[20] =
-      k_f[20] * exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[1])) * (sc[5]);
+    qr[20] = k_f[20] *
+             (kc_fast ? (ge[4] * ge[7] * inv_ge_qss[1] * inv_ge[5])
+                      : exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[1]))) *
+             (sc[5]);
   }
 
   {
     // reaction 50: HCO + OH <=> CO + H2O
     qf[21] = k_f[21] * (sc[4]);
-    qr[21] = k_f[21] * exp(-(g_RT[4] - g_RT[5] - g_RT[9] + g_RT_qss[2])) *
+    qr[21] = k_f[21] *
+             (kc_fast ? (ge[4] * ge_qss[2] * inv_ge[9] * inv_ge[5])
+                      : exp(-(g_RT[4] - g_RT[5] - g_RT[9] + g_RT_qss[2]))) *
              (sc[5] * sc[9]);
   }
 
   {
     // reaction 51: CH2O + OH <=> H2O + HCO
     qf[22] = k_f[22] * (sc[4] * sc[11]);
-    qr[22] =
-      k_f[22] * exp(-(g_RT[4] - g_RT[5] + g_RT[11] - g_RT_qss[2])) * (sc[5]);
+    qr[22] = k_f[22] *
+             (kc_fast ? (ge[4] * inv_ge_qss[2] * ge[11] * inv_ge[5])
+                      : exp(-(g_RT[4] - g_RT[5] + g_RT[11] - g_RT_qss[2]))) *
+             (sc[5]);
   }
 
   {
     // reaction 52: CH2OH + OH <=> CH2O + H2O
     qf[23] = k_f[23] * (sc[4]);
-    qr[23] = k_f[23] * exp(-(g_RT[4] - g_RT[5] - g_RT[11] + g_RT_qss[3])) *
+    qr[23] = k_f[23] *
+             (kc_fast ? (ge[4] * ge_qss[3] * inv_ge[11] * inv_ge[5])
+                      : exp(-(g_RT[4] - g_RT[5] - g_RT[11] + g_RT_qss[3]))) *
              (sc[5] * sc[11]);
   }
 
   {
     // reaction 53: CH2 + HO2 <=> CH2O + OH
     qf[24] = k_f[24] * (sc[6]);
-    qr[24] = k_f[24] * exp(-(-g_RT[4] + g_RT[6] - g_RT[11] + g_RT_qss[0])) *
+    qr[24] = k_f[24] *
+             (kc_fast ? (inv_ge[4] * ge[6] * inv_ge[11] * ge_qss[0])
+                      : exp(-(-g_RT[4] + g_RT[6] - g_RT[11] + g_RT_qss[0]))) *
              (sc[4] * sc[11]);
   }
 
   {
     // reaction 56: CH2 + O2 <=> HCO + OH
     qf[25] = k_f[25] * (sc[3]);
-    qr[25] =
-      k_f[25] * exp(-(g_RT[3] - g_RT[4] + g_RT_qss[0] - g_RT_qss[2])) * (sc[4]);
+    qr[25] = k_f[25] *
+             (kc_fast ? (inv_ge[4] * ge[3] * inv_ge_qss[2] * ge_qss[0])
+                      : exp(-(g_RT[3] - g_RT[4] + g_RT_qss[0] - g_RT_qss[2]))) *
+             (sc[4]);
   }
 
   {
     // reaction 57: CH2 + H2 <=> CH3 + H
     qf[26] = k_f[26] * (sc[0]);
-    qr[26] = k_f[26] * exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[0])) *
+    qr[26] = k_f[26] *
+             (kc_fast ? (ge[0] * inv_ge[7] * ge_qss[0] * inv_ge[1])
+                      : exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[0]))) *
              (sc[1] * sc[7]);
   }
 
   {
     // reaction 58: CH2 + CH4 <=> 2 CH3
     qf[27] = k_f[27] * (sc[8]);
-    qr[27] = k_f[27] * exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[0])) *
+    qr[27] = k_f[27] *
+             (kc_fast ? (inv_ge[7] * inv_ge[7] * ge_qss[0] * ge[8])
+                      : exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[0]))) *
              (sc[7] * sc[7]);
   }
 
   {
     // reaction 59: CH2(S) + N2 <=> CH2 + N2
     qf[28] = k_f[28] * (sc[12]);
-    qr[28] = k_f[28] * exp(-(g_RT[12] - g_RT[12] - g_RT_qss[0] + g_RT_qss[1])) *
-             (sc[12]);
+    qr[28] =
+      k_f[28] *
+      (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+               : exp(-(g_RT[12] - g_RT[12] - g_RT_qss[0] + g_RT_qss[1]))) *
+      (sc[12]);
   }
 
   {
     // reaction 60: CH2(S) + O2 <=> CO + H + OH
     qf[29] = k_f[29] * (sc[3]);
-    qr[29] = k_f[29] *
-             exp(-(-g_RT[1] + g_RT[3] - g_RT[4] - g_RT[9] + g_RT_qss[1])) *
-             (refCinv) * (sc[1] * sc[4] * sc[9]);
+    qr[29] =
+      k_f[29] *
+      (kc_fast ? (inv_ge[4] * ge[3] * inv_ge[9] * inv_ge[1] * ge_qss[1])
+               : exp(-(-g_RT[1] + g_RT[3] - g_RT[4] - g_RT[9] + g_RT_qss[1]))) *
+      (refCinv) * (sc[1] * sc[4] * sc[9]);
   }
 
   {
     // reaction 61: CH2(S) + O2 <=> CO + H2O
     qf[30] = k_f[30] * (sc[3]);
-    qr[30] = k_f[30] * exp(-(g_RT[3] - g_RT[5] - g_RT[9] + g_RT_qss[1])) *
+    qr[30] = k_f[30] *
+             (kc_fast ? (ge[3] * inv_ge[9] * inv_ge[5] * ge_qss[1])
+                      : exp(-(g_RT[3] - g_RT[5] - g_RT[9] + g_RT_qss[1]))) *
              (sc[5] * sc[9]);
   }
 
   {
     // reaction 62: CH2(S) + H2 <=> CH3 + H
     qf[31] = k_f[31] * (sc[0]);
-    qr[31] = k_f[31] * exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[1])) *
+    qr[31] = k_f[31] *
+             (kc_fast ? (ge[0] * inv_ge[7] * ge_qss[1] * inv_ge[1])
+                      : exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[1]))) *
              (sc[1] * sc[7]);
   }
 
   {
     // reaction 63: CH2(S) + H2O <=> CH2 + H2O
     qf[32] = k_f[32] * (sc[5]);
-    qr[32] =
-      k_f[32] * exp(-(g_RT[5] - g_RT[5] - g_RT_qss[0] + g_RT_qss[1])) * (sc[5]);
+    qr[32] = k_f[32] *
+             (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+                      : exp(-(g_RT[5] - g_RT[5] - g_RT_qss[0] + g_RT_qss[1]))) *
+             (sc[5]);
   }
 
   {
     // reaction 64: CH2(S) + CH4 <=> 2 CH3
     qf[33] = k_f[33] * (sc[8]);
-    qr[33] = k_f[33] * exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[1])) *
+    qr[33] = k_f[33] *
+             (kc_fast ? (inv_ge[7] * inv_ge[7] * ge_qss[1] * ge[8])
+                      : exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[1]))) *
              (sc[7] * sc[7]);
   }
 
   {
     // reaction 65: CH2(S) + CO <=> CH2 + CO
     qf[34] = k_f[34] * (sc[9]);
-    qr[34] =
-      k_f[34] * exp(-(g_RT[9] - g_RT[9] - g_RT_qss[0] + g_RT_qss[1])) * (sc[9]);
+    qr[34] = k_f[34] *
+             (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+                      : exp(-(g_RT[9] - g_RT[9] - g_RT_qss[0] + g_RT_qss[1]))) *
+             (sc[9]);
   }
 
   {
     // reaction 66: CH2(S) + CO2 <=> CH2 + CO2
     qf[35] = k_f[35] * (sc[10]);
-    qr[35] = k_f[35] * exp(-(g_RT[10] - g_RT[10] - g_RT_qss[0] + g_RT_qss[1])) *
-             (sc[10]);
+    qr[35] =
+      k_f[35] *
+      (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+               : exp(-(g_RT[10] - g_RT[10] - g_RT_qss[0] + g_RT_qss[1]))) *
+      (sc[10]);
   }
 
   {
     // reaction 67: CH2(S) + CO2 <=> CH2O + CO
     qf[36] = k_f[36] * (sc[10]);
-    qr[36] = k_f[36] * exp(-(-g_RT[9] + g_RT[10] - g_RT[11] + g_RT_qss[1])) *
+    qr[36] = k_f[36] *
+             (kc_fast ? (inv_ge[9] * ge[10] * ge_qss[1] * inv_ge[11])
+                      : exp(-(-g_RT[9] + g_RT[10] - g_RT[11] + g_RT_qss[1]))) *
              (sc[9] * sc[11]);
   }
 
   {
     // reaction 69: CH3 + HCO <=> CH4 + CO
     qf[37] = k_f[37] * (sc[7]);
-    qr[37] = k_f[37] * exp(-(g_RT[7] - g_RT[8] - g_RT[9] + g_RT_qss[2])) *
+    qr[37] = k_f[37] *
+             (kc_fast ? (ge_qss[2] * inv_ge[8] * ge[7] * inv_ge[9])
+                      : exp(-(g_RT[7] - g_RT[8] - g_RT[9] + g_RT_qss[2]))) *
              (sc[8] * sc[9]);
   }
 
   {
     // reaction 70: CH2O + CH3 <=> CH4 + HCO
     qf[38] = k_f[38] * (sc[7] * sc[11]);
-    qr[38] =
-      k_f[38] * exp(-(g_RT[7] - g_RT[8] + g_RT[11] - g_RT_qss[2])) * (sc[8]);
+    qr[38] = k_f[38] *
+             (kc_fast ? (inv_ge_qss[2] * ge[7] * ge[11] * inv_ge[8])
+                      : exp(-(g_RT[7] - g_RT[8] + g_RT[11] - g_RT_qss[2]))) *
+             (sc[8]);
   }
 
   {
     // reaction 71: HCO + O2 <=> CO + HO2
     qf[39] = k_f[39] * (sc[3]);
-    qr[39] = k_f[39] * exp(-(g_RT[3] - g_RT[6] - g_RT[9] + g_RT_qss[2])) *
+    qr[39] = k_f[39] *
+             (kc_fast ? (ge[3] * inv_ge[6] * ge_qss[2] * inv_ge[9])
+                      : exp(-(g_RT[3] - g_RT[6] - g_RT[9] + g_RT_qss[2]))) *
              (sc[6] * sc[9]);
   }
 
   {
     // reaction 72: CH2OH + O2 <=> CH2O + HO2
     qf[40] = k_f[40] * (sc[3]);
-    qr[40] = k_f[40] * exp(-(g_RT[3] - g_RT[6] - g_RT[11] + g_RT_qss[3])) *
+    qr[40] = k_f[40] *
+             (kc_fast ? (ge[3] * inv_ge[6] * ge_qss[3] * inv_ge[11])
+                      : exp(-(g_RT[3] - g_RT[6] - g_RT[11] + g_RT_qss[3]))) *
              (sc[6] * sc[11]);
   }
 
@@ -3761,6 +3864,25 @@ comp_qfqr(
   gibbs(g_RT, T);
   amrex::Real g_RT_qss[4];
   gibbs_qss(g_RT_qss, T);
+  // Kc from shared exp(-g/RT) factors where no factor or partial product can
+  // overflow (checked by CEPTR on this T range); exp of the sum otherwise and
+  // in single precision
+  const bool kc_fast =
+    sizeof(amrex::Real) == sizeof(double) && T >= 200.0 && T <= 10000.0;
+  amrex::Real ge[13] = {}, inv_ge[13] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 13; ++i) {
+      ge[i] = exp(-g_RT[i]);
+      inv_ge[i] = 1.0 / ge[i];
+    }
+  }
+  amrex::Real ge_qss[4] = {}, inv_ge_qss[4] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 4; ++i) {
+      ge_qss[i] = exp(-g_RT_qss[i]);
+      inv_ge_qss[i] = 1.0 / ge_qss[i];
+    }
+  }
 
   // reference concentration: P_atm / (RT) in inverse mol/m^3
   amrex::Real refC = 101325 / 8.31446 * invT;
@@ -3785,7 +3907,10 @@ comp_qfqr(
   F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
   Corr = F * F_troe;
   qf[0] *= Corr * k_f;
-  qr[0] *= Corr * k_f * exp(-(g_RT[1] - g_RT[7] + g_RT_qss[0])) * (refC);
+  qr[0] *= Corr * k_f *
+           (kc_fast ? (inv_ge[7] * ge[1] * ge_qss[0])
+                    : exp(-(g_RT[1] - g_RT[7] + g_RT_qss[0]))) *
+           (refC);
   // reaction 1:  CH3 + H (+M) <=> CH4 (+M)
   k_f = 12700000000 * exp((-0.63) * logT - (192.731983003208) * invT);
   Corr = mixture + sc[0] + (5) * sc[5] + sc[8] + (0.5) * sc[9] + sc[10];
@@ -3801,7 +3926,10 @@ comp_qfqr(
   F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
   Corr = F * F_troe;
   qf[1] *= Corr * k_f;
-  qr[1] *= Corr * k_f * exp(-(g_RT[1] + g_RT[7] - g_RT[8])) * (refC);
+  qr[1] *= Corr * k_f *
+           (kc_fast ? (ge[7] * inv_ge[8] * ge[1])
+                    : exp(-(g_RT[1] + g_RT[7] - g_RT[8]))) *
+           (refC);
   // reaction 2:  H + HCO (+M) <=> CH2O (+M)
   k_f = 1090000 * exp((0.48) * logT - (-130.836333109227) * invT);
   Corr = mixture + sc[0] + (5) * sc[5] + sc[8] + (0.5) * sc[9] + sc[10];
@@ -3818,7 +3946,10 @@ comp_qfqr(
   F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
   Corr = F * F_troe;
   qf[2] *= Corr * k_f;
-  qr[2] *= Corr * k_f * exp(-(g_RT[1] - g_RT[11] + g_RT_qss[2])) * (refC);
+  qr[2] *= Corr * k_f *
+           (kc_fast ? (ge_qss[2] * inv_ge[11] * ge[1])
+                    : exp(-(g_RT[1] - g_RT[11] + g_RT_qss[2]))) *
+           (refC);
   // reaction 3:  CH2O + H (+M) <=> CH2OH (+M)
   k_f = 540000 * exp((0.454) * logT - (1811.57999689699) * invT);
   Corr = mixture + sc[0] + (5) * sc[5] + sc[8] + (0.5) * sc[9] + sc[10];
@@ -3834,7 +3965,10 @@ comp_qfqr(
   F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
   Corr = F * F_troe;
   qf[3] *= Corr * k_f;
-  qr[3] *= Corr * k_f * exp(-(g_RT[1] + g_RT[11] - g_RT_qss[3])) * (refC);
+  qr[3] *= Corr * k_f *
+           (kc_fast ? (inv_ge_qss[3] * ge[11] * ge[1])
+                    : exp(-(g_RT[1] + g_RT[11] - g_RT_qss[3]))) *
+           (refC);
   // reaction 4:  CO + H2 (+M) <=> CH2O (+M)
   k_f = 43 * exp((1.5) * logT - (40056.0465980557) * invT);
   Corr = mixture + sc[0] + (5) * sc[5] + sc[8] + (0.5) * sc[9] + sc[10];
@@ -3850,290 +3984,416 @@ comp_qfqr(
   F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
   Corr = F * F_troe;
   qf[4] *= Corr * k_f;
-  qr[4] *= Corr * k_f * exp(-(g_RT[0] + g_RT[9] - g_RT[11])) * (refC);
+  qr[4] *= Corr * k_f *
+           (kc_fast ? (ge[0] * inv_ge[11] * ge[9])
+                    : exp(-(g_RT[0] + g_RT[9] - g_RT[11]))) *
+           (refC);
   // reaction 5:  2 O + M <=> O2 + M
   k_f = 120000 * exp((-1) * logT);
   Corr = mixture + (1.4) * sc[0] + (14.4) * sc[5] + sc[8] + (0.75) * sc[9] +
          (2.6) * sc[10];
   qf[5] *= Corr * k_f;
-  qr[5] *= Corr * k_f * exp(-(2.000000 * g_RT[2] - g_RT[3])) * (refC);
+  qr[5] *= Corr * k_f *
+           (kc_fast ? (inv_ge[3] * ge[2] * ge[2])
+                    : exp(-(2.000000 * g_RT[2] - g_RT[3]))) *
+           (refC);
   // reaction 6:  H + O + M <=> OH + M
   k_f = 500000 * exp((-1) * logT);
   Corr = mixture + sc[0] + (5) * sc[5] + sc[8] + (0.5) * sc[9] + sc[10];
   qf[6] *= Corr * k_f;
-  qr[6] *= Corr * k_f * exp(-(g_RT[1] + g_RT[2] - g_RT[4])) * (refC);
+  qr[6] *= Corr * k_f *
+           (kc_fast ? (inv_ge[4] * ge[1] * ge[2])
+                    : exp(-(g_RT[1] + g_RT[2] - g_RT[4]))) *
+           (refC);
   // reaction 7:  CO + O + M <=> CO2 + M
   k_f = 602 * exp(-(1509.64999741416) * invT);
   Corr = mixture + sc[0] + (5) * sc[3] + (5) * sc[5] + sc[8] + (0.5) * sc[9] +
          (2.5) * sc[10];
   qf[7] *= Corr * k_f;
-  qr[7] *= Corr * k_f * exp(-(g_RT[2] + g_RT[9] - g_RT[10])) * (refC);
+  qr[7] *= Corr * k_f *
+           (kc_fast ? (ge[9] * ge[2] * inv_ge[10])
+                    : exp(-(g_RT[2] + g_RT[9] - g_RT[10]))) *
+           (refC);
   // reaction 8:  H + O2 + M <=> HO2 + M
   k_f = 2800000 * exp((-0.86) * logT);
   Corr = mixture + (-1) * sc[3] + (-1) * sc[5] + (-0.25) * sc[9] +
          (0.5) * sc[10] + (-1) * sc[12];
   qf[8] *= Corr * k_f;
-  qr[8] *= Corr * k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC);
+  qr[8] *= Corr * k_f *
+           (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                    : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+           (refC);
   // reaction 9:  H + O2 + O2 <=> HO2 + O2
   k_f = 300000000 * exp((-1.72) * logT);
   qf[9] *= k_f;
-  qr[9] *= k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC);
+  qr[9] *= k_f *
+           (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                    : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+           (refC);
   // reaction 10:  H + O2 + H2O <=> HO2 + H2O
   k_f = 9380000 * exp((-0.76) * logT);
   qf[10] *= k_f;
-  qr[10] *= k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC);
+  qr[10] *= k_f *
+            (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                     : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+            (refC);
   // reaction 11:  H + O2 + N2 <=> HO2 + N2
   k_f = 375000000 * exp((-1.72) * logT);
   qf[11] *= k_f;
-  qr[11] *= k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC);
+  qr[11] *= k_f *
+            (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                     : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+            (refC);
   // reaction 12:  2 H + M <=> H2 + M
   k_f = 1000000 * exp((-1) * logT);
   Corr = mixture + (-1) * sc[0] + (-1) * sc[5] + sc[8] + (-1) * sc[10];
   qf[12] *= Corr * k_f;
-  qr[12] *= Corr * k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC);
+  qr[12] *= Corr * k_f *
+            (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                     : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+            (refC);
   // reaction 13:  2 H + H2 <=> H2 + H2
   k_f = 90000 * exp((-0.6) * logT);
   qf[13] *= k_f;
-  qr[13] *= k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC);
+  qr[13] *= k_f *
+            (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                     : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+            (refC);
   // reaction 14:  2 H + H2O <=> H2 + H2O
   k_f = 60000000 * exp((-1.25) * logT);
   qf[14] *= k_f;
-  qr[14] *= k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC);
+  qr[14] *= k_f *
+            (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                     : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+            (refC);
   // reaction 15:  2 H + CO2 <=> H2 + CO2
   k_f = 550000000 * exp((-2) * logT);
   qf[15] *= k_f;
-  qr[15] *= k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC);
+  qr[15] *= k_f *
+            (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                     : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+            (refC);
   // reaction 16:  H + OH + M <=> H2O + M
   k_f = 22000000000 * exp((-2) * logT);
   Corr = mixture + (-0.27) * sc[0] + (2.65) * sc[5] + sc[8];
   qf[16] *= Corr * k_f;
-  qr[16] *= Corr * k_f * exp(-(g_RT[1] + g_RT[4] - g_RT[5])) * (refC);
+  qr[16] *= Corr * k_f *
+            (kc_fast ? (ge[4] * ge[1] * inv_ge[5])
+                     : exp(-(g_RT[1] + g_RT[4] - g_RT[5]))) *
+            (refC);
   // reaction 17:  HCO + H2O <=> CO + H + H2O
   k_f = 2244000000000 * exp((-1) * logT - (8554.68331868023) * invT);
   qf[17] *= k_f;
-  qr[17] *= k_f * exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2])) * (refCinv);
+  qr[17] *= k_f *
+            (kc_fast ? (ge_qss[2] * inv_ge[9] * inv_ge[1])
+                     : exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
+            (refCinv);
   // reaction 18:  HCO + M <=> CO + H + M
   k_f = 187000000000 * exp((-1) * logT - (8554.68331868023) * invT);
   Corr = mixture + sc[0] + (-1) * sc[5] + sc[8] + (0.5) * sc[9] + sc[10];
   qf[18] *= Corr * k_f;
-  qr[18] *= Corr * k_f * exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2])) * (refCinv);
+  qr[18] *= Corr * k_f *
+            (kc_fast ? (ge_qss[2] * inv_ge[9] * inv_ge[1])
+                     : exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
+            (refCinv);
   // reaction 19:  H2 + O <=> H + OH
   k_f = 0.05 * exp((2.67) * logT - (3165.23282791169) * invT);
   qf[19] *= k_f;
-  qr[19] *= k_f * exp(-(g_RT[0] - g_RT[1] + g_RT[2] - g_RT[4]));
+  qr[19] *= k_f * (kc_fast ? (ge[0] * inv_ge[4] * ge[2] * inv_ge[1])
+                           : exp(-(g_RT[0] - g_RT[1] + g_RT[2] - g_RT[4])));
   // reaction 20:  HO2 + O <=> O2 + OH
   k_f = 20000000;
   qf[20] *= k_f;
-  qr[20] *= k_f * exp(-(g_RT[2] - g_RT[3] - g_RT[4] + g_RT[6]));
+  qr[20] *= k_f * (kc_fast ? (inv_ge[4] * ge[6] * inv_ge[3] * ge[2])
+                           : exp(-(g_RT[2] - g_RT[3] - g_RT[4] + g_RT[6])));
   // reaction 21:  CH2 + O <=> H + HCO
   k_f = 80000000;
   qf[21] *= k_f;
-  qr[21] *= k_f * exp(-(-g_RT[1] + g_RT[2] + g_RT_qss[0] - g_RT_qss[2]));
+  qr[21] *=
+    k_f * (kc_fast ? (inv_ge_qss[2] * inv_ge[1] * ge[2] * ge_qss[0])
+                   : exp(-(-g_RT[1] + g_RT[2] + g_RT_qss[0] - g_RT_qss[2])));
   // reaction 22:  CH2(S) + O <=> CO + H2
   k_f = 15000000;
   qf[22] *= k_f;
-  qr[22] *= k_f * exp(-(-g_RT[0] + g_RT[2] - g_RT[9] + g_RT_qss[1]));
+  qr[22] *=
+    k_f * (kc_fast ? (inv_ge[0] * inv_ge[9] * ge[2] * ge_qss[1])
+                   : exp(-(-g_RT[0] + g_RT[2] - g_RT[9] + g_RT_qss[1])));
   // reaction 23:  CH3 + O <=> CH2O + H
   k_f = 84300000;
   qf[23] *= k_f;
-  qr[23] *= k_f * exp(-(-g_RT[1] + g_RT[2] + g_RT[7] - g_RT[11]));
+  qr[23] *= k_f * (kc_fast ? (ge[7] * inv_ge[1] * inv_ge[11] * ge[2])
+                           : exp(-(-g_RT[1] + g_RT[2] + g_RT[7] - g_RT[11])));
   // reaction 24:  CH4 + O <=> CH3 + OH
   k_f = 1020 * exp((1.5) * logT - (4327.66332592059) * invT);
   qf[24] *= k_f;
-  qr[24] *= k_f * exp(-(g_RT[2] - g_RT[4] - g_RT[7] + g_RT[8]));
+  qr[24] *= k_f * (kc_fast ? (inv_ge[4] * ge[8] * ge[2] * inv_ge[7])
+                           : exp(-(g_RT[2] - g_RT[4] - g_RT[7] + g_RT[8])));
   // reaction 25:  HCO + O <=> CO + OH
   k_f = 30000000;
   qf[25] *= k_f;
-  qr[25] *= k_f * exp(-(g_RT[2] - g_RT[4] - g_RT[9] + g_RT_qss[2]));
+  qr[25] *= k_f * (kc_fast ? (inv_ge[4] * ge_qss[2] * inv_ge[9] * ge[2])
+                           : exp(-(g_RT[2] - g_RT[4] - g_RT[9] + g_RT_qss[2])));
   // reaction 26:  HCO + O <=> CO2 + H
   k_f = 30000000;
   qf[26] *= k_f;
-  qr[26] *= k_f * exp(-(-g_RT[1] + g_RT[2] - g_RT[10] + g_RT_qss[2]));
+  qr[26] *=
+    k_f * (kc_fast ? (ge_qss[2] * inv_ge[1] * ge[2] * inv_ge[10])
+                   : exp(-(-g_RT[1] + g_RT[2] - g_RT[10] + g_RT_qss[2])));
   // reaction 27:  CH2O + O <=> HCO + OH
   k_f = 39000000 * exp(-(1781.38699694871) * invT);
   qf[27] *= k_f;
-  qr[27] *= k_f * exp(-(g_RT[2] - g_RT[4] + g_RT[11] - g_RT_qss[2]));
+  qr[27] *=
+    k_f * (kc_fast ? (inv_ge[4] * inv_ge_qss[2] * ge[11] * ge[2])
+                   : exp(-(g_RT[2] - g_RT[4] + g_RT[11] - g_RT_qss[2])));
   // reaction 28:  CH2OH + O <=> CH2O + OH
   k_f = 10000000;
   qf[28] *= k_f;
-  qr[28] *= k_f * exp(-(g_RT[2] - g_RT[4] - g_RT[11] + g_RT_qss[3]));
+  qr[28] *=
+    k_f * (kc_fast ? (inv_ge[4] * ge_qss[3] * inv_ge[11] * ge[2])
+                   : exp(-(g_RT[2] - g_RT[4] - g_RT[11] + g_RT_qss[3])));
   // reaction 29:  CO + O2 <=> CO2 + O
   k_f = 2500000 * exp(-(24053.7566254656) * invT);
   qf[29] *= k_f;
-  qr[29] *= k_f * exp(-(-g_RT[2] + g_RT[3] + g_RT[9] - g_RT[10]));
+  qr[29] *= k_f * (kc_fast ? (ge[3] * ge[9] * inv_ge[10] * inv_ge[2])
+                           : exp(-(-g_RT[2] + g_RT[3] + g_RT[9] - g_RT[10])));
   // reaction 30:  CH2O + O2 <=> HCO + HO2
   k_f = 100000000 * exp(-(20128.6666321888) * invT);
   qf[30] *= k_f;
-  qr[30] *= k_f * exp(-(g_RT[3] - g_RT[6] + g_RT[11] - g_RT_qss[2]));
+  qr[30] *=
+    k_f * (kc_fast ? (ge[3] * inv_ge[6] * inv_ge_qss[2] * ge[11])
+                   : exp(-(g_RT[3] - g_RT[6] + g_RT[11] - g_RT_qss[2])));
   // reaction 31:  H + O2 <=> O + OH
   k_f = 83000000 * exp(-(7252.86180424342) * invT);
   qf[31] *= k_f;
-  qr[31] *= k_f * exp(-(g_RT[1] - g_RT[2] + g_RT[3] - g_RT[4]));
+  qr[31] *= k_f * (kc_fast ? (inv_ge[4] * ge[3] * ge[1] * inv_ge[2])
+                           : exp(-(g_RT[1] - g_RT[2] + g_RT[3] - g_RT[4])));
   // reaction 32:  H + HO2 <=> H2O + O
   k_f = 3970000 * exp(-(337.658382754967) * invT);
   qf[32] *= k_f;
-  qr[32] *= k_f * exp(-(g_RT[1] - g_RT[2] - g_RT[5] + g_RT[6]));
+  qr[32] *= k_f * (kc_fast ? (ge[6] * ge[1] * inv_ge[2] * inv_ge[5])
+                           : exp(-(g_RT[1] - g_RT[2] - g_RT[5] + g_RT[6])));
   // reaction 33:  H + HO2 <=> H2 + O2
   k_f = 28000000 * exp(-(537.435399079441) * invT);
   qf[33] *= k_f;
-  qr[33] *= k_f * exp(-(-g_RT[0] + g_RT[1] - g_RT[3] + g_RT[6]));
+  qr[33] *= k_f * (kc_fast ? (inv_ge[0] * ge[6] * inv_ge[3] * ge[1])
+                           : exp(-(-g_RT[0] + g_RT[1] - g_RT[3] + g_RT[6])));
   // reaction 34:  H + HO2 <=> 2 OH
   k_f = 134000000 * exp(-(319.542582785997) * invT);
   qf[34] *= k_f;
-  qr[34] *= k_f * exp(-(g_RT[1] - 2.000000 * g_RT[4] + g_RT[6]));
+  qr[34] *= k_f * (kc_fast ? (inv_ge[4] * ge[6] * inv_ge[4] * ge[1])
+                           : exp(-(g_RT[1] - 2.000000 * g_RT[4] + g_RT[6])));
   // reaction 35:  CH4 + H <=> CH3 + H2
   k_f = 660 * exp((1.62) * logT - (5454.86865732316) * invT);
   qf[35] *= k_f;
-  qr[35] *= k_f * exp(-(-g_RT[0] + g_RT[1] - g_RT[7] + g_RT[8]));
+  qr[35] *= k_f * (kc_fast ? (inv_ge[0] * ge[8] * ge[1] * inv_ge[7])
+                           : exp(-(-g_RT[0] + g_RT[1] - g_RT[7] + g_RT[8])));
   // reaction 36:  H + HCO <=> CO + H2
   k_f = 73400000;
   qf[36] *= k_f;
-  qr[36] *= k_f * exp(-(-g_RT[0] + g_RT[1] - g_RT[9] + g_RT_qss[2]));
+  qr[36] *=
+    k_f * (kc_fast ? (inv_ge[0] * ge_qss[2] * inv_ge[9] * ge[1])
+                   : exp(-(-g_RT[0] + g_RT[1] - g_RT[9] + g_RT_qss[2])));
   // reaction 37:  CH2O + H <=> H2 + HCO
   k_f = 23000 * exp((1.05) * logT - (1648.03458051046) * invT);
   qf[37] *= k_f;
-  qr[37] *= k_f * exp(-(-g_RT[0] + g_RT[1] + g_RT[11] - g_RT_qss[2]));
+  qr[37] *=
+    k_f * (kc_fast ? (inv_ge[0] * inv_ge_qss[2] * ge[11] * ge[1])
+                   : exp(-(-g_RT[0] + g_RT[1] + g_RT[11] - g_RT_qss[2])));
   // reaction 38:  CH2OH + H <=> CH2O + H2
   k_f = 20000000;
   qf[38] *= k_f;
-  qr[38] *= k_f * exp(-(-g_RT[0] + g_RT[1] - g_RT[11] + g_RT_qss[3]));
+  qr[38] *=
+    k_f * (kc_fast ? (inv_ge[0] * ge_qss[3] * inv_ge[11] * ge[1])
+                   : exp(-(-g_RT[0] + g_RT[1] - g_RT[11] + g_RT_qss[3])));
   // reaction 39:  CH2OH + H <=> CH3 + OH
   k_f = 12000000;
   qf[39] *= k_f;
-  qr[39] *= k_f * exp(-(g_RT[1] - g_RT[4] - g_RT[7] + g_RT_qss[3]));
+  qr[39] *= k_f * (kc_fast ? (inv_ge[4] * ge_qss[3] * ge[1] * inv_ge[7])
+                           : exp(-(g_RT[1] - g_RT[4] - g_RT[7] + g_RT_qss[3])));
   // reaction 40:  CH2OH + H <=> CH2(S) + H2O
   k_f = 6000000;
   qf[40] *= k_f;
-  qr[40] *= k_f * exp(-(g_RT[1] - g_RT[5] - g_RT_qss[1] + g_RT_qss[3]));
+  qr[40] *=
+    k_f * (kc_fast ? (ge_qss[3] * ge[1] * inv_ge_qss[1] * inv_ge[5])
+                   : exp(-(g_RT[1] - g_RT[5] - g_RT_qss[1] + g_RT_qss[3])));
   // reaction 41:  H2 + OH <=> H + H2O
   k_f = 216 * exp((1.51) * logT - (1726.03316371019) * invT);
   qf[41] *= k_f;
-  qr[41] *= k_f * exp(-(g_RT[0] - g_RT[1] + g_RT[4] - g_RT[5]));
+  qr[41] *= k_f * (kc_fast ? (ge[0] * ge[4] * inv_ge[1] * inv_ge[5])
+                           : exp(-(g_RT[0] - g_RT[1] + g_RT[4] - g_RT[5])));
   // reaction 42:  2 OH <=> H2O + O
   k_f = 0.0357 * exp((2.4) * logT - (-1061.78716484796) * invT);
   qf[42] *= k_f;
-  qr[42] *= k_f * exp(-(-g_RT[2] + 2.000000 * g_RT[4] - g_RT[5]));
+  qr[42] *= k_f * (kc_fast ? (ge[4] * ge[4] * inv_ge[2] * inv_ge[5])
+                           : exp(-(-g_RT[2] + 2.000000 * g_RT[4] - g_RT[5])));
   // reaction 43:  HO2 + OH <=> H2O + O2
   k_f = 29000000 * exp(-(-251.60833290236) * invT);
   qf[43] *= k_f;
-  qr[43] *= k_f * exp(-(-g_RT[3] + g_RT[4] - g_RT[5] + g_RT[6]));
+  qr[43] *= k_f * (kc_fast ? (ge[4] * inv_ge[3] * ge[6] * inv_ge[5])
+                           : exp(-(-g_RT[3] + g_RT[4] - g_RT[5] + g_RT[6])));
   // reaction 44:  CH2 + OH <=> CH2O + H
   k_f = 20000000;
   qf[44] *= k_f;
-  qr[44] *= k_f * exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[0]));
+  qr[44] *=
+    k_f * (kc_fast ? (ge[4] * inv_ge[11] * inv_ge[1] * ge_qss[0])
+                   : exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[0])));
   // reaction 45:  CH2(S) + OH <=> CH2O + H
   k_f = 30000000;
   qf[45] *= k_f;
-  qr[45] *= k_f * exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[1]));
+  qr[45] *=
+    k_f * (kc_fast ? (ge[4] * inv_ge[11] * inv_ge[1] * ge_qss[1])
+                   : exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[1])));
   // reaction 46:  CH3 + OH <=> CH2 + H2O
   k_f = 56 * exp((1.6) * logT - (2727.43432866158) * invT);
   qf[46] *= k_f;
-  qr[46] *= k_f * exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[0]));
+  qr[46] *= k_f * (kc_fast ? (ge[4] * ge[7] * inv_ge_qss[0] * inv_ge[5])
+                           : exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[0])));
   // reaction 47:  CH3 + OH <=> CH2(S) + H2O
   k_f = 25010000;
   qf[47] *= k_f;
-  qr[47] *= k_f * exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[1]));
+  qr[47] *= k_f * (kc_fast ? (ge[4] * ge[7] * inv_ge_qss[1] * inv_ge[5])
+                           : exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[1])));
   // reaction 48:  CH4 + OH <=> CH3 + H2O
   k_f = 100 * exp((1.6) * logT - (1570.03599731073) * invT);
   qf[48] *= k_f;
-  qr[48] *= k_f * exp(-(g_RT[4] - g_RT[5] - g_RT[7] + g_RT[8]));
+  qr[48] *= k_f * (kc_fast ? (ge[4] * inv_ge[7] * inv_ge[5] * ge[8])
+                           : exp(-(g_RT[4] - g_RT[5] - g_RT[7] + g_RT[8])));
   // reaction 49:  CO + OH <=> CO2 + H
   k_f = 47.6 * exp((1.228) * logT - (35.2251666063304) * invT);
   qf[49] *= k_f;
-  qr[49] *= k_f * exp(-(-g_RT[1] + g_RT[4] + g_RT[9] - g_RT[10]));
+  qr[49] *= k_f * (kc_fast ? (ge[4] * ge[9] * inv_ge[10] * inv_ge[1])
+                           : exp(-(-g_RT[1] + g_RT[4] + g_RT[9] - g_RT[10])));
   // reaction 50:  HCO + OH <=> CO + H2O
   k_f = 50000000;
   qf[50] *= k_f;
-  qr[50] *= k_f * exp(-(g_RT[4] - g_RT[5] - g_RT[9] + g_RT_qss[2]));
+  qr[50] *= k_f * (kc_fast ? (ge[4] * ge_qss[2] * inv_ge[9] * inv_ge[5])
+                           : exp(-(g_RT[4] - g_RT[5] - g_RT[9] + g_RT_qss[2])));
   // reaction 51:  CH2O + OH <=> H2O + HCO
   k_f = 3430 * exp((1.18) * logT - (-224.93784961471) * invT);
   qf[51] *= k_f;
-  qr[51] *= k_f * exp(-(g_RT[4] - g_RT[5] + g_RT[11] - g_RT_qss[2]));
+  qr[51] *=
+    k_f * (kc_fast ? (ge[4] * inv_ge_qss[2] * ge[11] * inv_ge[5])
+                   : exp(-(g_RT[4] - g_RT[5] + g_RT[11] - g_RT_qss[2])));
   // reaction 52:  CH2OH + OH <=> CH2O + H2O
   k_f = 5000000;
   qf[52] *= k_f;
-  qr[52] *= k_f * exp(-(g_RT[4] - g_RT[5] - g_RT[11] + g_RT_qss[3]));
+  qr[52] *=
+    k_f * (kc_fast ? (ge[4] * ge_qss[3] * inv_ge[11] * inv_ge[5])
+                   : exp(-(g_RT[4] - g_RT[5] - g_RT[11] + g_RT_qss[3])));
   // reaction 53:  CH2 + HO2 <=> CH2O + OH
   k_f = 20000000;
   qf[53] *= k_f;
-  qr[53] *= k_f * exp(-(-g_RT[4] + g_RT[6] - g_RT[11] + g_RT_qss[0]));
+  qr[53] *=
+    k_f * (kc_fast ? (inv_ge[4] * ge[6] * inv_ge[11] * ge_qss[0])
+                   : exp(-(-g_RT[4] + g_RT[6] - g_RT[11] + g_RT_qss[0])));
   // reaction 54:  CH3 + HO2 <=> CH4 + O2
   k_f = 1000000;
   qf[54] *= k_f;
-  qr[54] *= k_f * exp(-(-g_RT[3] + g_RT[6] + g_RT[7] - g_RT[8]));
+  qr[54] *= k_f * (kc_fast ? (inv_ge[3] * ge[6] * ge[7] * inv_ge[8])
+                           : exp(-(-g_RT[3] + g_RT[6] + g_RT[7] - g_RT[8])));
   // reaction 55:  CO + HO2 <=> CO2 + OH
   k_f = 150000000 * exp(-(11875.9133129914) * invT);
   qf[55] *= k_f;
-  qr[55] *= k_f * exp(-(-g_RT[4] + g_RT[6] + g_RT[9] - g_RT[10]));
+  qr[55] *= k_f * (kc_fast ? (inv_ge[4] * ge[6] * ge[9] * inv_ge[10])
+                           : exp(-(-g_RT[4] + g_RT[6] + g_RT[9] - g_RT[10])));
   // reaction 56:  CH2 + O2 <=> HCO + OH
   k_f = 13200000 * exp(-(754.82499870708) * invT);
   qf[56] *= k_f;
-  qr[56] *= k_f * exp(-(g_RT[3] - g_RT[4] + g_RT_qss[0] - g_RT_qss[2]));
+  qr[56] *=
+    k_f * (kc_fast ? (inv_ge[4] * ge[3] * inv_ge_qss[2] * ge_qss[0])
+                   : exp(-(g_RT[3] - g_RT[4] + g_RT_qss[0] - g_RT_qss[2])));
   // reaction 57:  CH2 + H2 <=> CH3 + H
   k_f = 0.5 * exp((2) * logT - (3638.25649376812) * invT);
   qf[57] *= k_f;
-  qr[57] *= k_f * exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[0]));
+  qr[57] *= k_f * (kc_fast ? (ge[0] * inv_ge[7] * ge_qss[0] * inv_ge[1])
+                           : exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[0])));
   // reaction 58:  CH2 + CH4 <=> 2 CH3
   k_f = 2.46 * exp((2) * logT - (4161.60182620503) * invT);
   qf[58] *= k_f;
-  qr[58] *= k_f * exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[0]));
+  qr[58] *=
+    k_f * (kc_fast ? (inv_ge[7] * inv_ge[7] * ge_qss[0] * ge[8])
+                   : exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[0])));
   // reaction 59:  CH2(S) + N2 <=> CH2 + N2
   k_f = 15000000 * exp(-(301.929999482832) * invT);
   qf[59] *= k_f;
-  qr[59] *= k_f * exp(-(g_RT[12] - g_RT[12] - g_RT_qss[0] + g_RT_qss[1]));
+  qr[59] *=
+    k_f * (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+                   : exp(-(g_RT[12] - g_RT[12] - g_RT_qss[0] + g_RT_qss[1])));
   // reaction 60:  CH2(S) + O2 <=> CO + H + OH
   k_f = 28000000;
   qf[60] *= k_f;
-  qr[60] *= k_f * exp(-(-g_RT[1] + g_RT[3] - g_RT[4] - g_RT[9] + g_RT_qss[1])) *
-            (refCinv);
+  qr[60] *=
+    k_f *
+    (kc_fast ? (inv_ge[4] * ge[3] * inv_ge[9] * inv_ge[1] * ge_qss[1])
+             : exp(-(-g_RT[1] + g_RT[3] - g_RT[4] - g_RT[9] + g_RT_qss[1]))) *
+    (refCinv);
   // reaction 61:  CH2(S) + O2 <=> CO + H2O
   k_f = 12000000;
   qf[61] *= k_f;
-  qr[61] *= k_f * exp(-(g_RT[3] - g_RT[5] - g_RT[9] + g_RT_qss[1]));
+  qr[61] *= k_f * (kc_fast ? (ge[3] * inv_ge[9] * inv_ge[5] * ge_qss[1])
+                           : exp(-(g_RT[3] - g_RT[5] - g_RT[9] + g_RT_qss[1])));
   // reaction 62:  CH2(S) + H2 <=> CH3 + H
   k_f = 70000000;
   qf[62] *= k_f;
-  qr[62] *= k_f * exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[1]));
+  qr[62] *= k_f * (kc_fast ? (ge[0] * inv_ge[7] * ge_qss[1] * inv_ge[1])
+                           : exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[1])));
   // reaction 63:  CH2(S) + H2O <=> CH2 + H2O
   k_f = 30000000;
   qf[63] *= k_f;
-  qr[63] *= k_f * exp(-(g_RT[5] - g_RT[5] - g_RT_qss[0] + g_RT_qss[1]));
+  qr[63] *=
+    k_f * (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+                   : exp(-(g_RT[5] - g_RT[5] - g_RT_qss[0] + g_RT_qss[1])));
   // reaction 64:  CH2(S) + CH4 <=> 2 CH3
   k_f = 16000000 * exp(-(-286.83349950869) * invT);
   qf[64] *= k_f;
-  qr[64] *= k_f * exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[1]));
+  qr[64] *=
+    k_f * (kc_fast ? (inv_ge[7] * inv_ge[7] * ge_qss[1] * ge[8])
+                   : exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[1])));
   // reaction 65:  CH2(S) + CO <=> CH2 + CO
   k_f = 9000000;
   qf[65] *= k_f;
-  qr[65] *= k_f * exp(-(g_RT[9] - g_RT[9] - g_RT_qss[0] + g_RT_qss[1]));
+  qr[65] *=
+    k_f * (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+                   : exp(-(g_RT[9] - g_RT[9] - g_RT_qss[0] + g_RT_qss[1])));
   // reaction 66:  CH2(S) + CO2 <=> CH2 + CO2
   k_f = 7000000;
   qf[66] *= k_f;
-  qr[66] *= k_f * exp(-(g_RT[10] - g_RT[10] - g_RT_qss[0] + g_RT_qss[1]));
+  qr[66] *=
+    k_f * (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+                   : exp(-(g_RT[10] - g_RT[10] - g_RT_qss[0] + g_RT_qss[1])));
   // reaction 67:  CH2(S) + CO2 <=> CH2O + CO
   k_f = 14000000;
   qf[67] *= k_f;
-  qr[67] *= k_f * exp(-(-g_RT[9] + g_RT[10] - g_RT[11] + g_RT_qss[1]));
+  qr[67] *=
+    k_f * (kc_fast ? (inv_ge[9] * ge[10] * ge_qss[1] * inv_ge[11])
+                   : exp(-(-g_RT[9] + g_RT[10] - g_RT[11] + g_RT_qss[1])));
   // reaction 68:  CH3 + O2 <=> CH2O + OH
   k_f = 36000 * exp(-(4498.75699229419) * invT);
   qf[68] *= k_f;
-  qr[68] *= k_f * exp(-(g_RT[3] - g_RT[4] + g_RT[7] - g_RT[11]));
+  qr[68] *= k_f * (kc_fast ? (inv_ge[4] * ge[3] * ge[7] * inv_ge[11])
+                           : exp(-(g_RT[3] - g_RT[4] + g_RT[7] - g_RT[11])));
   // reaction 69:  CH3 + HCO <=> CH4 + CO
   k_f = 26480000;
   qf[69] *= k_f;
-  qr[69] *= k_f * exp(-(g_RT[7] - g_RT[8] - g_RT[9] + g_RT_qss[2]));
+  qr[69] *= k_f * (kc_fast ? (ge_qss[2] * inv_ge[8] * ge[7] * inv_ge[9])
+                           : exp(-(g_RT[7] - g_RT[8] - g_RT[9] + g_RT_qss[2])));
   // reaction 70:  CH2O + CH3 <=> CH4 + HCO
   k_f = 0.00332 * exp((2.81) * logT - (2948.84966161566) * invT);
   qf[70] *= k_f;
-  qr[70] *= k_f * exp(-(g_RT[7] - g_RT[8] + g_RT[11] - g_RT_qss[2]));
+  qr[70] *=
+    k_f * (kc_fast ? (inv_ge_qss[2] * ge[7] * ge[11] * inv_ge[8])
+                   : exp(-(g_RT[7] - g_RT[8] + g_RT[11] - g_RT_qss[2])));
   // reaction 71:  HCO + O2 <=> CO + HO2
   k_f = 7600000 * exp(-(201.286666321888) * invT);
   qf[71] *= k_f;
-  qr[71] *= k_f * exp(-(g_RT[3] - g_RT[6] - g_RT[9] + g_RT_qss[2]));
+  qr[71] *= k_f * (kc_fast ? (ge[3] * inv_ge[6] * ge_qss[2] * inv_ge[9])
+                           : exp(-(g_RT[3] - g_RT[6] - g_RT[9] + g_RT_qss[2])));
   // reaction 72:  CH2OH + O2 <=> CH2O + HO2
   k_f = 18000000 * exp(-(452.894999224248) * invT);
   qf[72] *= k_f;
-  qr[72] *= k_f * exp(-(g_RT[3] - g_RT[6] - g_RT[11] + g_RT_qss[3]));
+  qr[72] *=
+    k_f * (kc_fast ? (ge[3] * inv_ge[6] * ge_qss[3] * inv_ge[11])
+                   : exp(-(g_RT[3] - g_RT[6] - g_RT[11] + g_RT_qss[3])));
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
@@ -4161,6 +4421,25 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
   gibbs(g_RT, T);
   amrex::Real g_RT_qss[4];
   gibbs_qss(g_RT_qss, T);
+  // Kc from shared exp(-g/RT) factors where no factor or partial product can
+  // overflow (checked by CEPTR on this T range); exp of the sum otherwise and
+  // in single precision
+  const bool kc_fast =
+    sizeof(amrex::Real) == sizeof(double) && T >= 200.0 && T <= 10000.0;
+  amrex::Real ge[13] = {}, inv_ge[13] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 13; ++i) {
+      ge[i] = exp(-g_RT[i]);
+      inv_ge[i] = 1.0 / ge[i];
+    }
+  }
+  amrex::Real ge_qss[4] = {}, inv_ge_qss[4] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 4; ++i) {
+      ge_qss[i] = exp(-g_RT_qss[i]);
+      inv_ge_qss[i] = 1.0 / ge_qss[i];
+    }
+  }
 
   amrex::Real sc_qss[4];
   amrex::Real kf_qss[41], qf_qss[41], qr_qss[41];
@@ -4188,8 +4467,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     const amrex::Real qf = Corr * k_f * (sc[1] * sc_qss[0]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] - g_RT[7] + g_RT_qss[0])) * (refC) * (sc[7]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (inv_ge[7] * ge[1] * ge_qss[0])
+                                    : exp(-(g_RT[1] - g_RT[7] + g_RT_qss[0]))) *
+                           (refC) * (sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[7] += qdot;
@@ -4215,8 +4496,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     const amrex::Real qf = Corr * k_f * (sc[1] * sc[7]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] + g_RT[7] - g_RT[8])) * (refC) * (sc[8]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (ge[7] * inv_ge[8] * ge[1])
+                                    : exp(-(g_RT[1] + g_RT[7] - g_RT[8]))) *
+                           (refC) * (sc[8]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[7] -= qdot;
@@ -4244,7 +4527,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     Corr = F * F_troe;
     const amrex::Real qf = Corr * k_f * (sc[1] * sc_qss[2]);
     const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] - g_RT[11] + g_RT_qss[2])) * (refC) * (sc[11]);
+      Corr * k_f *
+      (kc_fast ? (ge_qss[2] * inv_ge[11] * ge[1])
+               : exp(-(g_RT[1] - g_RT[11] + g_RT_qss[2]))) *
+      (refC) * (sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[11] += qdot;
@@ -4270,9 +4556,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     const amrex::Real qf = Corr * k_f * (sc[1] * sc[11]);
-    const amrex::Real qr = Corr * k_f *
-                           exp(-(g_RT[1] + g_RT[11] - g_RT_qss[3])) * (refC) *
-                           (sc_qss[3]);
+    const amrex::Real qr =
+      Corr * k_f *
+      (kc_fast ? (inv_ge_qss[3] * ge[11] * ge[1])
+               : exp(-(g_RT[1] + g_RT[11] - g_RT_qss[3]))) *
+      (refC) * (sc_qss[3]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[11] -= qdot;
@@ -4297,8 +4585,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     const amrex::Real qf = Corr * k_f * (sc[0] * sc[9]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[0] + g_RT[9] - g_RT[11])) * (refC) * (sc[11]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (ge[0] * inv_ge[11] * ge[9])
+                                    : exp(-(g_RT[0] + g_RT[9] - g_RT[11]))) *
+                           (refC) * (sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[0] -= qdot;
     wdot[9] -= qdot;
@@ -4311,8 +4601,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real Corr = mixture + (1.4) * sc[0] + (14.4) * sc[5] + sc[8] +
                              (0.75) * sc[9] + (2.6) * sc[10];
     const amrex::Real qf = Corr * k_f * ((sc[2] * sc[2]));
-    const amrex::Real qr =
-      Corr * k_f * exp(-(2.000000 * g_RT[2] - g_RT[3])) * (refC) * (sc[3]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (inv_ge[3] * ge[2] * ge[2])
+                                    : exp(-(2.000000 * g_RT[2] - g_RT[3]))) *
+                           (refC) * (sc[3]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= 2.000000 * qdot;
     wdot[3] += qdot;
@@ -4324,8 +4616,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real Corr =
       mixture + sc[0] + (5) * sc[5] + sc[8] + (0.5) * sc[9] + sc[10];
     const amrex::Real qf = Corr * k_f * (sc[1] * sc[2]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] + g_RT[2] - g_RT[4])) * (refC) * (sc[4]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (inv_ge[4] * ge[1] * ge[2])
+                                    : exp(-(g_RT[1] + g_RT[2] - g_RT[4]))) *
+                           (refC) * (sc[4]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[2] -= qdot;
@@ -4338,8 +4632,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real Corr = mixture + sc[0] + (5) * sc[3] + (5) * sc[5] +
                              sc[8] + (0.5) * sc[9] + (2.5) * sc[10];
     const amrex::Real qf = Corr * k_f * (sc[2] * sc[9]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[2] + g_RT[9] - g_RT[10])) * (refC) * (sc[10]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (ge[9] * ge[2] * inv_ge[10])
+                                    : exp(-(g_RT[2] + g_RT[9] - g_RT[10]))) *
+                           (refC) * (sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[9] -= qdot;
@@ -4352,8 +4648,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real Corr = mixture + (-1) * sc[3] + (-1) * sc[5] +
                              (-0.25) * sc[9] + (0.5) * sc[10] + (-1) * sc[12];
     const amrex::Real qf = Corr * k_f * (sc[1] * sc[3]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC) * (sc[6]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                                    : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+                           (refC) * (sc[6]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[3] -= qdot;
@@ -4364,8 +4662,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 9:  H + O2 + O2 <=> HO2 + O2
     const amrex::Real k_f = 300000000 * exp((-1.72) * logT);
     const amrex::Real qf = k_f * (sc[1] * (sc[3] * sc[3]));
-    const amrex::Real qr =
-      k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC) * (sc[3] * sc[6]);
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                                    : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+                           (refC) * (sc[3] * sc[6]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[3] -= qdot;
@@ -4376,8 +4676,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 10:  H + O2 + H2O <=> HO2 + H2O
     const amrex::Real k_f = 9380000 * exp((-0.76) * logT);
     const amrex::Real qf = k_f * (sc[1] * sc[3] * sc[5]);
-    const amrex::Real qr =
-      k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC) * (sc[5] * sc[6]);
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                                    : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+                           (refC) * (sc[5] * sc[6]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[3] -= qdot;
@@ -4388,8 +4690,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 11:  H + O2 + N2 <=> HO2 + N2
     const amrex::Real k_f = 375000000 * exp((-1.72) * logT);
     const amrex::Real qf = k_f * (sc[1] * sc[3] * sc[12]);
-    const amrex::Real qr =
-      k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC) * (sc[6] * sc[12]);
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                                    : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+                           (refC) * (sc[6] * sc[12]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[3] -= qdot;
@@ -4402,8 +4706,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real Corr =
       mixture + (-1) * sc[0] + (-1) * sc[5] + sc[8] + (-1) * sc[10];
     const amrex::Real qf = Corr * k_f * ((sc[1] * sc[1]));
-    const amrex::Real qr =
-      Corr * k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC) * (sc[0]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                                    : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+                           (refC) * (sc[0]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= 2.000000 * qdot;
@@ -4413,8 +4719,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 13:  2 H + H2 <=> H2 + H2
     const amrex::Real k_f = 90000 * exp((-0.6) * logT);
     const amrex::Real qf = k_f * (sc[0] * (sc[1] * sc[1]));
-    const amrex::Real qr =
-      k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC) * ((sc[0] * sc[0]));
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                                    : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+                           (refC) * ((sc[0] * sc[0]));
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= 2.000000 * qdot;
@@ -4424,8 +4732,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 14:  2 H + H2O <=> H2 + H2O
     const amrex::Real k_f = 60000000 * exp((-1.25) * logT);
     const amrex::Real qf = k_f * ((sc[1] * sc[1]) * sc[5]);
-    const amrex::Real qr =
-      k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC) * (sc[0] * sc[5]);
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                                    : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+                           (refC) * (sc[0] * sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= 2.000000 * qdot;
@@ -4435,8 +4745,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 15:  2 H + CO2 <=> H2 + CO2
     const amrex::Real k_f = 550000000 * exp((-2) * logT);
     const amrex::Real qf = k_f * ((sc[1] * sc[1]) * sc[10]);
-    const amrex::Real qr =
-      k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC) * (sc[0] * sc[10]);
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                                    : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+                           (refC) * (sc[0] * sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= 2.000000 * qdot;
@@ -4447,8 +4759,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 22000000000 * exp((-2) * logT);
     const amrex::Real Corr = mixture + (-0.27) * sc[0] + (2.65) * sc[5] + sc[8];
     const amrex::Real qf = Corr * k_f * (sc[1] * sc[4]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] + g_RT[4] - g_RT[5])) * (refC) * (sc[5]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (ge[4] * ge[1] * inv_ge[5])
+                                    : exp(-(g_RT[1] + g_RT[4] - g_RT[5]))) *
+                           (refC) * (sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[4] -= qdot;
@@ -4460,8 +4774,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f =
       2244000000000 * exp((-1) * logT - (8554.68331868023) * invT);
     const amrex::Real qf = k_f * (sc[5] * sc_qss[2]);
-    const amrex::Real qr = k_f * exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2])) *
-                           (refCinv) * (sc[1] * sc[5] * sc[9]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge_qss[2] * inv_ge[9] * inv_ge[1])
+               : exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
+      (refCinv) * (sc[1] * sc[5] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[9] += qdot;
@@ -4474,9 +4791,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real Corr =
       mixture + sc[0] + (-1) * sc[5] + sc[8] + (0.5) * sc[9] + sc[10];
     const amrex::Real qf = Corr * k_f * (sc_qss[2]);
-    const amrex::Real qr = Corr * k_f *
-                           exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2])) *
-                           (refCinv) * (sc[1] * sc[9]);
+    const amrex::Real qr =
+      Corr * k_f *
+      (kc_fast ? (ge_qss[2] * inv_ge[9] * inv_ge[1])
+               : exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
+      (refCinv) * (sc[1] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[9] += qdot;
@@ -4488,7 +4807,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
       0.05 * exp((2.67) * logT - (3165.23282791169) * invT);
     const amrex::Real qf = k_f * (sc[0] * sc[2]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[0] - g_RT[1] + g_RT[2] - g_RT[4])) * (sc[1] * sc[4]);
+      k_f *
+      (kc_fast ? (ge[0] * inv_ge[4] * ge[2] * inv_ge[1])
+               : exp(-(g_RT[0] - g_RT[1] + g_RT[2] - g_RT[4]))) *
+      (sc[1] * sc[4]);
     const amrex::Real qdot = qf - qr;
     wdot[0] -= qdot;
     wdot[1] += qdot;
@@ -4501,7 +4823,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 20000000;
     const amrex::Real qf = k_f * (sc[2] * sc[6]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[2] - g_RT[3] - g_RT[4] + g_RT[6])) * (sc[3] * sc[4]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[6] * inv_ge[3] * ge[2])
+               : exp(-(g_RT[2] - g_RT[3] - g_RT[4] + g_RT[6]))) *
+      (sc[3] * sc[4]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[3] += qdot;
@@ -4514,7 +4839,9 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 80000000;
     const amrex::Real qf = k_f * (sc[2] * sc_qss[0]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[1] + g_RT[2] + g_RT_qss[0] - g_RT_qss[2])) *
+      k_f *
+      (kc_fast ? (inv_ge_qss[2] * inv_ge[1] * ge[2] * ge_qss[0])
+               : exp(-(-g_RT[1] + g_RT[2] + g_RT_qss[0] - g_RT_qss[2]))) *
       (sc[1] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
@@ -4525,9 +4852,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 22:  CH2(S) + O <=> CO + H2
     const amrex::Real k_f = 15000000;
     const amrex::Real qf = k_f * (sc[2] * sc_qss[1]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[0] + g_RT[2] - g_RT[9] + g_RT_qss[1])) *
-                           (sc[0] * sc[9]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[0] * inv_ge[9] * ge[2] * ge_qss[1])
+               : exp(-(-g_RT[0] + g_RT[2] - g_RT[9] + g_RT_qss[1]))) *
+      (sc[0] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[2] -= qdot;
@@ -4539,7 +4868,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 84300000;
     const amrex::Real qf = k_f * (sc[2] * sc[7]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[1] + g_RT[2] + g_RT[7] - g_RT[11])) * (sc[1] * sc[11]);
+      k_f *
+      (kc_fast ? (ge[7] * inv_ge[1] * inv_ge[11] * ge[2])
+               : exp(-(-g_RT[1] + g_RT[2] + g_RT[7] - g_RT[11]))) *
+      (sc[1] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[2] -= qdot;
@@ -4553,7 +4885,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
       1020 * exp((1.5) * logT - (4327.66332592059) * invT);
     const amrex::Real qf = k_f * (sc[2] * sc[8]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[2] - g_RT[4] - g_RT[7] + g_RT[8])) * (sc[4] * sc[7]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[8] * ge[2] * inv_ge[7])
+               : exp(-(g_RT[2] - g_RT[4] - g_RT[7] + g_RT[8]))) *
+      (sc[4] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[4] += qdot;
@@ -4566,7 +4901,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 30000000;
     const amrex::Real qf = k_f * (sc[2] * sc_qss[2]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[2] - g_RT[4] - g_RT[9] + g_RT_qss[2])) * (sc[4] * sc[9]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge_qss[2] * inv_ge[9] * ge[2])
+               : exp(-(g_RT[2] - g_RT[4] - g_RT[9] + g_RT_qss[2]))) *
+      (sc[4] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[4] += qdot;
@@ -4577,9 +4915,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 26:  HCO + O <=> CO2 + H
     const amrex::Real k_f = 30000000;
     const amrex::Real qf = k_f * (sc[2] * sc_qss[2]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[1] + g_RT[2] - g_RT[10] + g_RT_qss[2])) *
-                           (sc[1] * sc[10]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge_qss[2] * inv_ge[1] * ge[2] * inv_ge[10])
+               : exp(-(-g_RT[1] + g_RT[2] - g_RT[10] + g_RT_qss[2]))) *
+      (sc[1] * sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[2] -= qdot;
@@ -4590,9 +4930,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 27:  CH2O + O <=> HCO + OH
     const amrex::Real k_f = 39000000 * exp(-(1781.38699694871) * invT);
     const amrex::Real qf = k_f * (sc[2] * sc[11]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[2] - g_RT[4] + g_RT[11] - g_RT_qss[2])) *
-                           (sc[4] * sc_qss[2]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[4] * inv_ge_qss[2] * ge[11] * ge[2])
+               : exp(-(g_RT[2] - g_RT[4] + g_RT[11] - g_RT_qss[2]))) *
+      (sc[4] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[4] += qdot;
@@ -4603,9 +4945,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 28:  CH2OH + O <=> CH2O + OH
     const amrex::Real k_f = 10000000;
     const amrex::Real qf = k_f * (sc[2] * sc_qss[3]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[2] - g_RT[4] - g_RT[11] + g_RT_qss[3])) *
-                           (sc[4] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge_qss[3] * inv_ge[11] * ge[2])
+               : exp(-(g_RT[2] - g_RT[4] - g_RT[11] + g_RT_qss[3]))) *
+      (sc[4] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[4] += qdot;
@@ -4617,7 +4961,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 2500000 * exp(-(24053.7566254656) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc[9]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[2] + g_RT[3] + g_RT[9] - g_RT[10])) * (sc[2] * sc[10]);
+      k_f *
+      (kc_fast ? (ge[3] * ge[9] * inv_ge[10] * inv_ge[2])
+               : exp(-(-g_RT[2] + g_RT[3] + g_RT[9] - g_RT[10]))) *
+      (sc[2] * sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[2] += qdot;
     wdot[3] -= qdot;
@@ -4629,9 +4976,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 30:  CH2O + O2 <=> HCO + HO2
     const amrex::Real k_f = 100000000 * exp(-(20128.6666321888) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc[11]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[3] - g_RT[6] + g_RT[11] - g_RT_qss[2])) *
-                           (sc[6] * sc_qss[2]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[3] * inv_ge[6] * inv_ge_qss[2] * ge[11])
+               : exp(-(g_RT[3] - g_RT[6] + g_RT[11] - g_RT_qss[2]))) *
+      (sc[6] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
     wdot[6] += qdot;
@@ -4643,7 +4992,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 83000000 * exp(-(7252.86180424342) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[3]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[1] - g_RT[2] + g_RT[3] - g_RT[4])) * (sc[2] * sc[4]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[3] * ge[1] * inv_ge[2])
+               : exp(-(g_RT[1] - g_RT[2] + g_RT[3] - g_RT[4]))) *
+      (sc[2] * sc[4]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[2] += qdot;
@@ -4656,7 +5008,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 3970000 * exp(-(337.658382754967) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[6]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[1] - g_RT[2] - g_RT[5] + g_RT[6])) * (sc[2] * sc[5]);
+      k_f *
+      (kc_fast ? (ge[6] * ge[1] * inv_ge[2] * inv_ge[5])
+               : exp(-(g_RT[1] - g_RT[2] - g_RT[5] + g_RT[6]))) *
+      (sc[2] * sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[2] += qdot;
@@ -4669,7 +5024,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 28000000 * exp(-(537.435399079441) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[6]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[0] + g_RT[1] - g_RT[3] + g_RT[6])) * (sc[0] * sc[3]);
+      k_f *
+      (kc_fast ? (inv_ge[0] * ge[6] * inv_ge[3] * ge[1])
+               : exp(-(-g_RT[0] + g_RT[1] - g_RT[3] + g_RT[6]))) *
+      (sc[0] * sc[3]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= qdot;
@@ -4682,7 +5040,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 134000000 * exp(-(319.542582785997) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[6]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[1] - 2.000000 * g_RT[4] + g_RT[6])) * ((sc[4] * sc[4]));
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[6] * inv_ge[4] * ge[1])
+               : exp(-(g_RT[1] - 2.000000 * g_RT[4] + g_RT[6]))) *
+      ((sc[4] * sc[4]));
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[4] += 2.000000 * qdot;
@@ -4695,7 +5056,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
       660 * exp((1.62) * logT - (5454.86865732316) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[8]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[0] + g_RT[1] - g_RT[7] + g_RT[8])) * (sc[0] * sc[7]);
+      k_f *
+      (kc_fast ? (inv_ge[0] * ge[8] * ge[1] * inv_ge[7])
+               : exp(-(-g_RT[0] + g_RT[1] - g_RT[7] + g_RT[8]))) *
+      (sc[0] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= qdot;
@@ -4707,9 +5071,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 36:  H + HCO <=> CO + H2
     const amrex::Real k_f = 73400000;
     const amrex::Real qf = k_f * (sc[1] * sc_qss[2]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[0] + g_RT[1] - g_RT[9] + g_RT_qss[2])) *
-                           (sc[0] * sc[9]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[0] * ge_qss[2] * inv_ge[9] * ge[1])
+               : exp(-(-g_RT[0] + g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
+      (sc[0] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= qdot;
@@ -4721,9 +5087,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f =
       23000 * exp((1.05) * logT - (1648.03458051046) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[11]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[0] + g_RT[1] + g_RT[11] - g_RT_qss[2])) *
-                           (sc[0] * sc_qss[2]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[0] * inv_ge_qss[2] * ge[11] * ge[1])
+               : exp(-(-g_RT[0] + g_RT[1] + g_RT[11] - g_RT_qss[2]))) *
+      (sc[0] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= qdot;
@@ -4734,9 +5102,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 38:  CH2OH + H <=> CH2O + H2
     const amrex::Real k_f = 20000000;
     const amrex::Real qf = k_f * (sc[1] * sc_qss[3]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[0] + g_RT[1] - g_RT[11] + g_RT_qss[3])) *
-                           (sc[0] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[0] * ge_qss[3] * inv_ge[11] * ge[1])
+               : exp(-(-g_RT[0] + g_RT[1] - g_RT[11] + g_RT_qss[3]))) *
+      (sc[0] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= qdot;
@@ -4748,7 +5118,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 12000000;
     const amrex::Real qf = k_f * (sc[1] * sc_qss[3]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[1] - g_RT[4] - g_RT[7] + g_RT_qss[3])) * (sc[4] * sc[7]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge_qss[3] * ge[1] * inv_ge[7])
+               : exp(-(g_RT[1] - g_RT[4] - g_RT[7] + g_RT_qss[3]))) *
+      (sc[4] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[4] += qdot;
@@ -4760,7 +5133,9 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 6000000;
     const amrex::Real qf = k_f * (sc[1] * sc_qss[3]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[1] - g_RT[5] - g_RT_qss[1] + g_RT_qss[3])) *
+      k_f *
+      (kc_fast ? (ge_qss[3] * ge[1] * inv_ge_qss[1] * inv_ge[5])
+               : exp(-(g_RT[1] - g_RT[5] - g_RT_qss[1] + g_RT_qss[3]))) *
       (sc[5] * sc_qss[1]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
@@ -4773,7 +5148,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
       216 * exp((1.51) * logT - (1726.03316371019) * invT);
     const amrex::Real qf = k_f * (sc[0] * sc[4]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[0] - g_RT[1] + g_RT[4] - g_RT[5])) * (sc[1] * sc[5]);
+      k_f *
+      (kc_fast ? (ge[0] * ge[4] * inv_ge[1] * inv_ge[5])
+               : exp(-(g_RT[0] - g_RT[1] + g_RT[4] - g_RT[5]))) *
+      (sc[1] * sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[0] -= qdot;
     wdot[1] += qdot;
@@ -4787,7 +5165,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
       0.0357 * exp((2.4) * logT - (-1061.78716484796) * invT);
     const amrex::Real qf = k_f * ((sc[4] * sc[4]));
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[2] + 2.000000 * g_RT[4] - g_RT[5])) * (sc[2] * sc[5]);
+      k_f *
+      (kc_fast ? (ge[4] * ge[4] * inv_ge[2] * inv_ge[5])
+               : exp(-(-g_RT[2] + 2.000000 * g_RT[4] - g_RT[5]))) *
+      (sc[2] * sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[2] += qdot;
     wdot[4] -= 2.000000 * qdot;
@@ -4799,7 +5180,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 29000000 * exp(-(-251.60833290236) * invT);
     const amrex::Real qf = k_f * (sc[4] * sc[6]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[3] + g_RT[4] - g_RT[5] + g_RT[6])) * (sc[3] * sc[5]);
+      k_f *
+      (kc_fast ? (ge[4] * inv_ge[3] * ge[6] * inv_ge[5])
+               : exp(-(-g_RT[3] + g_RT[4] - g_RT[5] + g_RT[6]))) *
+      (sc[3] * sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[3] += qdot;
     wdot[4] -= qdot;
@@ -4811,9 +5195,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 44:  CH2 + OH <=> CH2O + H
     const amrex::Real k_f = 20000000;
     const amrex::Real qf = k_f * (sc[4] * sc_qss[0]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[0])) *
-                           (sc[1] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * inv_ge[11] * inv_ge[1] * ge_qss[0])
+               : exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[0]))) *
+      (sc[1] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[4] -= qdot;
@@ -4824,9 +5210,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 45:  CH2(S) + OH <=> CH2O + H
     const amrex::Real k_f = 30000000;
     const amrex::Real qf = k_f * (sc[4] * sc_qss[1]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[1])) *
-                           (sc[1] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * inv_ge[11] * inv_ge[1] * ge_qss[1])
+               : exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[1]))) *
+      (sc[1] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[4] -= qdot;
@@ -4837,9 +5225,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 46:  CH3 + OH <=> CH2 + H2O
     const amrex::Real k_f = 56 * exp((1.6) * logT - (2727.43432866158) * invT);
     const amrex::Real qf = k_f * (sc[4] * sc[7]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[0])) *
-                           (sc[5] * sc_qss[0]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * ge[7] * inv_ge_qss[0] * inv_ge[5])
+               : exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[0]))) *
+      (sc[5] * sc_qss[0]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -4850,9 +5240,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 47:  CH3 + OH <=> CH2(S) + H2O
     const amrex::Real k_f = 25010000;
     const amrex::Real qf = k_f * (sc[4] * sc[7]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[1])) *
-                           (sc[5] * sc_qss[1]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * ge[7] * inv_ge_qss[1] * inv_ge[5])
+               : exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[1]))) *
+      (sc[5] * sc_qss[1]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -4864,7 +5256,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 100 * exp((1.6) * logT - (1570.03599731073) * invT);
     const amrex::Real qf = k_f * (sc[4] * sc[8]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[4] - g_RT[5] - g_RT[7] + g_RT[8])) * (sc[5] * sc[7]);
+      k_f *
+      (kc_fast ? (ge[4] * inv_ge[7] * inv_ge[5] * ge[8])
+               : exp(-(g_RT[4] - g_RT[5] - g_RT[7] + g_RT[8]))) *
+      (sc[5] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -4878,7 +5273,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
       47.6 * exp((1.228) * logT - (35.2251666063304) * invT);
     const amrex::Real qf = k_f * (sc[4] * sc[9]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[1] + g_RT[4] + g_RT[9] - g_RT[10])) * (sc[1] * sc[10]);
+      k_f *
+      (kc_fast ? (ge[4] * ge[9] * inv_ge[10] * inv_ge[1])
+               : exp(-(-g_RT[1] + g_RT[4] + g_RT[9] - g_RT[10]))) *
+      (sc[1] * sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[4] -= qdot;
@@ -4891,7 +5289,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 50000000;
     const amrex::Real qf = k_f * (sc[4] * sc_qss[2]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[4] - g_RT[5] - g_RT[9] + g_RT_qss[2])) * (sc[5] * sc[9]);
+      k_f *
+      (kc_fast ? (ge[4] * ge_qss[2] * inv_ge[9] * inv_ge[5])
+               : exp(-(g_RT[4] - g_RT[5] - g_RT[9] + g_RT_qss[2]))) *
+      (sc[5] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -4903,9 +5304,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f =
       3430 * exp((1.18) * logT - (-224.93784961471) * invT);
     const amrex::Real qf = k_f * (sc[4] * sc[11]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[4] - g_RT[5] + g_RT[11] - g_RT_qss[2])) *
-                           (sc[5] * sc_qss[2]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * inv_ge_qss[2] * ge[11] * inv_ge[5])
+               : exp(-(g_RT[4] - g_RT[5] + g_RT[11] - g_RT_qss[2]))) *
+      (sc[5] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -4916,9 +5319,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 52:  CH2OH + OH <=> CH2O + H2O
     const amrex::Real k_f = 5000000;
     const amrex::Real qf = k_f * (sc[4] * sc_qss[3]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[4] - g_RT[5] - g_RT[11] + g_RT_qss[3])) *
-                           (sc[5] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * ge_qss[3] * inv_ge[11] * inv_ge[5])
+               : exp(-(g_RT[4] - g_RT[5] - g_RT[11] + g_RT_qss[3]))) *
+      (sc[5] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -4929,9 +5334,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 53:  CH2 + HO2 <=> CH2O + OH
     const amrex::Real k_f = 20000000;
     const amrex::Real qf = k_f * (sc[6] * sc_qss[0]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[4] + g_RT[6] - g_RT[11] + g_RT_qss[0])) *
-                           (sc[4] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[6] * inv_ge[11] * ge_qss[0])
+               : exp(-(-g_RT[4] + g_RT[6] - g_RT[11] + g_RT_qss[0]))) *
+      (sc[4] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[4] += qdot;
     wdot[6] -= qdot;
@@ -4943,7 +5350,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 1000000;
     const amrex::Real qf = k_f * (sc[6] * sc[7]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[3] + g_RT[6] + g_RT[7] - g_RT[8])) * (sc[3] * sc[8]);
+      k_f *
+      (kc_fast ? (inv_ge[3] * ge[6] * ge[7] * inv_ge[8])
+               : exp(-(-g_RT[3] + g_RT[6] + g_RT[7] - g_RT[8]))) *
+      (sc[3] * sc[8]);
     const amrex::Real qdot = qf - qr;
     wdot[3] += qdot;
     wdot[6] -= qdot;
@@ -4956,7 +5366,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 150000000 * exp(-(11875.9133129914) * invT);
     const amrex::Real qf = k_f * (sc[6] * sc[9]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[4] + g_RT[6] + g_RT[9] - g_RT[10])) * (sc[4] * sc[10]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[6] * ge[9] * inv_ge[10])
+               : exp(-(-g_RT[4] + g_RT[6] + g_RT[9] - g_RT[10]))) *
+      (sc[4] * sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[4] += qdot;
     wdot[6] -= qdot;
@@ -4969,7 +5382,9 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 13200000 * exp(-(754.82499870708) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc_qss[0]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[3] - g_RT[4] + g_RT_qss[0] - g_RT_qss[2])) *
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[3] * inv_ge_qss[2] * ge_qss[0])
+               : exp(-(g_RT[3] - g_RT[4] + g_RT_qss[0] - g_RT_qss[2]))) *
       (sc[4] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
@@ -4981,7 +5396,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 0.5 * exp((2) * logT - (3638.25649376812) * invT);
     const amrex::Real qf = k_f * (sc[0] * sc_qss[0]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[0])) * (sc[1] * sc[7]);
+      k_f *
+      (kc_fast ? (ge[0] * inv_ge[7] * ge_qss[0] * inv_ge[1])
+               : exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[0]))) *
+      (sc[1] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[0] -= qdot;
     wdot[1] += qdot;
@@ -4992,9 +5410,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 58:  CH2 + CH4 <=> 2 CH3
     const amrex::Real k_f = 2.46 * exp((2) * logT - (4161.60182620503) * invT);
     const amrex::Real qf = k_f * (sc[8] * sc_qss[0]);
-    const amrex::Real qr = k_f *
-                           exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[0])) *
-                           ((sc[7] * sc[7]));
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[7] * inv_ge[7] * ge_qss[0] * ge[8])
+               : exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[0]))) *
+      ((sc[7] * sc[7]));
     const amrex::Real qdot = qf - qr;
     wdot[7] += 2.000000 * qdot;
     wdot[8] -= qdot;
@@ -5005,7 +5425,9 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 15000000 * exp(-(301.929999482832) * invT);
     const amrex::Real qf = k_f * (sc[12] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[12] - g_RT[12] - g_RT_qss[0] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+               : exp(-(g_RT[12] - g_RT[12] - g_RT_qss[0] + g_RT_qss[1]))) *
       (sc[12] * sc_qss[0]);
     const amrex::Real qdot = qf - qr;
     wdot[12] -= qdot;
@@ -5017,7 +5439,9 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 28000000;
     const amrex::Real qf = k_f * (sc[3] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[1] + g_RT[3] - g_RT[4] - g_RT[9] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[3] * inv_ge[9] * inv_ge[1] * ge_qss[1])
+               : exp(-(-g_RT[1] + g_RT[3] - g_RT[4] - g_RT[9] + g_RT_qss[1]))) *
       (refCinv) * (sc[1] * sc[4] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
@@ -5031,7 +5455,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 12000000;
     const amrex::Real qf = k_f * (sc[3] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[3] - g_RT[5] - g_RT[9] + g_RT_qss[1])) * (sc[5] * sc[9]);
+      k_f *
+      (kc_fast ? (ge[3] * inv_ge[9] * inv_ge[5] * ge_qss[1])
+               : exp(-(g_RT[3] - g_RT[5] - g_RT[9] + g_RT_qss[1]))) *
+      (sc[5] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
     wdot[5] += qdot;
@@ -5043,7 +5470,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 70000000;
     const amrex::Real qf = k_f * (sc[0] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[1])) * (sc[1] * sc[7]);
+      k_f *
+      (kc_fast ? (ge[0] * inv_ge[7] * ge_qss[1] * inv_ge[1])
+               : exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[1]))) *
+      (sc[1] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[0] -= qdot;
     wdot[1] += qdot;
@@ -5055,7 +5485,9 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 30000000;
     const amrex::Real qf = k_f * (sc[5] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[5] - g_RT[5] - g_RT_qss[0] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+               : exp(-(g_RT[5] - g_RT[5] - g_RT_qss[0] + g_RT_qss[1]))) *
       (sc[5] * sc_qss[0]);
     const amrex::Real qdot = qf - qr;
     wdot[5] -= qdot;
@@ -5066,9 +5498,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 64:  CH2(S) + CH4 <=> 2 CH3
     const amrex::Real k_f = 16000000 * exp(-(-286.83349950869) * invT);
     const amrex::Real qf = k_f * (sc[8] * sc_qss[1]);
-    const amrex::Real qr = k_f *
-                           exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[1])) *
-                           ((sc[7] * sc[7]));
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[7] * inv_ge[7] * ge_qss[1] * ge[8])
+               : exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[1]))) *
+      ((sc[7] * sc[7]));
     const amrex::Real qdot = qf - qr;
     wdot[7] += 2.000000 * qdot;
     wdot[8] -= qdot;
@@ -5079,7 +5513,9 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 9000000;
     const amrex::Real qf = k_f * (sc[9] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[9] - g_RT[9] - g_RT_qss[0] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+               : exp(-(g_RT[9] - g_RT[9] - g_RT_qss[0] + g_RT_qss[1]))) *
       (sc[9] * sc_qss[0]);
     const amrex::Real qdot = qf - qr;
     wdot[9] -= qdot;
@@ -5091,7 +5527,9 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 7000000;
     const amrex::Real qf = k_f * (sc[10] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[10] - g_RT[10] - g_RT_qss[0] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+               : exp(-(g_RT[10] - g_RT[10] - g_RT_qss[0] + g_RT_qss[1]))) *
       (sc[10] * sc_qss[0]);
     const amrex::Real qdot = qf - qr;
     wdot[10] -= qdot;
@@ -5103,7 +5541,9 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 14000000;
     const amrex::Real qf = k_f * (sc[10] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[9] + g_RT[10] - g_RT[11] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge[9] * ge[10] * ge_qss[1] * inv_ge[11])
+               : exp(-(-g_RT[9] + g_RT[10] - g_RT[11] + g_RT_qss[1]))) *
       (sc[9] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[9] += qdot;
@@ -5116,7 +5556,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 36000 * exp(-(4498.75699229419) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc[7]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[3] - g_RT[4] + g_RT[7] - g_RT[11])) * (sc[4] * sc[11]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[3] * ge[7] * inv_ge[11])
+               : exp(-(g_RT[3] - g_RT[4] + g_RT[7] - g_RT[11]))) *
+      (sc[4] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
     wdot[4] += qdot;
@@ -5129,7 +5572,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 26480000;
     const amrex::Real qf = k_f * (sc[7] * sc_qss[2]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[7] - g_RT[8] - g_RT[9] + g_RT_qss[2])) * (sc[8] * sc[9]);
+      k_f *
+      (kc_fast ? (ge_qss[2] * inv_ge[8] * ge[7] * inv_ge[9])
+               : exp(-(g_RT[7] - g_RT[8] - g_RT[9] + g_RT_qss[2]))) *
+      (sc[8] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[7] -= qdot;
     wdot[8] += qdot;
@@ -5141,9 +5587,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f =
       0.00332 * exp((2.81) * logT - (2948.84966161566) * invT);
     const amrex::Real qf = k_f * (sc[7] * sc[11]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[7] - g_RT[8] + g_RT[11] - g_RT_qss[2])) *
-                           (sc[8] * sc_qss[2]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge_qss[2] * ge[7] * ge[11] * inv_ge[8])
+               : exp(-(g_RT[7] - g_RT[8] + g_RT[11] - g_RT_qss[2]))) *
+      (sc[8] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[7] -= qdot;
     wdot[8] += qdot;
@@ -5155,7 +5603,10 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     const amrex::Real k_f = 7600000 * exp(-(201.286666321888) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc_qss[2]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[3] - g_RT[6] - g_RT[9] + g_RT_qss[2])) * (sc[6] * sc[9]);
+      k_f *
+      (kc_fast ? (ge[3] * inv_ge[6] * ge_qss[2] * inv_ge[9])
+               : exp(-(g_RT[3] - g_RT[6] - g_RT[9] + g_RT_qss[2]))) *
+      (sc[6] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
     wdot[6] += qdot;
@@ -5166,9 +5617,11 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
     // reaction 72:  CH2OH + O2 <=> CH2O + HO2
     const amrex::Real k_f = 18000000 * exp(-(452.894999224248) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc_qss[3]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[3] - g_RT[6] - g_RT[11] + g_RT_qss[3])) *
-                           (sc[6] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[3] * inv_ge[6] * ge_qss[3] * inv_ge[11])
+               : exp(-(g_RT[3] - g_RT[6] - g_RT[11] + g_RT_qss[3]))) *
+      (sc[6] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
     wdot[6] += qdot;
@@ -5208,6 +5661,25 @@ productionRate_light(
   // compute the Gibbs free energy
   gibbs(g_RT, T);
   gibbs_qss(g_RT_qss, T);
+  // Kc from shared exp(-g/RT) factors where no factor or partial product can
+  // overflow (checked by CEPTR on this T range); exp of the sum otherwise and
+  // in single precision
+  const bool kc_fast =
+    sizeof(amrex::Real) == sizeof(double) && T >= 200.0 && T <= 10000.0;
+  amrex::Real ge[13] = {}, inv_ge[13] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 13; ++i) {
+      ge[i] = exp(-g_RT[i]);
+      inv_ge[i] = 1.0 / ge[i];
+    }
+  }
+  amrex::Real ge_qss[4] = {}, inv_ge_qss[4] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 4; ++i) {
+      ge_qss[i] = exp(-g_RT_qss[i]);
+      inv_ge_qss[i] = 1.0 / ge_qss[i];
+    }
+  }
 
   // Fill sc_qss here
   comp_k_f_qss(T, invT, logT, kf_qss);
@@ -5233,8 +5705,10 @@ productionRate_light(
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     const amrex::Real qf = Corr * k_f * (sc[1] * sc_qss[0]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] - g_RT[7] + g_RT_qss[0])) * (refC) * (sc[7]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (inv_ge[7] * ge[1] * ge_qss[0])
+                                    : exp(-(g_RT[1] - g_RT[7] + g_RT_qss[0]))) *
+                           (refC) * (sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[7] += qdot;
@@ -5260,8 +5734,10 @@ productionRate_light(
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     const amrex::Real qf = Corr * k_f * (sc[1] * sc[7]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] + g_RT[7] - g_RT[8])) * (refC) * (sc[8]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (ge[7] * inv_ge[8] * ge[1])
+                                    : exp(-(g_RT[1] + g_RT[7] - g_RT[8]))) *
+                           (refC) * (sc[8]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[7] -= qdot;
@@ -5289,7 +5765,10 @@ productionRate_light(
     Corr = F * F_troe;
     const amrex::Real qf = Corr * k_f * (sc[1] * sc_qss[2]);
     const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] - g_RT[11] + g_RT_qss[2])) * (refC) * (sc[11]);
+      Corr * k_f *
+      (kc_fast ? (ge_qss[2] * inv_ge[11] * ge[1])
+               : exp(-(g_RT[1] - g_RT[11] + g_RT_qss[2]))) *
+      (refC) * (sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[11] += qdot;
@@ -5315,9 +5794,11 @@ productionRate_light(
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     const amrex::Real qf = Corr * k_f * (sc[1] * sc[11]);
-    const amrex::Real qr = Corr * k_f *
-                           exp(-(g_RT[1] + g_RT[11] - g_RT_qss[3])) * (refC) *
-                           (sc_qss[3]);
+    const amrex::Real qr =
+      Corr * k_f *
+      (kc_fast ? (inv_ge_qss[3] * ge[11] * ge[1])
+               : exp(-(g_RT[1] + g_RT[11] - g_RT_qss[3]))) *
+      (refC) * (sc_qss[3]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[11] -= qdot;
@@ -5342,8 +5823,10 @@ productionRate_light(
     const amrex::Real F_troe = exp(M_LN10 * logFcent / (1.0 + troe * troe));
     Corr = F * F_troe;
     const amrex::Real qf = Corr * k_f * (sc[0] * sc[9]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[0] + g_RT[9] - g_RT[11])) * (refC) * (sc[11]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (ge[0] * inv_ge[11] * ge[9])
+                                    : exp(-(g_RT[0] + g_RT[9] - g_RT[11]))) *
+                           (refC) * (sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[0] -= qdot;
     wdot[9] -= qdot;
@@ -5356,8 +5839,10 @@ productionRate_light(
     const amrex::Real Corr = mixture + (1.4) * sc[0] + (14.4) * sc[5] + sc[8] +
                              (0.75) * sc[9] + (2.6) * sc[10];
     const amrex::Real qf = Corr * k_f * ((sc[2] * sc[2]));
-    const amrex::Real qr =
-      Corr * k_f * exp(-(2.000000 * g_RT[2] - g_RT[3])) * (refC) * (sc[3]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (inv_ge[3] * ge[2] * ge[2])
+                                    : exp(-(2.000000 * g_RT[2] - g_RT[3]))) *
+                           (refC) * (sc[3]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= 2.000000 * qdot;
     wdot[3] += qdot;
@@ -5369,8 +5854,10 @@ productionRate_light(
     const amrex::Real Corr =
       mixture + sc[0] + (5) * sc[5] + sc[8] + (0.5) * sc[9] + sc[10];
     const amrex::Real qf = Corr * k_f * (sc[1] * sc[2]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] + g_RT[2] - g_RT[4])) * (refC) * (sc[4]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (inv_ge[4] * ge[1] * ge[2])
+                                    : exp(-(g_RT[1] + g_RT[2] - g_RT[4]))) *
+                           (refC) * (sc[4]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[2] -= qdot;
@@ -5383,8 +5870,10 @@ productionRate_light(
     const amrex::Real Corr = mixture + sc[0] + (5) * sc[3] + (5) * sc[5] +
                              sc[8] + (0.5) * sc[9] + (2.5) * sc[10];
     const amrex::Real qf = Corr * k_f * (sc[2] * sc[9]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[2] + g_RT[9] - g_RT[10])) * (refC) * (sc[10]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (ge[9] * ge[2] * inv_ge[10])
+                                    : exp(-(g_RT[2] + g_RT[9] - g_RT[10]))) *
+                           (refC) * (sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[9] -= qdot;
@@ -5397,8 +5886,10 @@ productionRate_light(
     const amrex::Real Corr = mixture + (-1) * sc[3] + (-1) * sc[5] +
                              (-0.25) * sc[9] + (0.5) * sc[10] + (-1) * sc[12];
     const amrex::Real qf = Corr * k_f * (sc[1] * sc[3]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC) * (sc[6]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                                    : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+                           (refC) * (sc[6]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[3] -= qdot;
@@ -5409,8 +5900,10 @@ productionRate_light(
     // reaction 9:  H + O2 + O2 <=> HO2 + O2
     const amrex::Real k_f = 300000000 * exp((-1.72) * logT);
     const amrex::Real qf = k_f * (sc[1] * (sc[3] * sc[3]));
-    const amrex::Real qr =
-      k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC) * (sc[3] * sc[6]);
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                                    : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+                           (refC) * (sc[3] * sc[6]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[3] -= qdot;
@@ -5421,8 +5914,10 @@ productionRate_light(
     // reaction 10:  H + O2 + H2O <=> HO2 + H2O
     const amrex::Real k_f = 9380000 * exp((-0.76) * logT);
     const amrex::Real qf = k_f * (sc[1] * sc[3] * sc[5]);
-    const amrex::Real qr =
-      k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC) * (sc[5] * sc[6]);
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                                    : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+                           (refC) * (sc[5] * sc[6]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[3] -= qdot;
@@ -5433,8 +5928,10 @@ productionRate_light(
     // reaction 11:  H + O2 + N2 <=> HO2 + N2
     const amrex::Real k_f = 375000000 * exp((-1.72) * logT);
     const amrex::Real qf = k_f * (sc[1] * sc[3] * sc[12]);
-    const amrex::Real qr =
-      k_f * exp(-(g_RT[1] + g_RT[3] - g_RT[6])) * (refC) * (sc[6] * sc[12]);
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (ge[3] * inv_ge[6] * ge[1])
+                                    : exp(-(g_RT[1] + g_RT[3] - g_RT[6]))) *
+                           (refC) * (sc[6] * sc[12]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[3] -= qdot;
@@ -5447,8 +5944,10 @@ productionRate_light(
     const amrex::Real Corr =
       mixture + (-1) * sc[0] + (-1) * sc[5] + sc[8] + (-1) * sc[10];
     const amrex::Real qf = Corr * k_f * ((sc[1] * sc[1]));
-    const amrex::Real qr =
-      Corr * k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC) * (sc[0]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                                    : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+                           (refC) * (sc[0]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= 2.000000 * qdot;
@@ -5458,8 +5957,10 @@ productionRate_light(
     // reaction 13:  2 H + H2 <=> H2 + H2
     const amrex::Real k_f = 90000 * exp((-0.6) * logT);
     const amrex::Real qf = k_f * (sc[0] * (sc[1] * sc[1]));
-    const amrex::Real qr =
-      k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC) * ((sc[0] * sc[0]));
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                                    : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+                           (refC) * ((sc[0] * sc[0]));
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= 2.000000 * qdot;
@@ -5469,8 +5970,10 @@ productionRate_light(
     // reaction 14:  2 H + H2O <=> H2 + H2O
     const amrex::Real k_f = 60000000 * exp((-1.25) * logT);
     const amrex::Real qf = k_f * ((sc[1] * sc[1]) * sc[5]);
-    const amrex::Real qr =
-      k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC) * (sc[0] * sc[5]);
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                                    : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+                           (refC) * (sc[0] * sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= 2.000000 * qdot;
@@ -5480,8 +5983,10 @@ productionRate_light(
     // reaction 15:  2 H + CO2 <=> H2 + CO2
     const amrex::Real k_f = 550000000 * exp((-2) * logT);
     const amrex::Real qf = k_f * ((sc[1] * sc[1]) * sc[10]);
-    const amrex::Real qr =
-      k_f * exp(-(-g_RT[0] + 2.000000 * g_RT[1])) * (refC) * (sc[0] * sc[10]);
+    const amrex::Real qr = k_f *
+                           (kc_fast ? (inv_ge[0] * ge[1] * ge[1])
+                                    : exp(-(-g_RT[0] + 2.000000 * g_RT[1]))) *
+                           (refC) * (sc[0] * sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= 2.000000 * qdot;
@@ -5492,8 +5997,10 @@ productionRate_light(
     const amrex::Real k_f = 22000000000 * exp((-2) * logT);
     const amrex::Real Corr = mixture + (-0.27) * sc[0] + (2.65) * sc[5] + sc[8];
     const amrex::Real qf = Corr * k_f * (sc[1] * sc[4]);
-    const amrex::Real qr =
-      Corr * k_f * exp(-(g_RT[1] + g_RT[4] - g_RT[5])) * (refC) * (sc[5]);
+    const amrex::Real qr = Corr * k_f *
+                           (kc_fast ? (ge[4] * ge[1] * inv_ge[5])
+                                    : exp(-(g_RT[1] + g_RT[4] - g_RT[5]))) *
+                           (refC) * (sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[4] -= qdot;
@@ -5505,8 +6012,11 @@ productionRate_light(
     const amrex::Real k_f =
       2244000000000 * exp((-1) * logT - (8554.68331868023) * invT);
     const amrex::Real qf = k_f * (sc[5] * sc_qss[2]);
-    const amrex::Real qr = k_f * exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2])) *
-                           (refCinv) * (sc[1] * sc[5] * sc[9]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge_qss[2] * inv_ge[9] * inv_ge[1])
+               : exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
+      (refCinv) * (sc[1] * sc[5] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[9] += qdot;
@@ -5519,9 +6029,11 @@ productionRate_light(
     const amrex::Real Corr =
       mixture + sc[0] + (-1) * sc[5] + sc[8] + (0.5) * sc[9] + sc[10];
     const amrex::Real qf = Corr * k_f * (sc_qss[2]);
-    const amrex::Real qr = Corr * k_f *
-                           exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2])) *
-                           (refCinv) * (sc[1] * sc[9]);
+    const amrex::Real qr =
+      Corr * k_f *
+      (kc_fast ? (ge_qss[2] * inv_ge[9] * inv_ge[1])
+               : exp(-(-g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
+      (refCinv) * (sc[1] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[9] += qdot;
@@ -5533,7 +6045,10 @@ productionRate_light(
       0.05 * exp((2.67) * logT - (3165.23282791169) * invT);
     const amrex::Real qf = k_f * (sc[0] * sc[2]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[0] - g_RT[1] + g_RT[2] - g_RT[4])) * (sc[1] * sc[4]);
+      k_f *
+      (kc_fast ? (ge[0] * inv_ge[4] * ge[2] * inv_ge[1])
+               : exp(-(g_RT[0] - g_RT[1] + g_RT[2] - g_RT[4]))) *
+      (sc[1] * sc[4]);
     const amrex::Real qdot = qf - qr;
     wdot[0] -= qdot;
     wdot[1] += qdot;
@@ -5546,7 +6061,10 @@ productionRate_light(
     const amrex::Real k_f = 20000000;
     const amrex::Real qf = k_f * (sc[2] * sc[6]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[2] - g_RT[3] - g_RT[4] + g_RT[6])) * (sc[3] * sc[4]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[6] * inv_ge[3] * ge[2])
+               : exp(-(g_RT[2] - g_RT[3] - g_RT[4] + g_RT[6]))) *
+      (sc[3] * sc[4]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[3] += qdot;
@@ -5559,7 +6077,9 @@ productionRate_light(
     const amrex::Real k_f = 80000000;
     const amrex::Real qf = k_f * (sc[2] * sc_qss[0]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[1] + g_RT[2] + g_RT_qss[0] - g_RT_qss[2])) *
+      k_f *
+      (kc_fast ? (inv_ge_qss[2] * inv_ge[1] * ge[2] * ge_qss[0])
+               : exp(-(-g_RT[1] + g_RT[2] + g_RT_qss[0] - g_RT_qss[2]))) *
       (sc[1] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
@@ -5570,9 +6090,11 @@ productionRate_light(
     // reaction 22:  CH2(S) + O <=> CO + H2
     const amrex::Real k_f = 15000000;
     const amrex::Real qf = k_f * (sc[2] * sc_qss[1]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[0] + g_RT[2] - g_RT[9] + g_RT_qss[1])) *
-                           (sc[0] * sc[9]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[0] * inv_ge[9] * ge[2] * ge_qss[1])
+               : exp(-(-g_RT[0] + g_RT[2] - g_RT[9] + g_RT_qss[1]))) *
+      (sc[0] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[2] -= qdot;
@@ -5584,7 +6106,10 @@ productionRate_light(
     const amrex::Real k_f = 84300000;
     const amrex::Real qf = k_f * (sc[2] * sc[7]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[1] + g_RT[2] + g_RT[7] - g_RT[11])) * (sc[1] * sc[11]);
+      k_f *
+      (kc_fast ? (ge[7] * inv_ge[1] * inv_ge[11] * ge[2])
+               : exp(-(-g_RT[1] + g_RT[2] + g_RT[7] - g_RT[11]))) *
+      (sc[1] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[2] -= qdot;
@@ -5598,7 +6123,10 @@ productionRate_light(
       1020 * exp((1.5) * logT - (4327.66332592059) * invT);
     const amrex::Real qf = k_f * (sc[2] * sc[8]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[2] - g_RT[4] - g_RT[7] + g_RT[8])) * (sc[4] * sc[7]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[8] * ge[2] * inv_ge[7])
+               : exp(-(g_RT[2] - g_RT[4] - g_RT[7] + g_RT[8]))) *
+      (sc[4] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[4] += qdot;
@@ -5611,7 +6139,10 @@ productionRate_light(
     const amrex::Real k_f = 30000000;
     const amrex::Real qf = k_f * (sc[2] * sc_qss[2]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[2] - g_RT[4] - g_RT[9] + g_RT_qss[2])) * (sc[4] * sc[9]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge_qss[2] * inv_ge[9] * ge[2])
+               : exp(-(g_RT[2] - g_RT[4] - g_RT[9] + g_RT_qss[2]))) *
+      (sc[4] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[4] += qdot;
@@ -5622,9 +6153,11 @@ productionRate_light(
     // reaction 26:  HCO + O <=> CO2 + H
     const amrex::Real k_f = 30000000;
     const amrex::Real qf = k_f * (sc[2] * sc_qss[2]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[1] + g_RT[2] - g_RT[10] + g_RT_qss[2])) *
-                           (sc[1] * sc[10]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge_qss[2] * inv_ge[1] * ge[2] * inv_ge[10])
+               : exp(-(-g_RT[1] + g_RT[2] - g_RT[10] + g_RT_qss[2]))) *
+      (sc[1] * sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[2] -= qdot;
@@ -5635,9 +6168,11 @@ productionRate_light(
     // reaction 27:  CH2O + O <=> HCO + OH
     const amrex::Real k_f = 39000000 * exp(-(1781.38699694871) * invT);
     const amrex::Real qf = k_f * (sc[2] * sc[11]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[2] - g_RT[4] + g_RT[11] - g_RT_qss[2])) *
-                           (sc[4] * sc_qss[2]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[4] * inv_ge_qss[2] * ge[11] * ge[2])
+               : exp(-(g_RT[2] - g_RT[4] + g_RT[11] - g_RT_qss[2]))) *
+      (sc[4] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[4] += qdot;
@@ -5648,9 +6183,11 @@ productionRate_light(
     // reaction 28:  CH2OH + O <=> CH2O + OH
     const amrex::Real k_f = 10000000;
     const amrex::Real qf = k_f * (sc[2] * sc_qss[3]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[2] - g_RT[4] - g_RT[11] + g_RT_qss[3])) *
-                           (sc[4] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge_qss[3] * inv_ge[11] * ge[2])
+               : exp(-(g_RT[2] - g_RT[4] - g_RT[11] + g_RT_qss[3]))) *
+      (sc[4] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[2] -= qdot;
     wdot[4] += qdot;
@@ -5662,7 +6199,10 @@ productionRate_light(
     const amrex::Real k_f = 2500000 * exp(-(24053.7566254656) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc[9]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[2] + g_RT[3] + g_RT[9] - g_RT[10])) * (sc[2] * sc[10]);
+      k_f *
+      (kc_fast ? (ge[3] * ge[9] * inv_ge[10] * inv_ge[2])
+               : exp(-(-g_RT[2] + g_RT[3] + g_RT[9] - g_RT[10]))) *
+      (sc[2] * sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[2] += qdot;
     wdot[3] -= qdot;
@@ -5674,9 +6214,11 @@ productionRate_light(
     // reaction 30:  CH2O + O2 <=> HCO + HO2
     const amrex::Real k_f = 100000000 * exp(-(20128.6666321888) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc[11]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[3] - g_RT[6] + g_RT[11] - g_RT_qss[2])) *
-                           (sc[6] * sc_qss[2]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[3] * inv_ge[6] * inv_ge_qss[2] * ge[11])
+               : exp(-(g_RT[3] - g_RT[6] + g_RT[11] - g_RT_qss[2]))) *
+      (sc[6] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
     wdot[6] += qdot;
@@ -5688,7 +6230,10 @@ productionRate_light(
     const amrex::Real k_f = 83000000 * exp(-(7252.86180424342) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[3]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[1] - g_RT[2] + g_RT[3] - g_RT[4])) * (sc[2] * sc[4]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[3] * ge[1] * inv_ge[2])
+               : exp(-(g_RT[1] - g_RT[2] + g_RT[3] - g_RT[4]))) *
+      (sc[2] * sc[4]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[2] += qdot;
@@ -5701,7 +6246,10 @@ productionRate_light(
     const amrex::Real k_f = 3970000 * exp(-(337.658382754967) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[6]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[1] - g_RT[2] - g_RT[5] + g_RT[6])) * (sc[2] * sc[5]);
+      k_f *
+      (kc_fast ? (ge[6] * ge[1] * inv_ge[2] * inv_ge[5])
+               : exp(-(g_RT[1] - g_RT[2] - g_RT[5] + g_RT[6]))) *
+      (sc[2] * sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[2] += qdot;
@@ -5714,7 +6262,10 @@ productionRate_light(
     const amrex::Real k_f = 28000000 * exp(-(537.435399079441) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[6]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[0] + g_RT[1] - g_RT[3] + g_RT[6])) * (sc[0] * sc[3]);
+      k_f *
+      (kc_fast ? (inv_ge[0] * ge[6] * inv_ge[3] * ge[1])
+               : exp(-(-g_RT[0] + g_RT[1] - g_RT[3] + g_RT[6]))) *
+      (sc[0] * sc[3]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= qdot;
@@ -5727,7 +6278,10 @@ productionRate_light(
     const amrex::Real k_f = 134000000 * exp(-(319.542582785997) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[6]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[1] - 2.000000 * g_RT[4] + g_RT[6])) * ((sc[4] * sc[4]));
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[6] * inv_ge[4] * ge[1])
+               : exp(-(g_RT[1] - 2.000000 * g_RT[4] + g_RT[6]))) *
+      ((sc[4] * sc[4]));
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[4] += 2.000000 * qdot;
@@ -5740,7 +6294,10 @@ productionRate_light(
       660 * exp((1.62) * logT - (5454.86865732316) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[8]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[0] + g_RT[1] - g_RT[7] + g_RT[8])) * (sc[0] * sc[7]);
+      k_f *
+      (kc_fast ? (inv_ge[0] * ge[8] * ge[1] * inv_ge[7])
+               : exp(-(-g_RT[0] + g_RT[1] - g_RT[7] + g_RT[8]))) *
+      (sc[0] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= qdot;
@@ -5752,9 +6309,11 @@ productionRate_light(
     // reaction 36:  H + HCO <=> CO + H2
     const amrex::Real k_f = 73400000;
     const amrex::Real qf = k_f * (sc[1] * sc_qss[2]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[0] + g_RT[1] - g_RT[9] + g_RT_qss[2])) *
-                           (sc[0] * sc[9]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[0] * ge_qss[2] * inv_ge[9] * ge[1])
+               : exp(-(-g_RT[0] + g_RT[1] - g_RT[9] + g_RT_qss[2]))) *
+      (sc[0] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= qdot;
@@ -5766,9 +6325,11 @@ productionRate_light(
     const amrex::Real k_f =
       23000 * exp((1.05) * logT - (1648.03458051046) * invT);
     const amrex::Real qf = k_f * (sc[1] * sc[11]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[0] + g_RT[1] + g_RT[11] - g_RT_qss[2])) *
-                           (sc[0] * sc_qss[2]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[0] * inv_ge_qss[2] * ge[11] * ge[1])
+               : exp(-(-g_RT[0] + g_RT[1] + g_RT[11] - g_RT_qss[2]))) *
+      (sc[0] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= qdot;
@@ -5779,9 +6340,11 @@ productionRate_light(
     // reaction 38:  CH2OH + H <=> CH2O + H2
     const amrex::Real k_f = 20000000;
     const amrex::Real qf = k_f * (sc[1] * sc_qss[3]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[0] + g_RT[1] - g_RT[11] + g_RT_qss[3])) *
-                           (sc[0] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[0] * ge_qss[3] * inv_ge[11] * ge[1])
+               : exp(-(-g_RT[0] + g_RT[1] - g_RT[11] + g_RT_qss[3]))) *
+      (sc[0] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[0] += qdot;
     wdot[1] -= qdot;
@@ -5793,7 +6356,10 @@ productionRate_light(
     const amrex::Real k_f = 12000000;
     const amrex::Real qf = k_f * (sc[1] * sc_qss[3]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[1] - g_RT[4] - g_RT[7] + g_RT_qss[3])) * (sc[4] * sc[7]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge_qss[3] * ge[1] * inv_ge[7])
+               : exp(-(g_RT[1] - g_RT[4] - g_RT[7] + g_RT_qss[3]))) *
+      (sc[4] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
     wdot[4] += qdot;
@@ -5805,7 +6371,9 @@ productionRate_light(
     const amrex::Real k_f = 6000000;
     const amrex::Real qf = k_f * (sc[1] * sc_qss[3]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[1] - g_RT[5] - g_RT_qss[1] + g_RT_qss[3])) *
+      k_f *
+      (kc_fast ? (ge_qss[3] * ge[1] * inv_ge_qss[1] * inv_ge[5])
+               : exp(-(g_RT[1] - g_RT[5] - g_RT_qss[1] + g_RT_qss[3]))) *
       (sc[5] * sc_qss[1]);
     const amrex::Real qdot = qf - qr;
     wdot[1] -= qdot;
@@ -5818,7 +6386,10 @@ productionRate_light(
       216 * exp((1.51) * logT - (1726.03316371019) * invT);
     const amrex::Real qf = k_f * (sc[0] * sc[4]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[0] - g_RT[1] + g_RT[4] - g_RT[5])) * (sc[1] * sc[5]);
+      k_f *
+      (kc_fast ? (ge[0] * ge[4] * inv_ge[1] * inv_ge[5])
+               : exp(-(g_RT[0] - g_RT[1] + g_RT[4] - g_RT[5]))) *
+      (sc[1] * sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[0] -= qdot;
     wdot[1] += qdot;
@@ -5832,7 +6403,10 @@ productionRate_light(
       0.0357 * exp((2.4) * logT - (-1061.78716484796) * invT);
     const amrex::Real qf = k_f * ((sc[4] * sc[4]));
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[2] + 2.000000 * g_RT[4] - g_RT[5])) * (sc[2] * sc[5]);
+      k_f *
+      (kc_fast ? (ge[4] * ge[4] * inv_ge[2] * inv_ge[5])
+               : exp(-(-g_RT[2] + 2.000000 * g_RT[4] - g_RT[5]))) *
+      (sc[2] * sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[2] += qdot;
     wdot[4] -= 2.000000 * qdot;
@@ -5844,7 +6418,10 @@ productionRate_light(
     const amrex::Real k_f = 29000000 * exp(-(-251.60833290236) * invT);
     const amrex::Real qf = k_f * (sc[4] * sc[6]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[3] + g_RT[4] - g_RT[5] + g_RT[6])) * (sc[3] * sc[5]);
+      k_f *
+      (kc_fast ? (ge[4] * inv_ge[3] * ge[6] * inv_ge[5])
+               : exp(-(-g_RT[3] + g_RT[4] - g_RT[5] + g_RT[6]))) *
+      (sc[3] * sc[5]);
     const amrex::Real qdot = qf - qr;
     wdot[3] += qdot;
     wdot[4] -= qdot;
@@ -5856,9 +6433,11 @@ productionRate_light(
     // reaction 44:  CH2 + OH <=> CH2O + H
     const amrex::Real k_f = 20000000;
     const amrex::Real qf = k_f * (sc[4] * sc_qss[0]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[0])) *
-                           (sc[1] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * inv_ge[11] * inv_ge[1] * ge_qss[0])
+               : exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[0]))) *
+      (sc[1] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[4] -= qdot;
@@ -5869,9 +6448,11 @@ productionRate_light(
     // reaction 45:  CH2(S) + OH <=> CH2O + H
     const amrex::Real k_f = 30000000;
     const amrex::Real qf = k_f * (sc[4] * sc_qss[1]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[1])) *
-                           (sc[1] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * inv_ge[11] * inv_ge[1] * ge_qss[1])
+               : exp(-(-g_RT[1] + g_RT[4] - g_RT[11] + g_RT_qss[1]))) *
+      (sc[1] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[4] -= qdot;
@@ -5882,9 +6463,11 @@ productionRate_light(
     // reaction 46:  CH3 + OH <=> CH2 + H2O
     const amrex::Real k_f = 56 * exp((1.6) * logT - (2727.43432866158) * invT);
     const amrex::Real qf = k_f * (sc[4] * sc[7]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[0])) *
-                           (sc[5] * sc_qss[0]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * ge[7] * inv_ge_qss[0] * inv_ge[5])
+               : exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[0]))) *
+      (sc[5] * sc_qss[0]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -5895,9 +6478,11 @@ productionRate_light(
     // reaction 47:  CH3 + OH <=> CH2(S) + H2O
     const amrex::Real k_f = 25010000;
     const amrex::Real qf = k_f * (sc[4] * sc[7]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[1])) *
-                           (sc[5] * sc_qss[1]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * ge[7] * inv_ge_qss[1] * inv_ge[5])
+               : exp(-(g_RT[4] - g_RT[5] + g_RT[7] - g_RT_qss[1]))) *
+      (sc[5] * sc_qss[1]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -5909,7 +6494,10 @@ productionRate_light(
     const amrex::Real k_f = 100 * exp((1.6) * logT - (1570.03599731073) * invT);
     const amrex::Real qf = k_f * (sc[4] * sc[8]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[4] - g_RT[5] - g_RT[7] + g_RT[8])) * (sc[5] * sc[7]);
+      k_f *
+      (kc_fast ? (ge[4] * inv_ge[7] * inv_ge[5] * ge[8])
+               : exp(-(g_RT[4] - g_RT[5] - g_RT[7] + g_RT[8]))) *
+      (sc[5] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -5923,7 +6511,10 @@ productionRate_light(
       47.6 * exp((1.228) * logT - (35.2251666063304) * invT);
     const amrex::Real qf = k_f * (sc[4] * sc[9]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[1] + g_RT[4] + g_RT[9] - g_RT[10])) * (sc[1] * sc[10]);
+      k_f *
+      (kc_fast ? (ge[4] * ge[9] * inv_ge[10] * inv_ge[1])
+               : exp(-(-g_RT[1] + g_RT[4] + g_RT[9] - g_RT[10]))) *
+      (sc[1] * sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
     wdot[4] -= qdot;
@@ -5936,7 +6527,10 @@ productionRate_light(
     const amrex::Real k_f = 50000000;
     const amrex::Real qf = k_f * (sc[4] * sc_qss[2]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[4] - g_RT[5] - g_RT[9] + g_RT_qss[2])) * (sc[5] * sc[9]);
+      k_f *
+      (kc_fast ? (ge[4] * ge_qss[2] * inv_ge[9] * inv_ge[5])
+               : exp(-(g_RT[4] - g_RT[5] - g_RT[9] + g_RT_qss[2]))) *
+      (sc[5] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -5948,9 +6542,11 @@ productionRate_light(
     const amrex::Real k_f =
       3430 * exp((1.18) * logT - (-224.93784961471) * invT);
     const amrex::Real qf = k_f * (sc[4] * sc[11]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[4] - g_RT[5] + g_RT[11] - g_RT_qss[2])) *
-                           (sc[5] * sc_qss[2]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * inv_ge_qss[2] * ge[11] * inv_ge[5])
+               : exp(-(g_RT[4] - g_RT[5] + g_RT[11] - g_RT_qss[2]))) *
+      (sc[5] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -5961,9 +6557,11 @@ productionRate_light(
     // reaction 52:  CH2OH + OH <=> CH2O + H2O
     const amrex::Real k_f = 5000000;
     const amrex::Real qf = k_f * (sc[4] * sc_qss[3]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[4] - g_RT[5] - g_RT[11] + g_RT_qss[3])) *
-                           (sc[5] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[4] * ge_qss[3] * inv_ge[11] * inv_ge[5])
+               : exp(-(g_RT[4] - g_RT[5] - g_RT[11] + g_RT_qss[3]))) *
+      (sc[5] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[4] -= qdot;
     wdot[5] += qdot;
@@ -5974,9 +6572,11 @@ productionRate_light(
     // reaction 53:  CH2 + HO2 <=> CH2O + OH
     const amrex::Real k_f = 20000000;
     const amrex::Real qf = k_f * (sc[6] * sc_qss[0]);
-    const amrex::Real qr = k_f *
-                           exp(-(-g_RT[4] + g_RT[6] - g_RT[11] + g_RT_qss[0])) *
-                           (sc[4] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[6] * inv_ge[11] * ge_qss[0])
+               : exp(-(-g_RT[4] + g_RT[6] - g_RT[11] + g_RT_qss[0]))) *
+      (sc[4] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[4] += qdot;
     wdot[6] -= qdot;
@@ -5988,7 +6588,10 @@ productionRate_light(
     const amrex::Real k_f = 1000000;
     const amrex::Real qf = k_f * (sc[6] * sc[7]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[3] + g_RT[6] + g_RT[7] - g_RT[8])) * (sc[3] * sc[8]);
+      k_f *
+      (kc_fast ? (inv_ge[3] * ge[6] * ge[7] * inv_ge[8])
+               : exp(-(-g_RT[3] + g_RT[6] + g_RT[7] - g_RT[8]))) *
+      (sc[3] * sc[8]);
     const amrex::Real qdot = qf - qr;
     wdot[3] += qdot;
     wdot[6] -= qdot;
@@ -6001,7 +6604,10 @@ productionRate_light(
     const amrex::Real k_f = 150000000 * exp(-(11875.9133129914) * invT);
     const amrex::Real qf = k_f * (sc[6] * sc[9]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[4] + g_RT[6] + g_RT[9] - g_RT[10])) * (sc[4] * sc[10]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[6] * ge[9] * inv_ge[10])
+               : exp(-(-g_RT[4] + g_RT[6] + g_RT[9] - g_RT[10]))) *
+      (sc[4] * sc[10]);
     const amrex::Real qdot = qf - qr;
     wdot[4] += qdot;
     wdot[6] -= qdot;
@@ -6014,7 +6620,9 @@ productionRate_light(
     const amrex::Real k_f = 13200000 * exp(-(754.82499870708) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc_qss[0]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[3] - g_RT[4] + g_RT_qss[0] - g_RT_qss[2])) *
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[3] * inv_ge_qss[2] * ge_qss[0])
+               : exp(-(g_RT[3] - g_RT[4] + g_RT_qss[0] - g_RT_qss[2]))) *
       (sc[4] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
@@ -6026,7 +6634,10 @@ productionRate_light(
     const amrex::Real k_f = 0.5 * exp((2) * logT - (3638.25649376812) * invT);
     const amrex::Real qf = k_f * (sc[0] * sc_qss[0]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[0])) * (sc[1] * sc[7]);
+      k_f *
+      (kc_fast ? (ge[0] * inv_ge[7] * ge_qss[0] * inv_ge[1])
+               : exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[0]))) *
+      (sc[1] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[0] -= qdot;
     wdot[1] += qdot;
@@ -6037,9 +6648,11 @@ productionRate_light(
     // reaction 58:  CH2 + CH4 <=> 2 CH3
     const amrex::Real k_f = 2.46 * exp((2) * logT - (4161.60182620503) * invT);
     const amrex::Real qf = k_f * (sc[8] * sc_qss[0]);
-    const amrex::Real qr = k_f *
-                           exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[0])) *
-                           ((sc[7] * sc[7]));
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[7] * inv_ge[7] * ge_qss[0] * ge[8])
+               : exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[0]))) *
+      ((sc[7] * sc[7]));
     const amrex::Real qdot = qf - qr;
     wdot[7] += 2.000000 * qdot;
     wdot[8] -= qdot;
@@ -6050,7 +6663,9 @@ productionRate_light(
     const amrex::Real k_f = 15000000 * exp(-(301.929999482832) * invT);
     const amrex::Real qf = k_f * (sc[12] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[12] - g_RT[12] - g_RT_qss[0] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+               : exp(-(g_RT[12] - g_RT[12] - g_RT_qss[0] + g_RT_qss[1]))) *
       (sc[12] * sc_qss[0]);
     const amrex::Real qdot = qf - qr;
     wdot[12] -= qdot;
@@ -6062,7 +6677,9 @@ productionRate_light(
     const amrex::Real k_f = 28000000;
     const amrex::Real qf = k_f * (sc[3] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[1] + g_RT[3] - g_RT[4] - g_RT[9] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[3] * inv_ge[9] * inv_ge[1] * ge_qss[1])
+               : exp(-(-g_RT[1] + g_RT[3] - g_RT[4] - g_RT[9] + g_RT_qss[1]))) *
       (refCinv) * (sc[1] * sc[4] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[1] += qdot;
@@ -6076,7 +6693,10 @@ productionRate_light(
     const amrex::Real k_f = 12000000;
     const amrex::Real qf = k_f * (sc[3] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[3] - g_RT[5] - g_RT[9] + g_RT_qss[1])) * (sc[5] * sc[9]);
+      k_f *
+      (kc_fast ? (ge[3] * inv_ge[9] * inv_ge[5] * ge_qss[1])
+               : exp(-(g_RT[3] - g_RT[5] - g_RT[9] + g_RT_qss[1]))) *
+      (sc[5] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
     wdot[5] += qdot;
@@ -6088,7 +6708,10 @@ productionRate_light(
     const amrex::Real k_f = 70000000;
     const amrex::Real qf = k_f * (sc[0] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[1])) * (sc[1] * sc[7]);
+      k_f *
+      (kc_fast ? (ge[0] * inv_ge[7] * ge_qss[1] * inv_ge[1])
+               : exp(-(g_RT[0] - g_RT[1] - g_RT[7] + g_RT_qss[1]))) *
+      (sc[1] * sc[7]);
     const amrex::Real qdot = qf - qr;
     wdot[0] -= qdot;
     wdot[1] += qdot;
@@ -6100,7 +6723,9 @@ productionRate_light(
     const amrex::Real k_f = 30000000;
     const amrex::Real qf = k_f * (sc[5] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[5] - g_RT[5] - g_RT_qss[0] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+               : exp(-(g_RT[5] - g_RT[5] - g_RT_qss[0] + g_RT_qss[1]))) *
       (sc[5] * sc_qss[0]);
     const amrex::Real qdot = qf - qr;
     wdot[5] -= qdot;
@@ -6111,9 +6736,11 @@ productionRate_light(
     // reaction 64:  CH2(S) + CH4 <=> 2 CH3
     const amrex::Real k_f = 16000000 * exp(-(-286.83349950869) * invT);
     const amrex::Real qf = k_f * (sc[8] * sc_qss[1]);
-    const amrex::Real qr = k_f *
-                           exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[1])) *
-                           ((sc[7] * sc[7]));
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge[7] * inv_ge[7] * ge_qss[1] * ge[8])
+               : exp(-(-2.000000 * g_RT[7] + g_RT[8] + g_RT_qss[1]))) *
+      ((sc[7] * sc[7]));
     const amrex::Real qdot = qf - qr;
     wdot[7] += 2.000000 * qdot;
     wdot[8] -= qdot;
@@ -6124,7 +6751,9 @@ productionRate_light(
     const amrex::Real k_f = 9000000;
     const amrex::Real qf = k_f * (sc[9] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[9] - g_RT[9] - g_RT_qss[0] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+               : exp(-(g_RT[9] - g_RT[9] - g_RT_qss[0] + g_RT_qss[1]))) *
       (sc[9] * sc_qss[0]);
     const amrex::Real qdot = qf - qr;
     wdot[9] -= qdot;
@@ -6136,7 +6765,9 @@ productionRate_light(
     const amrex::Real k_f = 7000000;
     const amrex::Real qf = k_f * (sc[10] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[10] - g_RT[10] - g_RT_qss[0] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge_qss[0] * ge_qss[1])
+               : exp(-(g_RT[10] - g_RT[10] - g_RT_qss[0] + g_RT_qss[1]))) *
       (sc[10] * sc_qss[0]);
     const amrex::Real qdot = qf - qr;
     wdot[10] -= qdot;
@@ -6148,7 +6779,9 @@ productionRate_light(
     const amrex::Real k_f = 14000000;
     const amrex::Real qf = k_f * (sc[10] * sc_qss[1]);
     const amrex::Real qr =
-      k_f * exp(-(-g_RT[9] + g_RT[10] - g_RT[11] + g_RT_qss[1])) *
+      k_f *
+      (kc_fast ? (inv_ge[9] * ge[10] * ge_qss[1] * inv_ge[11])
+               : exp(-(-g_RT[9] + g_RT[10] - g_RT[11] + g_RT_qss[1]))) *
       (sc[9] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[9] += qdot;
@@ -6161,7 +6794,10 @@ productionRate_light(
     const amrex::Real k_f = 36000 * exp(-(4498.75699229419) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc[7]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[3] - g_RT[4] + g_RT[7] - g_RT[11])) * (sc[4] * sc[11]);
+      k_f *
+      (kc_fast ? (inv_ge[4] * ge[3] * ge[7] * inv_ge[11])
+               : exp(-(g_RT[3] - g_RT[4] + g_RT[7] - g_RT[11]))) *
+      (sc[4] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
     wdot[4] += qdot;
@@ -6174,7 +6810,10 @@ productionRate_light(
     const amrex::Real k_f = 26480000;
     const amrex::Real qf = k_f * (sc[7] * sc_qss[2]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[7] - g_RT[8] - g_RT[9] + g_RT_qss[2])) * (sc[8] * sc[9]);
+      k_f *
+      (kc_fast ? (ge_qss[2] * inv_ge[8] * ge[7] * inv_ge[9])
+               : exp(-(g_RT[7] - g_RT[8] - g_RT[9] + g_RT_qss[2]))) *
+      (sc[8] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[7] -= qdot;
     wdot[8] += qdot;
@@ -6186,9 +6825,11 @@ productionRate_light(
     const amrex::Real k_f =
       0.00332 * exp((2.81) * logT - (2948.84966161566) * invT);
     const amrex::Real qf = k_f * (sc[7] * sc[11]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[7] - g_RT[8] + g_RT[11] - g_RT_qss[2])) *
-                           (sc[8] * sc_qss[2]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (inv_ge_qss[2] * ge[7] * ge[11] * inv_ge[8])
+               : exp(-(g_RT[7] - g_RT[8] + g_RT[11] - g_RT_qss[2]))) *
+      (sc[8] * sc_qss[2]);
     const amrex::Real qdot = qf - qr;
     wdot[7] -= qdot;
     wdot[8] += qdot;
@@ -6200,7 +6841,10 @@ productionRate_light(
     const amrex::Real k_f = 7600000 * exp(-(201.286666321888) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc_qss[2]);
     const amrex::Real qr =
-      k_f * exp(-(g_RT[3] - g_RT[6] - g_RT[9] + g_RT_qss[2])) * (sc[6] * sc[9]);
+      k_f *
+      (kc_fast ? (ge[3] * inv_ge[6] * ge_qss[2] * inv_ge[9])
+               : exp(-(g_RT[3] - g_RT[6] - g_RT[9] + g_RT_qss[2]))) *
+      (sc[6] * sc[9]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
     wdot[6] += qdot;
@@ -6211,9 +6855,11 @@ productionRate_light(
     // reaction 72:  CH2OH + O2 <=> CH2O + HO2
     const amrex::Real k_f = 18000000 * exp(-(452.894999224248) * invT);
     const amrex::Real qf = k_f * (sc[3] * sc_qss[3]);
-    const amrex::Real qr = k_f *
-                           exp(-(g_RT[3] - g_RT[6] - g_RT[11] + g_RT_qss[3])) *
-                           (sc[6] * sc[11]);
+    const amrex::Real qr =
+      k_f *
+      (kc_fast ? (ge[3] * inv_ge[6] * ge_qss[3] * inv_ge[11])
+               : exp(-(g_RT[3] - g_RT[6] - g_RT[11] + g_RT_qss[3]))) *
+      (sc[6] * sc[11]);
     const amrex::Real qdot = qf - qr;
     wdot[3] -= qdot;
     wdot[6] += qdot;
@@ -9625,7 +10271,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[57] = 2.80841511E+00;
   COFD[58] = -1.52629888E-01;
   COFD[59] = 6.72604927E-03;
-  COFD[60] = -1.68759075E+01;
+  COFD[60] = -1.68277332E+01;
   COFD[61] = 4.49460341E+00;
   COFD[62] = -3.64766179E-01;
   COFD[63] = 1.56457173E-02;
@@ -9637,7 +10283,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[69] = 5.02608697E+00;
   COFD[70] = -4.26959993E-01;
   COFD[71] = 1.80709910E-02;
-  COFD[72] = -2.10639926E+01;
+  COFD[72] = -2.10287057E+01;
   COFD[73] = 5.50980703E+00;
   COFD[74] = -4.78335492E-01;
   COFD[75] = 1.98515434E-02;
@@ -9729,7 +10375,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[161] = 3.34934830E+00;
   COFD[162] = -2.21831026E-01;
   COFD[163] = 9.68019791E-03;
-  COFD[164] = -2.12953626E+01;
+  COFD[164] = -2.12561676E+01;
   COFD[165] = 5.52385262E+00;
   COFD[166] = -4.69683817E-01;
   COFD[167] = 1.90677254E-02;
@@ -9765,7 +10411,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[197] = 2.99164244E+00;
   COFD[198] = -1.76293106E-01;
   COFD[199] = 7.74575100E-03;
-  COFD[200] = -2.08943723E+01;
+  COFD[200] = -2.08561919E+01;
   COFD[201] = 5.44718673E+00;
   COFD[202] = -4.72082974E-01;
   COFD[203] = 1.96531328E-02;
@@ -9805,7 +10451,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[237] = 3.98859394E+00;
   COFD[238] = -3.02316219E-01;
   COFD[239] = 1.30661099E-02;
-  COFD[240] = -2.12021420E+01;
+  COFD[240] = -2.11719364E+01;
   COFD[241] = 5.20775027E+00;
   COFD[242] = -4.07348285E-01;
   COFD[243] = 1.55473262E-02;
@@ -9897,7 +10543,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[329] = 2.98558426E+00;
   COFD[330] = -1.75507216E-01;
   COFD[331] = 7.71173691E-03;
-  COFD[332] = -2.08123331E+01;
+  COFD[332] = -2.07768625E+01;
   COFD[333] = 5.42470175E+00;
   COFD[334] = -4.69700438E-01;
   COFD[335] = 1.95706912E-02;

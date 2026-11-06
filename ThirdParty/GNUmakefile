@@ -123,6 +123,8 @@ endif
   ONE_MAGMA_SRC_FILE=$(MAGMA_SOURCE_DIR)/COPYRIGHT
   ONE_MAGMA_LIB_FILE=$(INSTALL_PREFIX)/libmagma.so
   MAGMA_DIST_FILE=magma-$(MAGMA_VERSION).tar.gz
+  # Fixes for newer toolchains, applied once after extraction (if present)
+  MAGMA_PATCH_FILE=$(wildcard $(PWD)/patches/magma-$(MAGMA_VERSION).patch)
 
 ifeq ($(USE_CUDA),TRUE)
   MAGMA_COMPILER_OPT=-DMAGMA_ENABLE_CUDA=ON -DGPU_TARGET=sm_$(CUDA_ARCH) -DCMAKE_CUDA_COMPILER:STRING=nvcc -DCMAKE_CUDA_HOST_COMPILER:STRING=$(CXXCOMPILER)
@@ -256,8 +258,10 @@ $(ONE_MAGMA_LIB_FILE): $(ONE_MAGMA_SRC_FILE)
         cmake --build $(MAGMA_BUILD_DIR) --parallel 10 && \
         cmake --install $(MAGMA_BUILD_DIR)
 
-$(ONE_MAGMA_SRC_FILE): $(MAGMA_DIST_DIR)/$(MAGMA_DIST_FILE)
-	@cd $(MAGMA_DIST_DIR)/..; tar xf $(MAGMA_DIST_DIR)/$(MAGMA_DIST_FILE); find $(MAGMA_SOURCE_DIR) -type f -exec touch {} +
+$(ONE_MAGMA_SRC_FILE): $(MAGMA_DIST_DIR)/$(MAGMA_DIST_FILE) $(MAGMA_PATCH_FILE)
+	@cd $(MAGMA_DIST_DIR)/..; tar xf $(MAGMA_DIST_DIR)/$(MAGMA_DIST_FILE)
+	$(if $(MAGMA_PATCH_FILE),cd $(MAGMA_SOURCE_DIR) && patch -p1 < $(MAGMA_PATCH_FILE))
+	@find $(MAGMA_SOURCE_DIR) -type f -exec touch {} +
 
 $(MAGMA_DIST_DIR)/$(MAGMA_DIST_FILE):
 	@mkdir -p $(MAGMA_DIST_DIR)

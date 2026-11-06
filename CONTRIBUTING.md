@@ -12,7 +12,7 @@ to fork *PelePhysics* main repo on your GitHub account, and use a recursive `git
 
 Then step into the *PelePhysics* folder and add the main *PelePhysics* repository as the `upstream` remote in order to keep track of the main repo :
 ~~~
-git add remote upstream https://github.com/AMReX-Combustion/PelePhysics
+git add remote upstream https://github.com/Pele-Suite/PelePhysics
 ~~~
 
 At any point, you can update the `development` branch of your local repository with changes implemented in the main *PelePhysics* repo by pulling from `upstream` :

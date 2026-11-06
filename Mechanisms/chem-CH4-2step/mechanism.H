@@ -1858,6 +1858,18 @@ comp_qfqr(
   // compute the Gibbs free energy
   amrex::Real g_RT[6];
   gibbs(g_RT, T);
+  // Kc from shared exp(-g/RT) factors where no factor or partial product can
+  // overflow (checked by CEPTR on this T range); exp of the sum otherwise and
+  // in single precision
+  const bool kc_fast =
+    sizeof(amrex::Real) == sizeof(double) && T >= 200.0 && T <= 10000.0;
+  amrex::Real ge[6] = {}, inv_ge[6] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 6; ++i) {
+      ge[i] = exp(-g_RT[i]);
+      inv_ge[i] = 1.0 / ge[i];
+    }
+  }
 
   // reference concentration: P_atm / (RT) in inverse mol/m^3
   amrex::Real refC = 101325 / 8.31446 * invT;
@@ -1878,12 +1890,18 @@ comp_qfqr(
   k_f = 6296094821.39524 * exp(-(20128.6666321888) * invT);
   qf[1] *= k_f;
   qr[1] *=
-    k_f * exp(-(g_RT[0] + 2.000000 * g_RT[3] - 2.000000 * g_RT[4])) * (refC);
+    k_f *
+    (kc_fast ? (ge[0] * ge[3] * inv_ge[4] * ge[3] * inv_ge[4])
+             : exp(-(g_RT[0] + 2.000000 * g_RT[3] - 2.000000 * g_RT[4]))) *
+    (refC);
   // reaction 2:  2 CO2 => 2 CO + O2
   k_f = 250000000 * exp(-(20128.6666321888) * invT);
   qf[2] *= k_f;
-  qr[2] *= k_f * exp(-(-g_RT[0] - 2.000000 * g_RT[3] + 2.000000 * g_RT[4])) *
-           (refCinv);
+  qr[2] *=
+    k_f *
+    (kc_fast ? (inv_ge[0] * inv_ge[3] * ge[4] * inv_ge[3] * ge[4])
+             : exp(-(-g_RT[0] - 2.000000 * g_RT[3] + 2.000000 * g_RT[4]))) *
+    (refCinv);
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
@@ -1909,6 +1927,18 @@ productionRate(amrex::Real* wdot, const amrex::Real* sc, const amrex::Real T)
   // compute the Gibbs free energy
   amrex::Real g_RT[6];
   gibbs(g_RT, T);
+  // Kc from shared exp(-g/RT) factors where no factor or partial product can
+  // overflow (checked by CEPTR on this T range); exp of the sum otherwise and
+  // in single precision
+  const bool kc_fast =
+    sizeof(amrex::Real) == sizeof(double) && T >= 200.0 && T <= 10000.0;
+  amrex::Real ge[6] = {}, inv_ge[6] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 6; ++i) {
+      ge[i] = exp(-g_RT[i]);
+      inv_ge[i] = 1.0 / ge[i];
+    }
+  }
 
   {
     // reaction 0:  2 CH4 + 3 O2 => 2 CO + 4 H2O
@@ -2148,6 +2178,18 @@ aJacobian_precond(
   // compute the Gibbs free energy
   amrex::Real g_RT[6];
   gibbs(g_RT, T);
+  // Kc from shared exp(-g/RT) factors where no factor or partial product can
+  // overflow (checked by CEPTR on this T range); exp of the sum otherwise and
+  // in single precision
+  const bool kc_fast =
+    sizeof(amrex::Real) == sizeof(double) && T >= 200.0 && T <= 10000.0;
+  amrex::Real ge[6] = {}, inv_ge[6] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 6; ++i) {
+      ge[i] = exp(-g_RT[i]);
+      inv_ge[i] = 1.0 / ge[i];
+    }
+  }
 
   // compute the species enthalpy
   amrex::Real h_RT[6];
@@ -2350,6 +2392,18 @@ aJacobian(
   // compute the Gibbs free energy
   amrex::Real g_RT[6];
   gibbs(g_RT, T);
+  // Kc from shared exp(-g/RT) factors where no factor or partial product can
+  // overflow (checked by CEPTR on this T range); exp of the sum otherwise and
+  // in single precision
+  const bool kc_fast =
+    sizeof(amrex::Real) == sizeof(double) && T >= 200.0 && T <= 10000.0;
+  amrex::Real ge[6] = {}, inv_ge[6] = {};
+  if (kc_fast) {
+    for (int i = 0; i < 6; ++i) {
+      ge[i] = exp(-g_RT[i]);
+      inv_ge[i] = 1.0 / ge[i];
+    }
+  }
 
   // compute the species enthalpy
   amrex::Real h_RT[6];
@@ -2713,7 +2767,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[1] = 3.37317428E+00;
   COFD[2] = -2.24900439E-01;
   COFD[3] = 9.81228151E-03;
-  COFD[4] = -2.10639926E+01;
+  COFD[4] = -2.10287057E+01;
   COFD[5] = 5.50980703E+00;
   COFD[6] = -4.78335492E-01;
   COFD[7] = 1.98515434E-02;
@@ -2725,7 +2779,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[13] = 3.66478157E+00;
   COFD[14] = -2.61506432E-01;
   COFD[15] = 1.13466231E-02;
-  COFD[16] = -2.12953626E+01;
+  COFD[16] = -2.12561676E+01;
   COFD[17] = 5.52385262E+00;
   COFD[18] = -4.69683817E-01;
   COFD[19] = 1.90677254E-02;
@@ -2737,7 +2791,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[25] = 3.26249588E+00;
   COFD[26] = -2.10658287E-01;
   COFD[27] = 9.20032462E-03;
-  COFD[28] = -2.08943723E+01;
+  COFD[28] = -2.08561919E+01;
   COFD[29] = 5.44718673E+00;
   COFD[30] = -4.72082974E-01;
   COFD[31] = 1.96531328E-02;
@@ -2753,7 +2807,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[41] = 4.33684042E+00;
   COFD[42] = -3.44981265E-01;
   COFD[43] = 1.48142449E-02;
-  COFD[44] = -2.12021420E+01;
+  COFD[44] = -2.11719364E+01;
   COFD[45] = 5.20775027E+00;
   COFD[46] = -4.07348285E-01;
   COFD[47] = 1.55473262E-02;
@@ -2773,7 +2827,7 @@ egtransetCOFD(amrex::Real* COFD)
   COFD[61] = 3.25515933E+00;
   COFD[62] = -2.09710110E-01;
   COFD[63] = 9.15941830E-03;
-  COFD[64] = -2.08123331E+01;
+  COFD[64] = -2.07768625E+01;
   COFD[65] = 5.42470175E+00;
   COFD[66] = -4.69700438E-01;
   COFD[67] = 1.95706912E-02;

@@ -85,9 +85,16 @@ private:
   int m_nfiles_plane;
   bool m_dump_flat_3D_plotfile;
 
-  // Plane definition
+  // Plane definition.  m_center is in the coordinate the AMReX grid uses
+  // (computational Xi under a mesh mapping).  With center_is_physical the
+  // input is taken as a physical position and converted through the
+  // geometry.mesh_mapping block on first use; m_center_phys keeps the
+  // input, m_map_kind the map it was converted with (0 = identity).
   int m_normal;
   amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> m_center;
+  bool m_center_is_physical = false;
+  amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> m_center_phys;
+  int m_map_kind = 0;
   bool m_dump_ghost_if_OOB;
 
   // Interpolation data

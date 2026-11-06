@@ -23,6 +23,7 @@ parser = argparse.ArgumentParser(
     prog="Cantera PMF Generator",
     description="Use Cantera to solve a 1D premixed flame and save in a Pele-readable format",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    fromfile_prefix_chars='@',
 )
 
 parser.add_argument(

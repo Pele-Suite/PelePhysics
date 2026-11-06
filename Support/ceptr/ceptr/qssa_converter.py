@@ -1447,6 +1447,7 @@ def qssa_coeff_functions(fstream, mechanism, species_info, reaction_info, syms):
 
     cw.writer(fstream, "const amrex::Real invT = 1.0 / T;")
     cw.writer(fstream, "const amrex::Real logT = log(T);")
+    cu.write_gibbs_exp(fstream, mechanism, species_info)
     cw.writer(fstream)
 
     if mechanism.n_reactions == 0:
@@ -1573,6 +1574,8 @@ def qssa_coeff_functions(fstream, mechanism, species_info, reaction_info, syms):
         kc_exp_arg, kc_exp_arg_smp = cu.sorted_kc_exp_arg(
             mechanism, species_info, reaction, syms
         )
+
+        kc_e = cu.kc_exp(mechanism, species_info, reaction, -1)
         kc_conv_inv, kc_conv_inv_smp = cu.fkc_conv_inv(
             mechanism, species_info, reaction, syms
         )
@@ -1774,7 +1777,7 @@ def qssa_coeff_functions(fstream, mechanism, species_info, reaction_info, syms):
                 else:
                     cw.writer(
                         fstream,
-                        f"qr[{idx}] = k_f[{idx}] * exp(-({kc_exp_arg})) *"
+                        f"qr[{idx}] = k_f[{idx}] * {kc_e} *"
                         f" ({kc_conv_inv}) * ({reverse_sc});",
                     )
                 syms.qr_qss_smp[idx] = (
@@ -1793,7 +1796,7 @@ def qssa_coeff_functions(fstream, mechanism, species_info, reaction_info, syms):
                     cw.writer(
                         fstream,
                         f"qr[{idx}] = Corr * k_f[{idx}] *"
-                        f" exp(-({kc_exp_arg})) * ({kc_conv_inv}) *"
+                        f" {kc_e} * ({kc_conv_inv}) *"
                         f" ({reverse_sc});",
                     )
                 syms.qr_qss_smp[idx] = (
@@ -1813,8 +1816,7 @@ def qssa_coeff_functions(fstream, mechanism, species_info, reaction_info, syms):
                 else:
                     cw.writer(
                         fstream,
-                        f"qr[{idx}] = k_f[{idx}] * exp(-({kc_exp_arg})) *"
-                        f" ({reverse_sc});",
+                        f"qr[{idx}] = k_f[{idx}] * {kc_e} *" f" ({reverse_sc});",
                     )
                 syms.qr_qss_smp[idx] = (
                     syms.kf_qss_smp[idx] * sme.exp(-kc_exp_arg_smp) * reverse_sc_smp
@@ -1828,8 +1830,7 @@ def qssa_coeff_functions(fstream, mechanism, species_info, reaction_info, syms):
                 else:
                     cw.writer(
                         fstream,
-                        f"qr[{idx}] = Corr * k_f[{idx}] *"
-                        f" exp(-({kc_exp_arg})) * ({reverse_sc});",
+                        f"qr[{idx}] = Corr * k_f[{idx}] *" f" {kc_e} * ({reverse_sc});",
                     )
                 syms.qr_qss_smp[idx] = (
                     corr_smp

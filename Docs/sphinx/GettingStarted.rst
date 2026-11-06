@@ -6,7 +6,7 @@
 
 Greetings users. As a word of caution, this documentation is in progress. Some parts of the code remain undocumented,
 and some parts of the documentation are out of data. If you are confused by something you read here, or otherwise
-need help with `PelePhysics`, the best course of action is to open a Discussion on the `GitHub page <https://github.com/AMReX-Combustion/PelePhysics/discussions>`_,
+need help with `PelePhysics`, the best course of action is to open a Discussion on the `GitHub page <https://github.com/Pele-Suite/PelePhysics/discussions>`_,
 so the development team and other users can help.
 
 - If you are a complete beginner, I urge you to carefully read the two following chapters :ref:`sec:GetPP` and :ref:`sec:GetCVODE`, to properly set-up your working environment.
@@ -18,7 +18,7 @@ so the development team and other users can help.
 Obtaining `PelePhysics`
 =======================
 
-PelePhysics is primarily intended as a library for use in the other `Pele codes <https://amrex-combustion.github.io>`_, and is automatically downloaded as
+PelePhysics is primarily intended as a library for use in the other `Pele codes <https://Pele-Suite.github.io>`_, and is automatically downloaded as
 a submodule of both PeleC and PeleLMeX. However, it can also be used as a stand-alone solver for chemical reactions and thermodynamic properties,
 or as a library for other codes. Instructions for how to obtain `PelePhysics` for these purposes are provided here.
 
@@ -26,7 +26,7 @@ First, make sure that "Git" is installed on your machine---we recommend version 
 
 1. Clone the `PelePhysics` repository and its submodules: ::
 
-    git clone --recursive https://github.com/AMReX-Combustion/PelePhysics.git
+    git clone --recursive https://github.com/Pele-Suite/PelePhysics.git
 
   This will create a ``PelePhysics`` directory on your machine. The ``--recursive`` option ensures that the required :ref:`sec:GetCVODE` are also downloaded to the
   ``PelePhysics/Submodules`` directory. Set the environment variable ``PELE_PHYSICS_HOME`` to point to the location of this folder (``export PELE_PHYSICS_HOME=$(pwd)/PelePhysics``)

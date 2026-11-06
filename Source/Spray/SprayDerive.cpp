@@ -18,7 +18,8 @@ SprayParticleContainer::computeDerivedVars(
   const RealVect dxi(AMREX_D_DECL(dxiarr[0], dxiarr[1], dxiarr[2]));
   const RealVect dx(AMREX_D_DECL(dxarr[0], dxarr[1], dxarr[2]));
   const RealVect plo(AMREX_D_DECL(ploarr[0], ploarr[1], ploarr[2]));
-  const Real cell_vol = AMREX_D_TERM(dx[0], *dx[1], *dx[2]);
+  const Real cell_vol = AMREX_D_PICK(
+    dx[0] * dx[0] * dx[0], dx[0] * dx[1] * dx[0], dx[0] * dx[1] * dx[2]);
 #ifdef AMREX_USE_EB
   const auto& factory =
     dynamic_cast<EBFArrayBoxFactory const&>(mf_var.Factory());

@@ -57,7 +57,7 @@ The following example commands will clone the required repositories
     ```
     git clone git@github.com:AMReX-Codes/amrex.git ${REGTEST_SCRATCH}/amrex
     git clone git@github.com:AMReX-Codes/regression_testing ${REGTEST_SCRATCH}/regression_testing
-    git clone git@github.com:AMReX-Combustion/PelePhysics.git ${REGTEST_SCRATCH}/PelePhysics
+    git clone git@github.com:Pele-Suite/PelePhysics.git ${REGTEST_SCRATCH}/PelePhysics
     ```
 
 4.  Move to the location where the tests will be built/run, preferably the 
