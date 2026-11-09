@@ -383,8 +383,8 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
   for (int a = 0; a < n_tp; ++a) {
     for (int b = a + 1; b < n_tp; ++b) {
       AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-        !(tp[a].nscal > 0 && tp[b].nscal > 0 && tp[a].dir == tp[b].dir &&
-          tp[a].side == tp[b].side),
+        tp[a].nscal <= 0 || tp[b].nscal <= 0 || tp[a].dir != tp[b].dir ||
+          tp[a].side != tp[b].side,
         "TurbInflow::init(): turbinflows " + tp_list[a] + " and " + tp_list[b] +
           " both carry scalar fields on the same face");
     }
@@ -906,6 +906,11 @@ TurbInflow::fill_turb_plane(
 {
   const auto& bx = v.box();
   const auto& vd = v.array();
+
+  // AsyncArray::data() is null for an empty array: nothing to fill then
+  if (bx.isEmpty() || x.empty() || y.empty()) {
+    return;
+  }
 
   // Freed by a stream callback once the kernel below is done with them, so
   // no synchronization is needed before they go out of scope

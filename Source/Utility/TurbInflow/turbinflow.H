@@ -318,7 +318,7 @@ public:
   {
     if (!amrex::Initialized()) {
       for (auto& t : tp) {
-        static_cast<void>(t.sdata.release());
+        amrex::ignore_unused(t.sdata.release());
       }
     }
   }
