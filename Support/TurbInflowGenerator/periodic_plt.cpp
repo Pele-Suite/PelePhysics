@@ -146,4 +146,13 @@ turbinflow_from_periodic_plt(std::ofstream& ifsd, std::ofstream& ifsh)
   // Optional mesh-mapping trailer; must come after the plane offsets (this
   // mode writes no plane times).
   write_meshmap_trailer(ifsh, probDomain, dim_map);
+
+  // Optional scalar fields (SCALARS_V1 trailer), after the other trailers
+  const auto scalidx = find_scalar_vars(varlist);
+  write_scalars_header(ifsh);
+  for (int s = 0; s < scalidx.size(); ++s) {
+    std::cout << "Loading scalar " << s << " ... " << std::flush;
+    write_component(scalidx[s]);
+    std::cout << "done" << std::endl;
+  }
 }

@@ -39,22 +39,30 @@
 // previously refused, or warned about, mapped files can #ifdef on this.
 #define PELEPHYSICS_TURBINFLOW_SAMPLES_MESHMAP 1
 
+// Feature macro: TurbInflow files may carry named scalar fields (SCALARS_V1
+// trailer, e.g. temp, Y(N2)) next to the velocity, and
+// TurbInflow::scalar_sampler() / scalar_names() exist.  The solver decides
+// what the scalars mean.
+#define PELEPHYSICS_TURBINFLOW_HAS_SCALARS 1
+
 namespace pele::physics::turbinflow {
 
 AMREX_ENUM(TurbInterpType, linear, quadratic);
 
 /**
  * \brief Device-callable view of the plane chunk of one turbulence file at
- *        one through-plane position: the interpolation of the file.
+ *        one through-plane position: the single implementation of the
+ *        interpolation, for the velocity and the scalar fields alike.
  *
- * Obtained from TurbInflow::file_sampler() right before use: it points at the
- * plane chunk currently loaded in memory and holds the through-plane weights
- * for the requested position, so it is invalidated by the next load of that
- * file's planes.  Trivially copyable, so it can be captured by value in a
- * kernel or a boundary-fill functor.
+ * Obtained from TurbInflow::file_sampler() or scalar_sampler() right before
+ * use: it points at the plane chunk currently loaded in memory and holds the
+ * through-plane weights for the requested position, so it is invalidated by
+ * the next load of that file's planes.  Trivially copyable, so it can be
+ * captured by value in a kernel or a boundary-fill functor.
  */
 struct TurbFileSampler
 {
+  int nscal = 0; //!< Number of scalar fields of the file
   amrex::Array4<const amrex::Real> sd;
 
   amrex::GpuArray<int, 2> npboxcells = {{0, 0}};
@@ -66,6 +74,7 @@ struct TurbFileSampler
   bool tile_periodic = false;
   bool extrap_nonperiodic = false;
   bool lininterp = false;
+  amrex::Real scale_loc = 1.0;
 
   // Through-plane stencil: planes k0, k0+1, k0+2 with weights cz
   int k0 = 0;
@@ -77,7 +86,7 @@ struct TurbFileSampler
   amrex::GpuArray<amrex::Real, 2> map_xi_hi = {{0.0, 0.0}};
 
   //! Transverse interpolation stencil of one position, shared by all the
-  //! components sampled there
+  //! fields sampled there
   struct Stencil
   {
     amrex::GpuArray<int, 2> i0{};
@@ -122,6 +131,22 @@ struct TurbFileSampler
       st.c[d][2] = lininterp ? 0.0 : 0.5 * ff * (ff - 1.0);
     }
     return true;
+  }
+
+  /**
+   * \brief Locate the physical transverse position (\p x1, \p x2), in case
+   *        units along the face's transverse directions
+   *        TurbInflow::transverseDirs(dir, ...).  See locate_file().
+   *
+   * Locate once, then read each field: the coordinate inversion and the
+   * weights are the expensive part on a mapped file.
+   */
+  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE bool
+  locate(const amrex::Real x1, const amrex::Real x2, Stencil& st) const noexcept
+  {
+    return locate_file(
+      file_coordinate(0, x1 * scale_loc), file_coordinate(1, x2 * scale_loc),
+      st);
   }
 
   //! Coordinate in the file of a position (already scaled to file units)
@@ -171,7 +196,8 @@ struct TurbFileSampler
     return xi;
   }
 
-  //! Value of chunk component \p n at a located position
+  //! Value of chunk component \p n at a located position: the velocity
+  //! components come first, then the scalars
   [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real
   component(const Stencil& st, const int n) const noexcept
   {
@@ -189,6 +215,13 @@ struct TurbFileSampler
     }
     return st.c[0][0] * ydata[0] + st.c[0][1] * ydata[1] +
            st.c[0][2] * ydata[2];
+  }
+
+  //! Value of scalar \p s (0 <= s < nscal) at a located position
+  [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real
+  scalar(const Stencil& st, const int s) const noexcept
+  {
+    return component(st, AMREX_SPACEDIM + s);
   }
 };
 
@@ -248,6 +281,13 @@ struct TurbParm
   amrex::Vector<long> offset;
   int kmax; // Number of plane in Turbfile
 
+  // Optional scalar fields (SCALARS_V1 trailer of HDR), stored in sdata
+  // after the AMREX_SPACEDIM velocity components.  scal_offset holds the
+  // binary offset of each plane, scalar-major like the velocity offsets.
+  int nscal = 0;
+  amrex::Vector<std::string> scal_names;
+  amrex::Vector<long> scal_offset;
+
   // Optional coordinate-mapping descriptor of the turbulence file, read
   // from the MESHMAP trailer of HDR (see the file-format notes in
   // turbinflow.cpp).  When present, the file's transverse grid is uniform
@@ -278,7 +318,7 @@ public:
   {
     if (!amrex::Initialized()) {
       for (auto& t : tp) {
-        static_cast<void>(t.sdata.release());
+        amrex::ignore_unused(t.sdata.release());
       }
     }
   }
@@ -408,6 +448,35 @@ public:
     amrex::Real xi_hi[2]) const;
 
   bool is_initialized() const { return turbinflow_initialized; }
+
+  /**
+   * \brief Names of the scalar fields carried by the turbulence file feeding
+   *        the (\p dir, \p side) face, in sampler order.
+   *
+   * Empty when no file acts on that face or its file has no SCALARS_V1
+   * trailer.  At most one file per face may carry scalars (checked in
+   * init()).
+   */
+  amrex::Vector<std::string>
+  scalar_names(const int dir, const amrex::Orientation::Side& side) const;
+
+  //! Whether any turbulence file carries scalar fields.
+  bool has_scalars() const;
+
+  /**
+   * \brief Sampler for the scalar fields of the (\p dir, \p side) face at
+   *        \p time.
+   *
+   * Loads the planes needed at \p time if they are not in memory already,
+   * exactly as add_turb() does for the velocity (the two share the plane
+   * chunk and the through-plane position), and computes the through-plane
+   * weights.  Host only; the returned object is used on the device.  Its
+   * nscal is 0 when the face has no scalar data.
+   */
+  TurbFileSampler scalar_sampler(
+    const int dir,
+    const amrex::Orientation::Side& side,
+    const amrex::Real time);
 
   // Override the through-plane sampling position with a supplied physical
   // convected distance (e.g. the time-integrated inlet velocity). Applies to

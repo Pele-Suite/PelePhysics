@@ -152,4 +152,15 @@ turbinflow_from_diag_frame_planes(std::ofstream& ifsd, std::ofstream& ifsh)
 
   // Optional mesh-mapping trailer; must come after the plane times.
   write_meshmap_trailer(ifsh, probDomain, dim_map);
+
+  // Optional scalar fields (SCALARS_V1 trailer), after the other trailers
+  const auto scalidx = find_scalar_vars(varlist);
+  write_scalars_header(ifsh);
+  for (int s = 0; s < scalidx.size(); ++s) {
+    std::cout << "Loading scalar " << s << " ... " << std::endl;
+    for (int k = 0; k < nf; ++k) {
+      write_plane(scalidx[s], k, false);
+    }
+    std::cout << "done" << std::endl;
+  }
 }
