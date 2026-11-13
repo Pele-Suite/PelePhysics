@@ -818,6 +818,12 @@ TurbInflow::fill_turb_plane(
   const amrex::Real* xd = x_dev.data();
   const amrex::Real* yd = y_dev.data();
 
+  // The coordinates span the plane (add_turb), so empty coordinate vectors
+  // mean an empty plane box with nothing to fill, and null device copies
+  if (xd == nullptr || yd == nullptr) {
+    return;
+  }
+
   const TurbFileSampler s = sampler; // by-value capture for the device
   amrex::Real velScale = (a_tp.side == amrex::Orientation::high)
                            ? -a_tp.turb_scale_vel
