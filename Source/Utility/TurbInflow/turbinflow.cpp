@@ -811,18 +811,18 @@ TurbInflow::fill_turb_plane(
   const auto& bx = v.box();
   const auto& vd = v.array();
 
-  // The coordinates span the plane (add_turb): nothing to fill without them,
-  // and the device copies below would be null
-  if (x.empty() || y.empty()) {
-    return;
-  }
-
   // Freed by a stream callback once the kernel below is done with them, so
   // no synchronization is needed before they go out of scope
   amrex::Gpu::AsyncArray<amrex::Real> x_dev(x.data(), x.size());
   amrex::Gpu::AsyncArray<amrex::Real> y_dev(y.data(), y.size());
   const amrex::Real* xd = x_dev.data();
   const amrex::Real* yd = y_dev.data();
+
+  // The coordinates span the plane (add_turb), so empty coordinate vectors
+  // mean an empty plane box with nothing to fill, and null device copies
+  if (xd == nullptr || yd == nullptr) {
+    return;
+  }
 
   const TurbFileSampler s = sampler; // by-value capture for the device
   amrex::Real velScale = (a_tp.side == amrex::Orientation::high)
