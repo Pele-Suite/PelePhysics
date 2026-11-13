@@ -278,7 +278,7 @@ public:
   {
     if (!amrex::Initialized()) {
       for (auto& t : tp) {
-        static_cast<void>(t.sdata.release());
+        [[maybe_unused]] auto* leaked = t.sdata.release();
       }
     }
   }
