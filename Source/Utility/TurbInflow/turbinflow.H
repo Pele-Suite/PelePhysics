@@ -318,7 +318,7 @@ public:
   {
     if (!amrex::Initialized()) {
       for (auto& t : tp) {
-        amrex::ignore_unused(t.sdata.release());
+        [[maybe_unused]] auto* leaked = t.sdata.release();
       }
     }
   }
