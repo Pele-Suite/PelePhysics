@@ -170,14 +170,24 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
       // p2 = p3 = 0.  A trailer marks the file as uniform in the precursor's
       // Xi coordinate rather than in physical position; add_turb() inverts
       // the map before indexing the file.
+      //
+      // Content this reader does not recognise (a trailer from a newer
+      // generator, or stray tokens) is skipped up to the next keyword it
+      // knows, so a known trailer is found whatever precedes it.  One warning
+      // is printed per unrecognised run.
       std::string token;
+      bool skipping = false;
       while (is >> token) {
         if (token != "MESHMAP_V1" && token != "MESHMAP_V2") {
-          amrex::Print() << "TurbInflow: WARNING ignoring unrecognised "
-                            "trailing content in "
-                         << turb_header << " starting at '" << token << "'\n";
-          break;
+          if (!skipping) {
+            amrex::Print() << "TurbInflow: WARNING skipping unrecognised "
+                              "trailing content in "
+                           << turb_header << " starting at '" << token << "'\n";
+          }
+          skipping = true;
+          continue;
         }
+        skipping = false;
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
           !tp[n].has_map,
           "TurbInflow::init(): duplicate MESHMAP trailer in " + turb_header);
@@ -199,9 +209,11 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
           tp[n].map.m_p3[idim] = p3;
           tp[n].map.m_q[idim] = q;
         }
+        // !fail() rather than good(): a trailer that ends the file without a
+        // final newline sets eofbit on its last value, and is still valid.
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-          is.good(), "TurbInflow::init(): malformed " + token + " trailer in " +
-                       turb_header);
+          !is.fail(), "TurbInflow::init(): malformed " + token +
+                        " trailer in " + turb_header);
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
           kind[0] == kind[1],
           "TurbInflow::init(): " + token + " trailer in " + turb_header +
