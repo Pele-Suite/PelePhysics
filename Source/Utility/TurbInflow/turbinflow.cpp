@@ -743,25 +743,27 @@ TurbInflow::read_turb_planes(TurbParm& a_tp, const amrex::Real z)
                    << std::endl;
   }
 
-  // Kernels launched by earlier add_turb() calls may still be reading the
-  // chunk, possibly on other streams (callers loop over boxes inside an
-  // MFIter, which switches streams); let them finish before overwriting it.
-  amrex::Gpu::synchronize();
-  a_tp.chunk_generation = ++last_chunk_generation;
-
   // DAT holds kmax planes of component 0, then kmax planes of component 1,
-  // and so on; a_tp.offset gives where each starts.
+  // and so on; a_tp.offset gives where each starts.  Read the chunk on the
+  // host, then move it to the device in one copy.
   const std::string turb_data = a_tp.m_turb_file + "/DAT";
+  std::ifstream ifs(turb_data.c_str());
+  if (!ifs.is_open()) {
+    amrex::Abort("Unable to open input file " + turb_data);
+  }
+#ifdef AMREX_USE_GPU
+  amrex::FArrayBox host(
+    a_tp.sdata->box(), a_tp.ncomp, amrex::The_Pinned_Arena());
+#else
+  amrex::FArrayBox& host = *a_tp.sdata;
+#endif
+
   for (int iplane = 0; iplane < a_tp.nplane; ++iplane) {
     int k = a_tp.izlo + iplane;
     if (!a_tp.istimeplanes) {
       k = (a_tp.kmax + k) % a_tp.kmax; // "wrap" planes if data is periodic
     }
-    std::ifstream ifs(turb_data.c_str());
-    if (!ifs.is_open()) {
-      amrex::Abort("Unable to open input file " + turb_data);
-    }
-    amrex::Box dstBox = a_tp.sdata->box();
+    amrex::Box dstBox = host.box();
     dstBox.setRange(AMREX_SPACEDIM - 1, iplane);
     for (int n = 0; n < a_tp.ncomp; ++n) {
       const long offset_idx = k + (static_cast<long>(n) * a_tp.kmax);
@@ -773,20 +775,29 @@ TurbInflow::read_turb_planes(TurbParm& a_tp, const amrex::Real z)
           "TurbInflow::read_turb_planes(): seekg() failed in " + turb_data);
       }
 
-      amrex::FArrayBox tmp;
+      amrex::FArrayBox tmp(amrex::The_Pinned_Arena());
       tmp.readFrom(ifs);
       if (a_tp.verbose > 2) {
         amrex::Print() << "   for d = " << n << " and k = " << k
-                       << ": minval = " << tmp.min<amrex::RunOn::Device>(0)
-                       << ", maxval = " << tmp.max<amrex::RunOn::Device>(0)
+                       << ": minval = " << tmp.min<amrex::RunOn::Host>(0)
+                       << ", maxval = " << tmp.max<amrex::RunOn::Host>(0)
                        << std::endl;
       }
-      a_tp.sdata->copy<amrex::RunOn::Device>(tmp, tmp.box(), 0, dstBox, n, 1);
+      host.copy<amrex::RunOn::Host>(tmp, tmp.box(), 0, dstBox, n, 1);
     }
   }
 
-  // The copies above run on the current stream; the chunk may next be read
-  // from another one.
+  // Kernels launched by earlier add_turb() calls may still be reading the
+  // chunk, possibly on other streams (callers loop over boxes inside an
+  // MFIter, which switches streams); let them finish before overwriting it.
+  amrex::Gpu::synchronize();
+#ifdef AMREX_USE_GPU
+  amrex::Gpu::htod_memcpy_async(
+    a_tp.sdata->dataPtr(), host.dataPtr(), host.nBytes());
+#endif
+  a_tp.chunk_generation = ++last_chunk_generation;
+  // The chunk may next be read from another stream, and the host buffer
+  // must outlive the copy.
   amrex::Gpu::streamSynchronize();
 }
 
