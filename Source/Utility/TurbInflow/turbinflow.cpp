@@ -417,15 +417,35 @@ TurbInflow::sampling_position(const TurbParm& a_tp, const amrex::Real time)
   return (time + a_tp.time_shift) * a_tp.turb_conv_vel * a_tp.geom.scale_loc;
 }
 
+namespace {
+bool
+on_face(
+  const TurbParm& tpn, const int dir, const amrex::Orientation::Side& side)
+{
+  return tpn.dir == dir && tpn.side == side;
+}
+} // namespace
+
+int
+TurbInflow::n_files(const int dir, const amrex::Orientation::Side& side) const
+{
+  return static_cast<int>(
+    std::count_if(tp.begin(), tp.end(), [dir, side](const TurbParm& tpn) {
+      return on_face(tpn, dir, side);
+    }));
+}
+
 const TurbParm*
 TurbInflow::find_turbparm(
-  const int dir, const amrex::Orientation::Side& side) const
+  const int dir, const amrex::Orientation::Side& side, const int ifile) const
 {
-  auto it =
-    std::find_if(tp.begin(), tp.end(), [dir, side](const TurbParm& tpn) {
-      return tpn.dir == dir && tpn.side == side;
-    });
-  return (it != tp.end()) ? &(*it) : nullptr;
+  int i = 0;
+  for (const auto& tpn : tp) {
+    if (on_face(tpn, dir, side) && i++ == ifile) {
+      return &tpn;
+    }
+  }
+  return nullptr;
 }
 
 bool
@@ -434,7 +454,7 @@ TurbInflow::file_has_map(
 {
   // Any of the files acting on the face
   return std::any_of(tp.begin(), tp.end(), [dir, side](const TurbParm& tpn) {
-    return tpn.dir == dir && tpn.side == side && tpn.geom.has_map;
+    return on_face(tpn, dir, side) && tpn.geom.has_map;
   });
 }
 
@@ -471,9 +491,10 @@ TurbInflow::file_transverse_dx(
   const int dir,
   const amrex::Orientation::Side& side,
   amrex::Real& dx_tdir1,
-  amrex::Real& dx_tdir2) const
+  amrex::Real& dx_tdir2,
+  const int ifile) const
 {
-  const TurbParm* tpn = find_turbparm(dir, side);
+  const TurbParm* tpn = find_turbparm(dir, side, ifile);
   if (tpn == nullptr) {
     return false;
   }
@@ -498,9 +519,10 @@ TurbInflow::file_transverse_dx_range(
   const int dir,
   const amrex::Orientation::Side& side,
   amrex::Real dx_min[2],
-  amrex::Real dx_max[2]) const
+  amrex::Real dx_max[2],
+  const int ifile) const
 {
-  const TurbParm* tpn = find_turbparm(dir, side);
+  const TurbParm* tpn = find_turbparm(dir, side, ifile);
   if (tpn == nullptr) {
     return false;
   }
@@ -514,9 +536,10 @@ TurbInflow::file_map(
   const amrex::Orientation::Side& side,
   pele::physics::MeshMapEvaluator& map,
   amrex::Real xi_lo[2],
-  amrex::Real xi_hi[2]) const
+  amrex::Real xi_hi[2],
+  const int ifile) const
 {
-  const TurbParm* tpn = find_turbparm(dir, side);
+  const TurbParm* tpn = find_turbparm(dir, side, ifile);
   if (tpn == nullptr) {
     return -1;
   }
@@ -689,7 +712,7 @@ TurbInflow::add_turb(
 
   // Add turbulence from all the tp acting on this face
   for (auto& tpn : tp) {
-    if (tpn.dir != dir || tpn.side != side) {
+    if (!on_face(tpn, dir, side)) {
       continue;
     }
     const amrex::Real velScale = (side == amrex::Orientation::high)

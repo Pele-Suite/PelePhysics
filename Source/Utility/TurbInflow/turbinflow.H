@@ -39,6 +39,12 @@
 // previously refused, or warned about, mapped files can #ifdef on this.
 #define PELEPHYSICS_TURBINFLOW_SAMPLES_MESHMAP 1
 
+// Feature macro: a face may carry several turbulence files (add_turb() sums
+// them); n_files() counts them and file_transverse_dx(),
+// file_transverse_dx_range() and file_map() take the index of the file to
+// describe (default 0, the first).
+#define PELEPHYSICS_TURBINFLOW_PER_FILE_ACCESSORS 1
+
 namespace pele::physics::turbinflow {
 
 AMREX_ENUM(TurbInterpType, linear, quadratic);
@@ -376,10 +382,19 @@ public:
   }
 
   /**
-   * \brief Transverse cell spacings of the turbulence file feeding the
+   * \brief Number of turbulence files acting on the (\p dir, \p side) face.
+   *
+   * add_turb() sums the contributions of all of them.  The per-file
+   * accessors below take an index \p ifile in [0, n_files()), numbering the
+   * files of the face in the order they appear in \c turbinflows.
+   */
+  int n_files(const int dir, const amrex::Orientation::Side& side) const;
+
+  /**
+   * \brief Transverse cell spacings of turbulence file \p ifile of the
    *        (\p dir, \p side) face, expressed in case units.
    *
-   * Returns false when no turb file acts on that face.  Intended for
+   * Returns false when the face has no such file.  Intended for
    * resolution-consistency diagnostics: the ratio of the target grid's
    * local spacing to this value is what decides whether the injected
    * field can fill the grid's resolved scales.  For a mesh-mapped file
@@ -390,50 +405,54 @@ public:
     const int dir,
     const amrex::Orientation::Side& side,
     amrex::Real& dx_tdir1,
-    amrex::Real& dx_tdir2) const;
+    amrex::Real& dx_tdir2,
+    const int ifile = 0) const;
 
   /**
-   * \brief Smallest and largest physical transverse cell spacing of the
-   *        turbulence file feeding the (\p dir, \p side) face, in case
+   * \brief Smallest and largest physical transverse cell spacing of
+   *        turbulence file \p ifile of the (\p dir, \p side) face, in case
    *        units, for each of the two transverse directions.
    *
    * Equal to \c file_transverse_dx for a physically-uniform file.  Returns
-   * false when no turb file acts on that face.
+   * false when the face has no such file.
    */
   bool file_transverse_dx_range(
     const int dir,
     const amrex::Orientation::Side& side,
     amrex::Real dx_min[2],
-    amrex::Real dx_max[2]) const;
+    amrex::Real dx_max[2],
+    const int ifile = 0) const;
 
   /**
-   * \brief Whether the turbulence file feeding the (\p dir, \p side) face
-   *        carries a MESHMAP trailer, i.e. is uniform in a precursor's
-   *        computational coordinate rather than in physical position.
+   * \brief Whether any turbulence file of the (\p dir, \p side) face carries
+   *        a MESHMAP trailer, i.e. is uniform in a precursor's computational
+   *        coordinate rather than in physical position.
    *
+   * A question about the whole face; use file_map() for a given file.
    * Returns false when no turb file acts on that face.
    */
   bool file_has_map(const int dir, const amrex::Orientation::Side& side) const;
 
   /**
-   * \brief The mesh-mapping descriptor of the turbulence file feeding the
+   * \brief The mesh-mapping descriptor of turbulence file \p ifile of the
    *        (\p dir, \p side) face.
    *
-   * Returns -1 when no turb file acts on that face, 0 when the file is
-   * uniform in physical position (\p map is then left untouched), and 1
-   * when it carries a MESHMAP trailer, in which case \p map holds the
-   * precursor's map with the file's two transverse directions in axis
-   * slots 0 and 1 and \p xi_lo / \p xi_hi their Xi-space bounds.  Lets a
-   * solver compare the file's map with its own: equal maps and bounds
-   * mean the file is injected by exact index, anything else by
-   * interpolation in the file's Xi coordinate.
+   * Returns -1 when the face has no such file, 0 when the file is uniform
+   * in physical position (\p map is then left untouched), and 1 when it
+   * carries a MESHMAP trailer, in which case \p map holds the precursor's
+   * map with the file's two transverse directions in axis slots 0 and 1
+   * and \p xi_lo / \p xi_hi their Xi-space bounds.  Lets a solver compare
+   * the file's map with its own: equal maps and bounds mean the file is
+   * injected by exact index, anything else by interpolation in the file's
+   * Xi coordinate.
    */
   int file_map(
     const int dir,
     const amrex::Orientation::Side& side,
     pele::physics::MeshMapEvaluator& map,
     amrex::Real xi_lo[2],
-    amrex::Real xi_hi[2]) const;
+    amrex::Real xi_hi[2],
+    const int ifile = 0) const;
 
   bool is_initialized() const { return turbinflow_initialized; }
 
@@ -497,9 +516,9 @@ private:
   static void transverse_dx_range(
     const TurbParm& a_tp, amrex::Real dx_min[2], amrex::Real dx_max[2]);
 
-  //! The TurbParm acting on the (\p dir, \p side) face, or nullptr.
-  const TurbParm*
-  find_turbparm(const int dir, const amrex::Orientation::Side& side) const;
+  //! File \p ifile of the (\p dir, \p side) face (see n_files()), or nullptr.
+  const TurbParm* find_turbparm(
+    const int dir, const amrex::Orientation::Side& side, const int ifile) const;
 
   amrex::Vector<TurbParm> tp;
   bool turbinflow_initialized = false;
