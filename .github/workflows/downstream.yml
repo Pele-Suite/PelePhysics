@@ -2,6 +2,10 @@ name: Downstream-CI
 
 on:
    workflow_dispatch:
+   schedule:
+     # Weekly, so the ccaches are refreshed before GitHub evicts them after
+     # 7 days without access.
+     - cron: '0 3 * * 1'
    push:
      branches: [development]
    pull_request:
