@@ -43,6 +43,68 @@ namespace pele::physics::turbinflow {
 
 AMREX_ENUM(TurbInterpType, linear, quadratic);
 
+//! Weights of the three-point stencil at fractional offset \p f from its
+//! first point: linear (the third weight is then 0) or quadratic Lagrange
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
+stencil_weights(
+  const amrex::Real f,
+  const bool lininterp,
+  amrex::GpuArray<amrex::Real, 3>& c) noexcept
+{
+  c[0] = lininterp ? 1.0 - f : 0.5 * (f - 1.0) * (f - 2.0);
+  c[1] = lininterp ? f : f * (2.0 - f);
+  c[2] = lininterp ? 0.0 : 0.5 * f * (f - 1.0);
+}
+
+/**
+ * \brief Transverse geometry of a turbulence file and how it is placed on
+ *        the injection face: everything needed to turn a position into a
+ *        file stencil.
+ *
+ * Index 0 and 1 are the file's two transverse directions.  Lengths are in
+ * file units (case units times scale_loc); for a mesh-mapped file
+ * (has_map) the grid, and so pboxlo, pboxsize and dx, are in the
+ * precursor's Xi coordinate.
+ */
+struct TurbFileGeom
+{
+  amrex::GpuArray<int, 2> npboxcells = {{0, 0}};
+  amrex::GpuArray<amrex::Real, 2> pboxlo = {{0.0, 0.0}};
+  amrex::GpuArray<amrex::Real, 2> pboxsize = {{0.0, 0.0}};
+  amrex::GpuArray<amrex::Real, 2> dx = {{0.0, 0.0}};
+  amrex::GpuArray<amrex::Real, 2> dxinv = {{0.0, 0.0}};
+  amrex::GpuArray<int, 2> periodicity = {{1, 1}};
+  // Patch the whole face with a periodic tiling of the file
+  bool tile_periodic = false;
+  // Allow stencils that touch ghost cells in nonperiodic directions
+  bool extrap_nonperiodic = false;
+  bool lininterp = false; // Linear rather than quadratic interpolation
+  // File units per case unit
+  amrex::Real scale_loc = 1.0;
+
+  // Optional coordinate-mapping descriptor, read from the MESHMAP trailer
+  // of HDR (see the file-format notes in turbinflow.cpp).  When present,
+  // the file's transverse grid is uniform in the computational (Xi)
+  // coordinate of the precursor that produced it, and a physical position
+  // is inverted through this map before being turned into a file index.
+  // The evaluator's axis slots 0 and 1 hold the payload for the file's two
+  // transverse directions, and map_xi_lo / map_xi_hi the precursor's Xi
+  // bounds along them, i.e. the file's own transverse extent before the
+  // two ghost layers.
+  bool has_map = false;
+  pele::physics::MeshMapEvaluator map{};
+  amrex::GpuArray<amrex::Real, 2> map_xi_lo = {{0.0, 0.0}};
+  amrex::GpuArray<amrex::Real, 2> map_xi_hi = {{0.0, 0.0}};
+
+  //! Physical position (file units) of Xi coordinate \p xi along \p d of a
+  //! mesh-mapped file
+  [[nodiscard]] AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real
+  x_phys(const int d, const amrex::Real xi) const noexcept
+  {
+    return map.x_phys_from_xi(d, xi, map_xi_lo[d], map_xi_hi[d]);
+  }
+};
+
 /**
  * \brief Device-callable view of the plane chunk of one turbulence file at
  *        one through-plane position: the interpolation of the file.
@@ -59,19 +121,9 @@ AMREX_ENUM(TurbInterpType, linear, quadratic);
  * kernels that use it, and get a new one for the next position; on the
  * host, TurbInflow::sampler_is_current() tells whether one is still valid.
  */
-struct TurbFileSampler
+struct TurbFileSampler : TurbFileGeom
 {
   amrex::Array4<const amrex::Real> sd;
-
-  amrex::GpuArray<int, 2> npboxcells = {{0, 0}};
-  amrex::GpuArray<amrex::Real, 2> pboxlo = {{0.0, 0.0}};
-  amrex::GpuArray<amrex::Real, 2> pboxsize = {{0.0, 0.0}};
-  amrex::GpuArray<amrex::Real, 2> dx = {{0.0, 0.0}};
-  amrex::GpuArray<amrex::Real, 2> dxinv = {{0.0, 0.0}};
-  amrex::GpuArray<int, 2> periodicity = {{1, 1}};
-  bool tile_periodic = false;
-  bool extrap_nonperiodic = false;
-  bool lininterp = false;
 
   // Through-plane stencil: planes k0, k0+1, k0+2 with weights cz
   int k0 = 0;
@@ -79,11 +131,6 @@ struct TurbFileSampler
 
   //! TurbParm::chunk_generation of the chunk this sampler points at
   int generation = -1;
-
-  bool has_map = false;
-  pele::physics::MeshMapEvaluator map{};
-  amrex::GpuArray<amrex::Real, 2> map_xi_lo = {{0.0, 0.0}};
-  amrex::GpuArray<amrex::Real, 2> map_xi_hi = {{0.0, 0.0}};
 
   //! Transverse interpolation stencil of one position, shared by all the
   //! components sampled there
@@ -126,9 +173,7 @@ struct TurbFileSampler
         i0 = (i0 % npboxcells[d] + npboxcells[d]) % npboxcells[d];
       }
       st.i0[d] = i0;
-      st.c[d][0] = lininterp ? 1.0 - ff : 0.5 * (ff - 1.0) * (ff - 2.0);
-      st.c[d][1] = lininterp ? ff : ff * (2.0 - ff);
-      st.c[d][2] = lininterp ? 0.0 : 0.5 * ff * (ff - 1.0);
+      stencil_weights(ff, lininterp, st.c[d]);
     }
     return true;
   }
@@ -145,8 +190,8 @@ struct TurbFileSampler
     }
     const amrex::Real xi_lo = map_xi_lo[d];
     const amrex::Real xi_hi = map_xi_hi[d];
-    const amrex::Real x_lo = map.x_phys_from_xi(d, xi_lo, xi_lo, xi_hi);
-    const amrex::Real x_hi = map.x_phys_from_xi(d, xi_hi, xi_lo, xi_hi);
+    const amrex::Real x_lo = x_phys(d, xi_lo);
+    const amrex::Real x_hi = x_phys(d, xi_hi);
 
     amrex::Real x = x_file_phys;
     if (tile_periodic && periodicity[d] != 0) {
@@ -218,17 +263,21 @@ struct TurbParm
   // Verbosity
   int verbose = 1;
 
-  // Geometry of the turbulent data
-  amrex::GpuArray<int, 3> npboxcells = {{0}};
-  amrex::GpuArray<amrex::Real, 3> pboxlo = {{0.0}};
-  amrex::GpuArray<amrex::Real, 3> dx = {{0.0}};
-  amrex::GpuArray<amrex::Real, 3> dxinv = {{0.0}};
-  amrex::GpuArray<amrex::Real, 3> pboxsize = {{0.0}};
-  int dir;                       // Direction where to use this TurbParm
+  // Transverse geometry and placement of the file
+  TurbFileGeom geom;
+
+  // Through-plane direction: plane spacing (positions are in file units)
+  // and number of planes in the file
+  amrex::Real dz = 0.0;
+  amrex::Real dzinv = 0.0;
+  int kmax = 0;
+
+  int dir = -1;                  // Direction where to use this TurbParm
   amrex::Orientation::Side side; // Side on which to use this TurbParm
   amrex::Real time_shift =
     0.0; // Enable to offset the location in the turb file
 
+  int ncomp = 0;   // Number of components in the file
   int nplane = 32; // Number of turb planes stored at once in memory
   // Currently loaded chunk of turb data; shared only for make_plane_chunk()
   std::shared_ptr<amrex::FArrayBox> sdata;
@@ -238,21 +287,10 @@ struct TurbParm
   amrex::Real szhi = -1.0e11; // Position of the current chunk high plane
   int chunk_generation = 0;   // Changed whenever the chunk is reloaded
 
-  amrex::IntVect periodicity{AMREX_D_DECL(1, 1, 1)};
-  bool istimeplanes = false; // false indicates turb data is periodic normal to
-                             // flow dir, true requires time array in turb data
-
-  bool extrap_nonperiodic =
-    false; // if true, allow interpolation where stencil touches ghost cells for
-           // nonperiodic directions
-  bool tile_periodic = false; // if true, turbulence is patched over entire face
-                              // with a periodic tiled pattern
+  bool istimeplanes = false;  // false indicates turb data is periodic normal to
+                              // flow dir, true requires time array in turb data
   bool time_periodic = false; // if true, turbulence data is looped in time
-  TurbInterpType interp_type =
-    TurbInterpType::quadratic; // linear required for non-periodic directions
 
-  amrex::Real turb_scale_loc =
-    1.; // Spatial scale relating turbfile geom -> actual case scale
   amrex::Real turb_scale_vel = 1.; // Velocity scaling
   amrex::Real turb_conv_vel =
     1.; // Mean inlet velocity, used to move through data planes
@@ -264,25 +302,8 @@ struct TurbParm
 
   amrex::Vector<amrex::Real> planeTimes;
 
+  // Offset in DAT of plane k of component n, at index k + n * kmax
   amrex::Vector<long> offset;
-  int kmax; // Number of plane in Turbfile
-
-  // Optional coordinate-mapping descriptor of the turbulence file, read
-  // from the MESHMAP trailer of HDR (see the file-format notes in
-  // turbinflow.cpp).  When present, the file's transverse grid is uniform
-  // in the *computational* (Xi) coordinate of the precursor that produced
-  // it, and a physical position must be inverted through this map before
-  // being turned into a file index -- add_turb() does so.  Absent trailer
-  // => has_map == false and the file is uniform in physical position.
-  //
-  // The evaluator's axis slots 0 and 1 hold the payload for the file's
-  // two transverse directions (in the file's own order), and map_xi_lo /
-  // map_xi_hi the precursor's Xi-space bounds along them, i.e. the file's
-  // own transverse extent before the two ghost layers.
-  bool has_map = false;
-  pele::physics::MeshMapEvaluator map{};
-  amrex::GpuArray<amrex::Real, 2> map_xi_lo = {{0.0, 0.0}};
-  amrex::GpuArray<amrex::Real, 2> map_xi_hi = {{0.0, 0.0}};
 };
 
 struct TurbInflow
@@ -351,7 +372,7 @@ public:
   transverseDirs(const int dir, int& tdir1, int& tdir2) noexcept
   {
     tdir1 = (dir != 0) ? 0 : 1;
-    tdir2 = (dir != 0) ? ((dir == 2) ? 1 : 2) : 2;
+    tdir2 = (dir == 2) ? 1 : 2;
   }
 
   /**
@@ -427,12 +448,31 @@ public:
     }
   }
 
+  //! Whether \p s still points at the plane chunk loaded in \p a_tp, i.e.
+  //! no reload has happened since file_sampler() returned it.
+  static bool
+  sampler_is_current(const TurbParm& a_tp, const TurbFileSampler& s) noexcept
+  {
+    return s.generation == a_tp.chunk_generation;
+  }
+
+private:
+  /**
+   * \brief Allocate an arena-backed buffer of a TurbParm (the plane chunk).
+   *
+   * A TurbInflow may outlive amrex::Finalize (PeleC holds a static one), so
+   * the buffer is freed at Finalize, while its arena still exists, if it is
+   * alive then.  Its owner is left with an empty FArrayBox, which is safe to
+   * destroy, move or replace afterwards.  Every arena-backed member of
+   * TurbParm must be allocated through here.
+   */
+  static std::shared_ptr<amrex::FArrayBox>
+  make_plane_chunk(const amrex::Box& bx, int ncomp);
+
   //! Load the chunk of planes around \p z, which for a time_periodic file
   //! must already be wrapped into the file's period (prepare_planes() does
   //! so).
   static void read_turb_planes(TurbParm& a_tp, amrex::Real z);
-
-  static void read_one_turb_plane(TurbParm& a_tp, int iplane, int k);
 
   //! Through-plane sampling position of \p a_tp at \p time: the plane time
   //! for time-plane files, else the convected distance (file units).
@@ -452,46 +492,10 @@ public:
   //! TurbFileSampler).
   static TurbFileSampler file_sampler(TurbParm& a_tp, amrex::Real z);
 
-  //! Whether \p s still points at the plane chunk loaded in \p a_tp, i.e.
-  //! no reload has happened since file_sampler() returned it.
-  static bool
-  sampler_is_current(const TurbParm& a_tp, const TurbFileSampler& s) noexcept
-  {
-    return s.generation == a_tp.chunk_generation;
-  }
-
-  static void fill_turb_plane(
-    const TurbParm& a_tp,
-    const TurbFileSampler& sampler,
-    const amrex::Vector<amrex::Real>& x,
-    const amrex::Vector<amrex::Real>& y,
-    amrex::FArrayBox& v);
-
   //! Smallest and largest physical transverse spacing of \p a_tp's file in
   //! case units, per transverse direction.
   static void transverse_dx_range(
     const TurbParm& a_tp, amrex::Real dx_min[2], amrex::Real dx_max[2]);
-
-  static void set_turb(
-    int normDir,
-    int transDir1,
-    int transDir2,
-    amrex::FArrayBox& v,
-    amrex::FArrayBox& data,
-    const int dcomp);
-
-private:
-  /**
-   * \brief Allocate an arena-backed buffer of a TurbParm (the plane chunk).
-   *
-   * A TurbInflow may outlive amrex::Finalize (PeleC holds a static one), so
-   * the buffer is freed at Finalize, while its arena still exists, if it is
-   * alive then.  Its owner is left with an empty FArrayBox, which is safe to
-   * destroy, move or replace afterwards.  Every arena-backed member of
-   * TurbParm must be allocated through here.
-   */
-  static std::shared_ptr<amrex::FArrayBox>
-  make_plane_chunk(const amrex::Box& bx, int ncomp);
 
   //! The TurbParm acting on the (\p dir, \p side) face, or nullptr.
   const TurbParm*
