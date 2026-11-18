@@ -23,23 +23,8 @@ env:
   XTRA_CXXFLAGS: "-Werror -Wshadow -Woverloaded-virtual -Wunreachable-code"
 
 jobs:
-  # CleanUpCache (workflow_run) needs the PR number to find this PR's caches.
-  Save-PR-Number:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Save PR number
-        env:
-          PR_NUMBER: ${{ github.event.number }}
-        run: echo ${PR_NUMBER} > pr_number.txt
-      - uses: actions/upload-artifact@v7
-        with:
-          name: pr_number
-          path: pr_number.txt
-          retention-days: 1
-
   Detect-Changes:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     outputs:
       has-source-changes: ${{ steps.changes.outputs.src }}
     steps:
@@ -190,8 +175,8 @@ jobs:
           echo "CCACHE_MAXSIZE=100M" >> $GITHUB_ENV
           # clang-tidy-cache skips files whose preprocessed source, flags and
           # resolved clang-tidy config are unchanged. SAVE_OUTPUT/SAVE_ALL
-          # store each file's diagnostics and exit code and replay them on a
-          # hit, so the report below is the same as a full run. Keyed on the
+          # store each file's diagnostics (clang-tidy's stdout) and exit code
+          # and replay them on a hit; stderr is not replayed. Keyed on the
           # clang-tidy version, which the hash does not include. Comments are
           # kept in the hash so that NOLINT edits invalidate the entry.
           echo "CTCACHE_DIR=${HOME}/.cache/ctcache/$(clang-tidy --version | sha256sum | cut -c1-12)" >> $GITHUB_ENV
@@ -257,6 +242,10 @@ jobs:
             find ${CTCACHE_DIR} -type f ! -newer ${{ runner.temp }}/ctcache-start -delete
             find ${HOME}/.cache/ctcache -mindepth 1 -maxdepth 1 ! -path ${CTCACHE_DIR} -exec rm -rf {} +
           fi
+          # Fail on a failed build: a replayed cache hit restores the exit
+          # code but not clang-tidy's stderr, so the warning count alone can
+          # miss it.
+          exit ${build_status}
 
       - name: Ccache Report
         run: |
@@ -315,8 +304,8 @@ jobs:
           echo "CCACHE_MAXSIZE=100M" >> $GITHUB_ENV
           # clang-tidy-cache skips files whose preprocessed source, flags and
           # resolved clang-tidy config are unchanged. SAVE_OUTPUT/SAVE_ALL
-          # store each file's diagnostics and exit code and replay them on a
-          # hit, so the report below is the same as a full run. Keyed on the
+          # store each file's diagnostics (clang-tidy's stdout) and exit code
+          # and replay them on a hit; stderr is not replayed. Keyed on the
           # clang-tidy version, which the hash does not include. Comments are
           # kept in the hash so that NOLINT edits invalidate the entry.
           echo "CTCACHE_DIR=${HOME}/.cache/ctcache/$(clang-tidy --version | sha256sum | cut -c1-12)" >> $GITHUB_ENV
@@ -384,6 +373,10 @@ jobs:
             find ${CTCACHE_DIR} -type f ! -newer ${{ runner.temp }}/ctcache-start -delete
             find ${HOME}/.cache/ctcache -mindepth 1 -maxdepth 1 ! -path ${CTCACHE_DIR} -exec rm -rf {} +
           fi
+          # Fail on a failed build: a replayed cache hit restores the exit
+          # code but not clang-tidy's stderr, so the warning count alone can
+          # miss it.
+          exit ${build_status}
 
       - name: Ccache Report
         run: |

@@ -17,23 +17,8 @@ defaults:
     shell: bash
 
 jobs:
-  # CleanUpCache (workflow_run) needs the PR number to find this PR's caches.
-  Save-PR-Number:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Save PR number
-        env:
-          PR_NUMBER: ${{ github.event.number }}
-        run: echo ${PR_NUMBER} > pr_number.txt
-      - uses: actions/upload-artifact@v7
-        with:
-          name: pr_number
-          path: pr_number.txt
-          retention-days: 1
-
   Detect-Changes:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     outputs:
       has-source-changes: ${{ steps.changes.outputs.src }}
     steps:
@@ -57,7 +42,7 @@ jobs:
   Formatting:
     needs: Detect-Changes
     if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Clone
         uses: actions/checkout@v6
@@ -71,7 +56,7 @@ jobs:
 
   Codespell:
     needs: Detect-Changes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Clone
         uses: actions/checkout@v6
@@ -92,7 +77,7 @@ jobs:
   CEPTR:
     needs: Detect-Changes
     if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:

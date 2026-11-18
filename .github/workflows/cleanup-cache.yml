@@ -9,7 +9,7 @@ on:
 jobs:
   CleanUpCcacheCache:
     name: Clean Up Ccache Cache for ${{ github.event.workflow_run.name }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       actions: write
       contents: read
@@ -30,12 +30,14 @@ jobs:
           WORKFLOW_NAME="${{ github.event.workflow_run.name }}"
 
           if [[ $EVENT == "pull_request" ]]; then
-            # Missing when the run was cancelled before Save-PR-Number ran.
-            if ! gh run download ${{ github.event.workflow_run.id }} -n pr_number; then
-              echo "No pr_number artifact; nothing to clean up."
+            # As in PeleLMeX: find the PR from the run's head commit.
+            pr_head_sha=${{ github.event.workflow_run.head_sha }}
+            pr_number=$(gh pr list --search $pr_head_sha --json number --jq '.[0].number')
+            if [ -z "${pr_number}" ]; then
+              echo "No open PR for ${pr_head_sha}; nothing to clean up."
               exit 0
             fi
-            pr_number=`cat pr_number.txt`
+            echo "Clean up cache for PR ${pr_number}"
             BRANCH=refs/pull/${pr_number}/merge
           else
             BRANCH=refs/heads/${{ github.event.workflow_run.head_branch }}
