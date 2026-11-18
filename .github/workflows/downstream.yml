@@ -120,7 +120,6 @@ jobs:
             cmake_args: -DPELE_ENABLE_MASA:BOOL=OFF -DPELE_EXCLUDE_BUILD_IN_CI:BOOL=ON
     env:
       BUILD_DIR: ${{ github.workspace }}/build-clang-tidy-${{ matrix.code }}
-      CCACHE_COMPRESS: 1
       CCACHE_COMPRESSLEVEL: 10
       CCACHE_EXTRAFILES: ${{ github.workspace }}/${{ matrix.code }}/.clang-tidy
       CCACHE_MAXSIZE: 100M
@@ -154,17 +153,20 @@ jobs:
           tar xf ccache-4.8-linux-x86_64.tar.xz
           sudo cp -f ccache-4.8-linux-x86_64/ccache /usr/local/bin/
           # ctcache 1.2.0; the module is a self-contained script
-          sudo curl -L https://raw.githubusercontent.com/matus-chochlik/ctcache/e33c063ca6e52b48bcefbc45d46d8c150ffa81ca/src/ctcache/clang_tidy_cache.py -o /usr/local/bin/clang-tidy-cache
+          sudo curl -fsSL https://raw.githubusercontent.com/matus-chochlik/ctcache/e33c063ca6e52b48bcefbc45d46d8c150ffa81ca/src/ctcache/clang_tidy_cache.py -o /usr/local/bin/clang-tidy-cache
           sudo chmod +x /usr/local/bin/clang-tidy-cache
           # Keyed on the clang-tidy version, which the ctcache hash does not include
           echo "CTCACHE_DIR=${HOME}/.cache/ctcache/$(clang-tidy --version | sha256sum | cut -c1-12)" >> $GITHUB_ENV
+      # Restore and save separately: the combined actions/cache saves only
+      # when the whole job passes, so a run that finds warnings would throw
+      # away the cache it just filled.
       - name: Set Up Ccache
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/.cache/ccache
             ~/.cache/ctcache
-          key: ccache-${{ github.workflow }}-${{ github.job }}-${{ matrix.code }}-git-${{ github.sha }}-${{ github.run_id }}
+          key: ccache-${{ github.workflow }}-${{ github.job }}-${{ matrix.code }}-git-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             ccache-${{ github.workflow }}-${{ github.job }}-${{ matrix.code }}-git-
       - name: Configure
@@ -190,6 +192,7 @@ jobs:
           ${{ matrix.cmake_args }} \
           ${{ github.workspace }}/${{ matrix.code }}
       - name: Check
+        id: check
         working-directory: ${{ env.BUILD_DIR }}
         run: |
           mkdir -p ${CTCACHE_DIR}
@@ -215,9 +218,20 @@ jobs:
           # characters); the per-directory stats files are not counted.
           echo "ctcache entries: $(find ${CTCACHE_DIR} -type f -regextype posix-extended -regex '.*/[0-9a-f]{38}' | wc -l)"
           ccache -s
+      # Saved on PRs too (a cold run takes hours, and the cache is small),
+      # whenever Check completed the build, even if Short report then fails
+      # on warnings.
+      - name: Save Ccache
+        if: ${{ !cancelled() && steps.check.outcome == 'success' }}
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ~/.cache/ccache
+            ~/.cache/ctcache
+          key: ccache-${{ github.workflow }}-${{ github.job }}-${{ matrix.code }}-git-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Short report
         if: ${{ !cancelled() }}
         working-directory: ${{ env.BUILD_DIR }}
         run: |
-          echo "::add-matcher::${{ github.workspace }}/${{ matrix.code }}/.github/problem-matchers/gcc.json"
+          echo "::add-matcher::${{ github.workspace }}/pelephysics-pr/.github/problem-matchers/gcc.json"
           ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt

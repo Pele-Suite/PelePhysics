@@ -124,6 +124,9 @@ jobs:
     if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     runs-on: ubuntu-24.04
     strategy:
+      # One backend failing (e.g. a mirror hiccup) should not cancel the
+      # others before they report and save their caches.
+      fail-fast: false
       matrix:
         comp: [gnu, llvm, cuda, hip, sycl]
         python-version: ['3.11']
@@ -155,10 +158,10 @@ jobs:
       RUN_TESTS: ${{matrix.comp == 'gnu' || matrix.comp == 'llvm'}}
       # Manifold models are not built with SYCL.
       BUILD_MANIFOLD: ${{matrix.comp != 'sycl'}}
-      CCACHE_COMPRESS: 1
       CCACHE_MAXSIZE: 1G
-      # Only development (pushes and manual runs) saves the cache; PRs restore
-      # development's. CCACHE_COMPRESSLEVEL is set from this in Install Ccache.
+      # Only development (pushes, scheduled and manual runs) saves the cache;
+      # PRs restore development's. The scheduled runs exist to keep it from
+      # being evicted. CCACHE_COMPRESSLEVEL is set from this in Install Ccache.
       SAVE_CCACHE: ${{github.event_name != 'pull_request' && github.ref == 'refs/heads/development'}}
       # ccache for the CMake-built TPLs (SUNDIALS) too: CMake reads these as
       # the default compiler launchers.
@@ -198,7 +201,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: ~/.cache/ccache
-          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}-${{github.run_id}}
+          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}-${{github.run_id}}-${{github.run_attempt}}
           restore-keys: |
                ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-
       # The dependency scripts also export the toolchain's environment to the
@@ -353,4 +356,4 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ~/.cache/ccache
-          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}-${{github.run_id}}
+          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}-${{github.run_id}}-${{github.run_attempt}}
