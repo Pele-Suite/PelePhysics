@@ -2,7 +2,7 @@ name: CleanUpCache
 
 on:
   workflow_run:
-    workflows: [PelePhysics-CI]
+    workflows: [PelePhysics-CI, Downstream-CI]
     types:
       - completed
 
@@ -30,7 +30,11 @@ jobs:
           WORKFLOW_NAME="${{ github.event.workflow_run.name }}"
 
           if [[ $EVENT == "pull_request" ]]; then
-            gh run download ${{ github.event.workflow_run.id }} -n pr_number
+            # Missing when the run was cancelled before Save-PR-Number ran.
+            if ! gh run download ${{ github.event.workflow_run.id }} -n pr_number; then
+              echo "No pr_number artifact; nothing to clean up."
+              exit 0
+            fi
             pr_number=`cat pr_number.txt`
             BRANCH=refs/pull/${pr_number}/merge
           else

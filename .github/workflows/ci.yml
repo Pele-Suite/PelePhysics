@@ -11,16 +11,36 @@ concurrency:
   group: ${{github.ref}}-${{github.head_ref}}-ci
   cancel-in-progress: true
 
+# Run steps with bash -eo pipefail, so a failing command stops the step.
+defaults:
+  run:
+    shell: bash
+
 jobs:
+  # CleanUpCache (workflow_run) needs the PR number to find this PR's caches.
+  Save-PR-Number:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Save PR number
+        env:
+          PR_NUMBER: ${{ github.event.number }}
+        run: echo ${PR_NUMBER} > pr_number.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pr_number
+          path: pr_number.txt
+          retention-days: 1
+
   Detect-Changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       has-source-changes: ${{ steps.changes.outputs.src }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: dorny/paths-filter@v2
+      - uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
@@ -136,7 +156,6 @@ jobs:
             amrex_build_flags: '--with-sycl=yes'
             dependency_cmds: '.github/workflows/dependencies/dependencies_dpcpp.sh'
     steps:
-      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: ${{matrix.python-version}}
@@ -161,8 +180,10 @@ jobs:
           echo "NPROCS=$(nproc)" >> $GITHUB_ENV
           echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
           echo "CCACHE_COMPRESSLEVEL=5" >> $GITHUB_ENV
-          echo "CCACHE_LOGFILE=${{github.workspace}}/ccache.log.txt" >> $GITHUB_ENV
           echo "CCACHE_MAXSIZE=1G" >> $GITHUB_ENV
+          # ccache for the CMake-built TPLs (SUNDIALS) too: CMake reads these
+          # as the default compiler launchers.
+          for LANG in C CXX CUDA HIP; do echo "CMAKE_${LANG}_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV; done
           if [ "${{matrix.comp}}" == 'cuda' ]; then \
             echo "CUDA_HOME=/usr/local/cuda-12.6" >> $GITHUB_ENV; \
             echo "LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH}" >> $GITHUB_ENV; \
@@ -206,7 +227,7 @@ jobs:
           printf "\n-------- AMReX --------\n"; \
           cd ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Submodules/amrex/
           ./configure --dim=2 --with-mpi=no --enable-particle=no --with-fortran=no --enable-linear-solver=no --enable-fortran-api=no --prefix=./ --enable-tiny-profile=yes ${{matrix.amrex_build_flags}}
-          make -j ${{env.NPROCS}} ${{matrix.amrex_build_args}} USE_SUNDIALS=TRUE SUNDIALS_HOME=${{github.workspace}}/PelePhysics-${{matrix.comp}}/ThirdParty/INSTALL/*/
+          make -j ${{env.NPROCS}} ${{matrix.amrex_build_args}} USE_CCACHE=TRUE USE_SUNDIALS=TRUE SUNDIALS_HOME=${{github.workspace}}/PelePhysics-${{matrix.comp}}/ThirdParty/INSTALL/*/
           make install
       - name: Unit Test Utilities
         working-directory: ${{env.UTILITIES_WORKING_DIRECTORY}}
@@ -376,7 +397,7 @@ jobs:
               ccache -z
               cd ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Support/ceptr
               poetry install
-              poetry run qssa -f ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Mechanisms/dodecane_lu_qss/skeletal.yaml -n ${{github.workspace}}/Mechanisms/dodecane_lu_qss/non_qssa_list.yaml
+              poetry run qssa -f ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Mechanisms/dodecane_lu_qss/skeletal.yaml -n ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Mechanisms/dodecane_lu_qss/non_qssa_list.yaml
               poetry run convert -f ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Mechanisms/dodecane_lu_qss/qssa.yaml --qss_format_input ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Mechanisms/dodecane_lu_qss/qssa_input_non_optimized.toml --qss_symbolic_jacobian
               cd ${{env.JAC_WORKING_DIRECTORY}}
               make TPL DEBUG=TRUE TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}

@@ -18,8 +18,6 @@ sudo apt-get install -y \
     libcusolver-dev-${CUDA_VERSION}         \
     libcusparse-dev-${CUDA_VERSION}         \
     libcublas-dev-${CUDA_VERSION}           \
-    libcurand-dev-${CUDA_VERSION}           \
-    libcusparse-dev-${CUDA_VERSION}         \
     libnvjitlink-${CUDA_VERSION}
 
 export PATH=/usr/local/nvidia/bin:/usr/local/cuda-12.6/bin:${PATH}
