@@ -3,16 +3,18 @@ name: PelePhysics-CI
 on:
    workflow_dispatch:
    schedule:
-     # Weekly, so the ccaches are refreshed before GitHub evicts them after
-     # 7 days without access.
-     - cron: '0 3 * * 1'
+     # Twice a week, so the ccaches are refreshed before GitHub evicts them
+     # after 7 days without access, with a margin for late scheduled starts.
+     - cron: '0 3 * * 1,4'
    push:
      branches: [development]
    pull_request:
      branches: [development]
 
 concurrency:
-  group: ${{github.ref}}-${{github.head_ref}}-ci
+  # The event is in the group so that a scheduled run and a push to
+  # development do not cancel each other.
+  group: ${{github.ref}}-${{github.head_ref}}-${{github.event_name}}-ci
   cancel-in-progress: true
 
 # Run steps with bash -eo pipefail, so a failing command stops the step.
@@ -24,18 +26,23 @@ jobs:
   Detect-Changes:
     runs-on: ubuntu-latest
     outputs:
-      # Scheduled and manual runs always build: without a push there is no
-      # previous commit to compare against, so paths-filter only looks at
-      # the last commit, and a docs-only one would skip every job (and leave
-      # the ccaches to be evicted).
+      # Scheduled and manual runs always build, so they refresh the ccaches
+      # whatever the last commit touched. Without a push there is no previous
+      # commit to compare against, so the filter does not run for them.
       has-source-changes: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.src }}
     steps:
       - uses: actions/checkout@v6
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         with:
           fetch-depth: 0
       - uses: dorny/paths-filter@v3
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         id: changes
         with:
+          # A file counts only if it matches every pattern, so the '!'
+          # patterns exclude: with the default 'some', '**' matches every
+          # file and a docs-only change still ran everything.
+          predicate-quantifier: 'every'
           filters: |
             src:
               - '**'
@@ -191,7 +198,7 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: ~/.cache/ccache
-          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}
+          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}-${{github.run_id}}
           restore-keys: |
                ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-
       # The dependency scripts also export the toolchain's environment to the
@@ -346,4 +353,4 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ~/.cache/ccache
-          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}
+          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}-${{github.run_id}}

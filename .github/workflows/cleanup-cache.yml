@@ -41,7 +41,8 @@ jobs:
           # Don't fail the workflow while deleting cache keys.
           set +e
 
-          # Keys are <job id>-git-<sha>, e.g. ccache-PelePhysics-CI-Transport-EOS-Reactions-gnu-git-<sha>.
+          # Keys are <job id>-git-<sha>-<run id>, e.g. ccache-PelePhysics-CI-Transport-EOS-Reactions-gnu-git-<sha>-<run id>.
+          # The run id lets a scheduled run on an unchanged commit save a fresh cache.
           # Keep the most recently created key of each job and delete the others.
           # Not the most recently used: PRs restore development's cache, so one
           # that restores the old key while this run's other jobs are still
