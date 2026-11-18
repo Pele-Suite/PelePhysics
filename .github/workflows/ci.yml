@@ -141,8 +141,10 @@ jobs:
       # Manifold models are not built with SYCL.
       BUILD_MANIFOLD: ${{matrix.comp != 'sycl'}}
       CCACHE_COMPRESS: 1
-      CCACHE_COMPRESSLEVEL: 5
+      CCACHE_COMPRESSLEVEL: 10
       CCACHE_MAXSIZE: 1G
+      # Only pushes to development save the cache; PRs restore development's.
+      SAVE_CCACHE: ${{github.event_name == 'push' && github.ref == 'refs/heads/development'}}
       # ccache for the CMake-built TPLs (SUNDIALS) too: CMake reads these as
       # the default compiler launchers.
       CMAKE_C_COMPILER_LAUNCHER: ccache
@@ -167,8 +169,13 @@ jobs:
           wget -q https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
           tar xf ccache-4.8-linux-x86_64.tar.xz
           sudo cp -f ccache-4.8-linux-x86_64/ccache /usr/local/bin/
+          echo "CCACHE_RUN_START=$(date +%s)" >> $GITHUB_ENV
+      # Restore only; the cache is saved at the end of the job, and only from
+      # development (SAVE_CCACHE). A PR's own pushes would each store a full
+      # copy (~1.5 GB per PR across the matrix) for little gain over
+      # development's cache.
       - name: Set Up Ccache
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: ~/.cache/ccache
           key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}
@@ -309,3 +316,18 @@ jobs:
         run: |
           ccache -s
           du -hs ${HOME}/.cache/ccache
+      # Hits refresh an entry's mtime: drop what this run did not use, so the
+      # saved cache is the current working set rather than everything since
+      # the cache was first created. Only after a successful job (the default
+      # condition), since a failed one never reached some files.
+      - name: Trim Ccache
+        if: env.SAVE_CCACHE == 'true'
+        run: |
+          ccache --evict-older-than $(( $(date +%s) - CCACHE_RUN_START + 60 ))s
+          du -hs ${HOME}/.cache/ccache
+      - name: Save Ccache
+        if: env.SAVE_CCACHE == 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}
