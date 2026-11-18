@@ -194,6 +194,15 @@ struct TurbFileSampler
 
 struct TurbParm
 {
+  // Move-only: copies would share one plane chunk (sdata) but track its
+  // loaded planes separately
+  TurbParm() = default;
+  TurbParm(const TurbParm&) = delete;
+  TurbParm& operator=(const TurbParm&) = delete;
+  TurbParm(TurbParm&&) = default;
+  TurbParm& operator=(TurbParm&&) = default;
+  ~TurbParm() = default;
+
   // Turbulence data file
   std::string m_turb_file;
 
@@ -212,8 +221,8 @@ struct TurbParm
     0.0; // Enable to offset the location in the turb file
 
   int nplane = 32; // Number of turb planes stored at once in memory
-  std::unique_ptr<amrex::FArrayBox>
-    sdata;                    // Currently loaded chunk of turb data
+  // Currently loaded chunk of turb data; shared only for make_plane_chunk()
+  std::shared_ptr<amrex::FArrayBox> sdata;
   int izlo = -1;              // Currently loaded low plane
   int izhi = -1;              // Currently loaded high plane
   amrex::Real szlo = -1.0e12; // Position of the current chunk low plane
@@ -270,18 +279,6 @@ struct TurbInflow
 {
 public:
   TurbInflow() = default;
-
-  // The plane chunks live in an AMReX arena.  A TurbInflow that outlives
-  // amrex::Finalize (e.g. PeleC's static member) must not free them then:
-  // release them instead, as the memory is gone with the arena anyway.
-  ~TurbInflow()
-  {
-    if (!amrex::Initialized()) {
-      for (auto& t : tp) {
-        [[maybe_unused]] auto* leaked = t.sdata.release();
-      }
-    }
-  }
 
   TurbInflow(const TurbInflow&) = delete;
   TurbInflow& operator=(const TurbInflow&) = delete;
@@ -461,6 +458,18 @@ public:
     const int dcomp);
 
 private:
+  /**
+   * \brief Allocate an arena-backed buffer of a TurbParm (the plane chunk).
+   *
+   * A TurbInflow may outlive amrex::Finalize (PeleC holds a static one), so
+   * the buffer is freed at Finalize, while its arena still exists, if it is
+   * alive then.  Its owner is left with an empty FArrayBox, which is safe to
+   * destroy, move or replace afterwards.  Every arena-backed member of
+   * TurbParm must be allocated through here.
+   */
+  static std::shared_ptr<amrex::FArrayBox>
+  make_plane_chunk(const amrex::Box& bx, int ncomp);
+
   //! The TurbParm acting on the (\p dir, \p side) face, or nullptr.
   const TurbParm*
   find_turbparm(const int dir, const amrex::Orientation::Side& side) const;

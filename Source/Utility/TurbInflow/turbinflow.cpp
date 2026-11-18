@@ -262,8 +262,7 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
         amrex::IntVect(
           AMREX_D_DECL(npts[0] - 1, npts[1] - 1, tp[n].nplane - 1)));
 
-      tp[n].sdata = std::make_unique<amrex::FArrayBox>(
-        sbx, AMREX_SPACEDIM, amrex::The_Async_Arena());
+      tp[n].sdata = make_plane_chunk(sbx, AMREX_SPACEDIM);
 
       // Center the turbulence.  For a physically-uniform file turb_center
       // is in case units and the file is placed around it.  For a
@@ -344,6 +343,22 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
     }
     turbinflow_initialized = true;
   }
+}
+
+std::shared_ptr<amrex::FArrayBox>
+TurbInflow::make_plane_chunk(const amrex::Box& bx, const int ncomp)
+{
+  auto fab =
+    std::make_shared<amrex::FArrayBox>(bx, ncomp, amrex::The_Async_Arena());
+  // Runs before the arenas are torn down.  A weak reference, so that the
+  // hook neither keeps the chunk alive nor touches it once its owner has
+  // freed or replaced it.
+  amrex::ExecOnFinalize([w = std::weak_ptr<amrex::FArrayBox>(fab)]() {
+    if (auto f = w.lock()) {
+      f->clear();
+    }
+  });
+  return fab;
 }
 
 TurbFileSampler
