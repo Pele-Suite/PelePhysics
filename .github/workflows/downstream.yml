@@ -45,12 +45,23 @@ jobs:
               - '!.codespell*'
               - '!.gitignore'
 
-  PeleLMeX-FlameSheet:
+  Run:
     needs: Detect-Changes
     if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
-    name: PeleLMeX GNU MPI Run [FlameSheet]
+    name: ${{ matrix.code }} GNU MPI Run [${{ matrix.case }}]
     runs-on: ubuntu-24.04
-
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - code: PeleLMeX
+            case: FlameSheet
+            make_args: DIM=2
+            run: ./PeleLMeX2d.gnu.MPI.drm19.ex input.2d-regt amr.max_step=2 amr.plot_int=-1 amr.check_int=-1 amrex.abort_on_unused_inputs=1 amr.n_cell=32 64
+          - code: PeleC
+            case: PMF
+            make_args: DIM=3
+            run: ./PeleC3d.gnu.MPI.ex example.inp max_step=2 amr.plot_int=-1 amr.check_int=-1 amrex.abort_on_unused_inputs=0 amr.n_cell=8 8 128
     steps:
       - name: Checkout PelePhysics
         uses: actions/checkout@v6
@@ -58,45 +69,54 @@ jobs:
           path: pelephysics-pr
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - name: Clone PeleLMeX
+      - name: Clone ${{ matrix.code }}, pointing its PelePhysics at this PR
         run: |
-          git clone --recursive --shallow-submodules --single-branch \
-            https://github.com/Pele-Suite/PeleLMeX.git
-
-      - name: Point PeleLMeX/Submodules/PelePhysics to this PR
-        working-directory: PeleLMeX
-        run: |
-          cd Submodules/PelePhysics
-          git fetch "$GITHUB_WORKSPACE/pelephysics-pr"
-          git checkout $(git -C "$GITHUB_WORKSPACE/pelephysics-pr" rev-parse HEAD)
+          git clone --depth 1 --recursive --shallow-submodules --single-branch \
+            https://github.com/Pele-Suite/${{ matrix.code }}.git
+          cd ${{ matrix.code }}/Submodules/PelePhysics
+          git fetch "${GITHUB_WORKSPACE}/pelephysics-pr"
+          git checkout FETCH_HEAD
           git submodule update --recursive
-
-          echo "PelePhysics Submodule now points to:"
-          git rev-parse --short HEAD
-
+          echo "PelePhysics submodule now at $(git rev-parse --short HEAD)"
       - name: System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libopenmpi-dev openmpi-bin
-
       - name: Build
-        working-directory: PeleLMeX/Exec/RegTests/FlameSheet/
+        working-directory: ${{ matrix.code }}/Exec/RegTests/${{ matrix.case }}
         run: |
           make TPL COMP=gnu USE_MPI=TRUE
-          make -j $(nproc) DIM=2 COMP=gnu USE_MPI=TRUE
-
+          make -j $(nproc) ${{ matrix.make_args }} COMP=gnu USE_MPI=TRUE
       - name: Run
-        working-directory: PeleLMeX/Exec/RegTests/FlameSheet/
-        run: |
-          mpirun -n 2 ./PeleLMeX2d.gnu.MPI.drm19.ex input.2d-regt amr.max_step=2 amr.plot_int=-1 amr.check_int=-1 amrex.abort_on_unused_inputs=1 amr.n_cell=32 64
+        working-directory: ${{ matrix.code }}/Exec/RegTests/${{ matrix.case }}
+        run: mpirun -n 2 ${{ matrix.run }}
 
-  PeleC-PMF:
-    needs: Detect-Changes
-    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
-    name: PeleC GNU MPI Run [PMF]
+  clang-tidy:
+    needs: Run
+    name: ${{ matrix.code }} clang-tidy
     runs-on: ubuntu-24.04
-
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - code: PeleLMeX
+            cmake_args: ''
+          - code: PeleC
+            cmake_args: -DPELE_ENABLE_MASA:BOOL=OFF -DPELE_EXCLUDE_BUILD_IN_CI:BOOL=ON
+    env:
+      BUILD_DIR: ${{ github.workspace }}/build-clang-tidy-${{ matrix.code }}
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 10
+      CCACHE_EXTRAFILES: ${{ github.workspace }}/${{ matrix.code }}/.clang-tidy
+      CCACHE_MAXSIZE: 100M
+      # clang-tidy-cache skips files whose preprocessed source, flags and
+      # resolved clang-tidy config are unchanged. SAVE_OUTPUT/SAVE_ALL store
+      # each file's diagnostics (clang-tidy's stdout) and exit code and replay
+      # them on a hit; stderr is not replayed. Comments are kept in the hash
+      # so that NOLINT edits invalidate the entry.
+      CTCACHE_SAVE_OUTPUT: 1
+      CTCACHE_SAVE_ALL: 1
+      CTCACHE_KEEP_COMMENTS: 1
     steps:
       - name: Checkout PelePhysics
         uses: actions/checkout@v6
@@ -104,116 +124,42 @@ jobs:
           path: pelephysics-pr
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - name: Clone PeleC
+      - name: Clone ${{ matrix.code }}, pointing its PelePhysics at this PR
         run: |
-          git clone --recursive --shallow-submodules --single-branch \
-            https://github.com/Pele-Suite/PeleC.git
-
-      - name: Point PeleC/Submodules/PelePhysics to this PR
-        working-directory: PeleC
-        run: |
-          cd Submodules/PelePhysics
-          git fetch "$GITHUB_WORKSPACE/pelephysics-pr"
-          git checkout $(git -C "$GITHUB_WORKSPACE/pelephysics-pr" rev-parse HEAD)
+          git clone --depth 1 --recursive --shallow-submodules --single-branch \
+            https://github.com/Pele-Suite/${{ matrix.code }}.git
+          cd ${{ matrix.code }}/Submodules/PelePhysics
+          git fetch "${GITHUB_WORKSPACE}/pelephysics-pr"
+          git checkout FETCH_HEAD
           git submodule update --recursive
-
-          echo "PelePhysics Submodule now points to:"
-          git rev-parse --short HEAD
-
-      - name: System Dependencies
+          echo "PelePhysics submodule now at $(git rev-parse --short HEAD)"
+      - name: Install Ccache and clang-tidy-cache
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libopenmpi-dev openmpi-bin
-
-      - name: Build
-        working-directory: PeleC/Exec/RegTests/PMF/
-        run: |
-          make TPL COMP=gnu USE_MPI=TRUE
-          make -j $(nproc) DIM=3 COMP=gnu USE_MPI=TRUE
-
-      - name: Run
-        working-directory: PeleC/Exec/RegTests/PMF/
-        run: |
-          mpirun -n 2 ./PeleC3d.gnu.MPI.ex example.inp max_step=2 amr.plot_int=-1 amr.check_int=-1 amrex.abort_on_unused_inputs=0 amr.n_cell=8 8 128
-
-  PeleLMeX-clang-tidy:
-    name: PeleLMeX clang-tidy
-    needs: [PeleLMeX-FlameSheet, PeleC-PMF]
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout PelePhysics
-        uses: actions/checkout@v6
-        with:
-          path: pelephysics-pr
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - name: Clone PeleLMeX
-        run: |
-          git clone --recursive --shallow-submodules --single-branch \
-            https://github.com/Pele-Suite/PeleLMeX.git
-
-      - name: Point PeleLMeX/Submodules/PelePhysics to this PR
-        working-directory: PeleLMeX
-        run: |
-          cd Submodules/PelePhysics
-          git fetch "$GITHUB_WORKSPACE/pelephysics-pr"
-          git checkout $(git -C "$GITHUB_WORKSPACE/pelephysics-pr" rev-parse HEAD)
-          git submodule update --recursive
-
-          echo "PelePhysics Submodule now points to:"
-          git rev-parse --short HEAD
-
-      - name: Setup
-        run: |
-          echo "NPROCS=$(nproc)" >> $GITHUB_ENV
-          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
-          echo "CCACHE_COMPRESSLEVEL=10" >> $GITHUB_ENV
-          echo "CCACHE_EXTRAFILES=${{github.workspace}}/PeleLMeX/.clang-tidy" >> $GITHUB_ENV
-          echo "CCACHE_MAXSIZE=100M" >> $GITHUB_ENV
-          # clang-tidy-cache skips files whose preprocessed source, flags and
-          # resolved clang-tidy config are unchanged. SAVE_OUTPUT/SAVE_ALL
-          # store each file's diagnostics (clang-tidy's stdout) and exit code
-          # and replay them on a hit; stderr is not replayed. Keyed on the
-          # clang-tidy version, which the hash does not include. Comments are
-          # kept in the hash so that NOLINT edits invalidate the entry.
-          echo "CTCACHE_DIR=${HOME}/.cache/ctcache/$(clang-tidy --version | sha256sum | cut -c1-12)" >> $GITHUB_ENV
-          echo "CTCACHE_SAVE_OUTPUT=1" >> $GITHUB_ENV
-          echo "CTCACHE_SAVE_ALL=1" >> $GITHUB_ENV
-          echo "CTCACHE_KEEP_COMMENTS=1" >> $GITHUB_ENV
-
-      - name: Install Ccache
-        run: |
-          wget https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
-          tar xvf ccache-4.8-linux-x86_64.tar.xz
+          wget -q https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
+          tar xf ccache-4.8-linux-x86_64.tar.xz
           sudo cp -f ccache-4.8-linux-x86_64/ccache /usr/local/bin/
           # ctcache 1.2.0; the module is a self-contained script
           sudo curl -L https://raw.githubusercontent.com/matus-chochlik/ctcache/e33c063ca6e52b48bcefbc45d46d8c150ffa81ca/src/ctcache/clang_tidy_cache.py -o /usr/local/bin/clang-tidy-cache
           sudo chmod +x /usr/local/bin/clang-tidy-cache
-
+          # Keyed on the clang-tidy version, which the ctcache hash does not include
+          echo "CTCACHE_DIR=${HOME}/.cache/ctcache/$(clang-tidy --version | sha256sum | cut -c1-12)" >> $GITHUB_ENV
       - name: Set Up Ccache
         uses: actions/cache@v5
         with:
-          path: ~/.cache
-          key: ccache-${{ github.workflow }}-${{ github.job }}-git-${{ github.sha }}
+          path: |
+            ~/.cache/ccache
+            ~/.cache/ctcache
+          key: ccache-${{ github.workflow }}-${{ github.job }}-${{ matrix.code }}-git-${{ github.sha }}
           restore-keys: |
-            ccache-${{ github.workflow }}-${{ github.job }}-git-
-
+            ccache-${{ github.workflow }}-${{ github.job }}-${{ matrix.code }}-git-
       - name: Configure
-        working-directory: PeleLMeX
         run: |
-          # clang-tidy only needs the compiler frontend (parsing/AST) to run;
-          # it never executes optimized code. Building at -O3 (the default
-          # under CMAKE_BUILD_TYPE=Release) has been observed to crash the
-          # clang++ 18.1.3 frontend (SIGSEGV, exit 139) inside LLVM's
-          # InstCombine pass on some AMReX submodule files (e.g.
-          # AMReX_EB_STL_utils.cpp, AMReX_EB2_Level_STL.cpp). Forcing -O0
-          # avoids invoking the optimizer entirely, sidestepping the crash,
-          # while CMAKE_BUILD_TYPE=Release is kept so NDEBUG/asserts stay
-          # consistent with the rest of the build.
-          cmake -B"${{ github.workspace }}/build-clang-tidy-lmex" \
+          # clang-tidy only needs the compiler frontend (parsing/AST); it never
+          # executes the objects, so build at -O0. At -O3 (the Release
+          # default) the clang++ 18.1.3 optimizer has crashed (SIGSEGV) on
+          # some AMReX files (AMReX_EB_STL_utils.cpp, AMReX_EB2_Level_STL.cpp).
+          # CMAKE_BUILD_TYPE=Release keeps NDEBUG consistent with other builds.
+          cmake -B${BUILD_DIR} \
           -DCMAKE_BUILD_TYPE:STRING=Release \
           -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
           -DCMAKE_CXX_COMPILER:STRING=clang++ \
@@ -226,15 +172,15 @@ jobs:
           -DPELE_ENABLE_CLANG_TIDY:BOOL=ON \
           "-DCLANG_TIDY_EXE:STRING=clang-tidy-cache;$(command -v clang-tidy)" \
           -DCMAKE_CXX_COMPILER_LAUNCHER:STRING=ccache \
-          ${{ github.workspace }}/PeleLMeX
-
+          ${{ matrix.cmake_args }} \
+          ${{ github.workspace }}/${{ matrix.code }}
       - name: Check
-        working-directory: ${{ github.workspace }}/build-clang-tidy-lmex
+        working-directory: ${{ env.BUILD_DIR }}
         run: |
           mkdir -p ${CTCACHE_DIR}
           touch ${{ runner.temp }}/ctcache-start
           build_status=0
-          cmake --build . --parallel ${{ env.NPROCS }} 2>&1 | tee -a clang-tidy-full-report.txt || build_status=$?
+          cmake --build . --parallel $(nproc) 2>&1 | tee clang-tidy-full-report.txt || build_status=$?
           # Hits refresh an entry's mtime: drop the ones this run did not use
           # (and older clang-tidy versions) so the cache does not grow. Only
           # after a complete build: a failed one never reached some files.
@@ -246,153 +192,17 @@ jobs:
           # code but not clang-tidy's stderr, so the warning count alone can
           # miss it.
           exit ${build_status}
-
       - name: Ccache Report
+        if: ${{ !cancelled() }}
         run: |
-          du -hs ~/.cache/ccache
-          du -hs ~/.cache/ctcache
+          du -hs ~/.cache/ccache ~/.cache/ctcache
           # Entries are named by the rest of their sha1 digest (38 hex
           # characters); the per-directory stats files are not counted.
           echo "ctcache entries: $(find ${CTCACHE_DIR} -type f -regextype posix-extended -regex '.*/[0-9a-f]{38}' | wc -l)"
           ccache -s
-
-      - name: Full report
-        working-directory: ${{ github.workspace }}/build-clang-tidy-lmex
-        run: cat clang-tidy-full-report.txt
-
       - name: Short report
-        working-directory: ${{ github.workspace }}/build-clang-tidy-lmex
+        if: ${{ !cancelled() }}
+        working-directory: ${{ env.BUILD_DIR }}
         run: |
-          echo "::add-matcher::${{ github.workspace }}/PeleLMeX/.github/problem-matchers/gcc.json"
-          ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt
-
-  PeleC-clang-tidy:
-    name: PeleC clang-tidy
-    needs: [PeleLMeX-FlameSheet, PeleC-PMF]
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Checkout PelePhysics
-        uses: actions/checkout@v6
-        with:
-          path: pelephysics-pr
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - name: Clone PeleC
-        run: |
-          git clone --recursive --shallow-submodules --single-branch \
-            https://github.com/Pele-Suite/PeleC
-
-      - name: Point PeleC/Submodules/PelePhysics to this PR
-        working-directory: PeleC
-        run: |
-          cd Submodules/PelePhysics
-          git fetch "$GITHUB_WORKSPACE/pelephysics-pr"
-          git checkout $(git -C "$GITHUB_WORKSPACE/pelephysics-pr" rev-parse HEAD)
-          git submodule update --recursive
-
-          echo "PelePhysics Submodule now points to:"
-          git rev-parse --short HEAD
-
-      - name: Setup
-        run: |
-          echo "NPROCS=$(nproc)" >> $GITHUB_ENV
-          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
-          echo "CCACHE_COMPRESSLEVEL=10" >> $GITHUB_ENV
-          echo "CCACHE_EXTRAFILES=${{github.workspace}}/PeleC/.clang-tidy" >> $GITHUB_ENV
-          echo "CCACHE_MAXSIZE=100M" >> $GITHUB_ENV
-          # clang-tidy-cache skips files whose preprocessed source, flags and
-          # resolved clang-tidy config are unchanged. SAVE_OUTPUT/SAVE_ALL
-          # store each file's diagnostics (clang-tidy's stdout) and exit code
-          # and replay them on a hit; stderr is not replayed. Keyed on the
-          # clang-tidy version, which the hash does not include. Comments are
-          # kept in the hash so that NOLINT edits invalidate the entry.
-          echo "CTCACHE_DIR=${HOME}/.cache/ctcache/$(clang-tidy --version | sha256sum | cut -c1-12)" >> $GITHUB_ENV
-          echo "CTCACHE_SAVE_OUTPUT=1" >> $GITHUB_ENV
-          echo "CTCACHE_SAVE_ALL=1" >> $GITHUB_ENV
-          echo "CTCACHE_KEEP_COMMENTS=1" >> $GITHUB_ENV
-
-      - name: Install Ccache
-        run: |
-          wget https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
-          tar xvf ccache-4.8-linux-x86_64.tar.xz
-          sudo cp -f ccache-4.8-linux-x86_64/ccache /usr/local/bin/
-          # ctcache 1.2.0; the module is a self-contained script
-          sudo curl -L https://raw.githubusercontent.com/matus-chochlik/ctcache/e33c063ca6e52b48bcefbc45d46d8c150ffa81ca/src/ctcache/clang_tidy_cache.py -o /usr/local/bin/clang-tidy-cache
-          sudo chmod +x /usr/local/bin/clang-tidy-cache
-
-      - name: Set Up Ccache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache
-          key: ccache-${{github.workflow}}-${{github.job}}-git-${{github.sha}}
-          restore-keys: |
-               ccache-${{github.workflow}}-${{github.job}}-git-
-
-      - name: Configure
-        working-directory: PeleC
-        run: |
-          # clang-tidy only needs the compiler frontend (parsing/AST) to run;
-          # it never executes optimized code. Building at -O3 (the default
-          # under CMAKE_BUILD_TYPE=Release) has been observed to crash the
-          # clang++ 18.1.3 frontend (SIGSEGV, exit 139) inside LLVM's
-          # InstCombine pass on some AMReX submodule files (e.g.
-          # AMReX_EB_STL_utils.cpp, AMReX_EB2_Level_STL.cpp). Forcing -O0
-          # avoids invoking the optimizer entirely, sidestepping the crash,
-          # while CMAKE_BUILD_TYPE=Release is kept so NDEBUG/asserts stay
-          # consistent with the rest of the build.
-          cmake -B"${{ github.workspace }}/build-clang-tidy-c" \
-          -DCMAKE_BUILD_TYPE:STRING=Release \
-          -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-          -DCMAKE_CXX_COMPILER:STRING=clang++ \
-          -DCMAKE_C_COMPILER:STRING=clang \
-          -DCMAKE_C_FLAGS_RELEASE:STRING="-O0 -DNDEBUG" \
-          -DCMAKE_CXX_FLAGS_RELEASE:STRING="-O0 -DNDEBUG" \
-          -DPELE_ENABLE_MPI:BOOL=OFF \
-          -DPELE_ENABLE_FCOMPARE_FOR_TESTS:BOOL=OFF \
-          -DPELE_ENABLE_MASA:BOOL=OFF \
-          -DPELE_ENABLE_EB:BOOL=OFF \
-          -DPELE_ENABLE_CLANG_TIDY:BOOL=ON \
-          "-DCLANG_TIDY_EXE:STRING=clang-tidy-cache;$(command -v clang-tidy)" \
-          -DPELE_EXCLUDE_BUILD_IN_CI:BOOL=ON \
-          -DCMAKE_CXX_COMPILER_LAUNCHER:STRING=ccache \
-          ${{github.workspace}}/PeleC
-
-      - name: Check
-        working-directory: ${{ github.workspace }}/build-clang-tidy-c
-        run: |
-          mkdir -p ${CTCACHE_DIR}
-          touch ${{ runner.temp }}/ctcache-start
-          build_status=0
-          cmake --build . --parallel ${{ env.NPROCS }} 2>&1 | tee -a clang-tidy-full-report.txt || build_status=$?
-          # Hits refresh an entry's mtime: drop the ones this run did not use
-          # (and older clang-tidy versions) so the cache does not grow. Only
-          # after a complete build: a failed one never reached some files.
-          if [ ${build_status} -eq 0 ]; then
-            find ${CTCACHE_DIR} -type f ! -newer ${{ runner.temp }}/ctcache-start -delete
-            find ${HOME}/.cache/ctcache -mindepth 1 -maxdepth 1 ! -path ${CTCACHE_DIR} -exec rm -rf {} +
-          fi
-          # Fail on a failed build: a replayed cache hit restores the exit
-          # code but not clang-tidy's stderr, so the warning count alone can
-          # miss it.
-          exit ${build_status}
-
-      - name: Ccache Report
-        run: |
-          du -hs ~/.cache/ccache
-          du -hs ~/.cache/ctcache
-          # Entries are named by the rest of their sha1 digest (38 hex
-          # characters); the per-directory stats files are not counted.
-          echo "ctcache entries: $(find ${CTCACHE_DIR} -type f -regextype posix-extended -regex '.*/[0-9a-f]{38}' | wc -l)"
-          ccache -s
-
-      - name: Full report
-        working-directory: ${{ github.workspace }}/build-clang-tidy-c
-        run: cat clang-tidy-full-report.txt
-
-      - name: Short report
-        working-directory: ${{ github.workspace }}/build-clang-tidy-c
-        run: |
-          echo "::add-matcher::${{ github.workspace }}/PeleC/.github/problem-matchers/gcc.json"
+          echo "::add-matcher::${{ github.workspace }}/${{ matrix.code }}/.github/problem-matchers/gcc.json"
           ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt

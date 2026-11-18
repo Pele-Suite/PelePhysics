@@ -8,33 +8,33 @@ on:
 
 jobs:
   CleanUpCcacheCachePostPR:
-    name: Clean Up Ccahe Cache Post PR
+    name: Clean Up Ccache Cache Post PR
     runs-on: ubuntu-latest
     permissions:
       actions: write
       contents: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v6
-      - name: Clean up ccahe
+      - name: Clean up ccache
         run: |
-          gh extension install actions/gh-actions-cache
+          # The run's own PR when it has one (same-repo PRs); otherwise search, keeping
+          # only the PR whose head is this commit (a stacked PR also contains it).
+          pr_head_sha=${{ github.event.workflow_run.head_sha }}
+          pr_number=${{ github.event.workflow_run.pull_requests[0].number }}
+          if [ -z "${pr_number}" ]; then
+            pr_number=$(gh pr list --state all --search ${pr_head_sha} --json number,headRefOid \
+              --jq "map(select(.headRefOid == \"${pr_head_sha}\")) | .[0].number // empty") || true
+          fi
+          if [ -z "${pr_number}" ]; then
+            echo "No PR for ${pr_head_sha}; nothing to clean up."
+            exit 0
+          fi
+          echo "Post-PR cache cleanup for PR ${pr_number}"
 
-          REPO=${{ github.repository }}
-
-          gh run download ${{ github.event.workflow_run.id }} -n pr_number
-          pr_number=`cat pr_number.txt`
-          BRANCH=refs/pull/${pr_number}/merge
-
-          # Setting this to not fail the workflow while deleting cache keys.
-          set +e
-
-          keys=$(gh actions-cache list -L 100 -R $REPO -B $BRANCH | cut -f 1)
-          # $keys might contain spaces. Thus we set IFS to \n.
-          IFS=$'\n'
-          for k in $keys
-          do
-            gh actions-cache delete "$k" -R $REPO -B $BRANCH --confirm
+          # `gh cache delete` has no ref filter, so delete by id, not key.
+          # `|| true`: a failed deletion should not fail the workflow.
+          for i in $(gh cache list -L 100 --ref refs/pull/${pr_number}/merge --json id --jq '.[].id'); do
+            gh cache delete "${i}" || true
           done
-          unset IFS

@@ -55,22 +55,16 @@ jobs:
           clangFormatVersion: 20
 
   Codespell:
-    needs: Detect-Changes
     runs-on: ubuntu-latest
     steps:
       - name: Clone
         uses: actions/checkout@v6
-        with:
-          submodules: false
       - name: Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - name: Dependencies
-        run: |
-          # Install Python packages
-          python -m pip install --upgrade pip
-          pip install codespell
+        run: pip install codespell
       - name: Run codespell
         run: codespell
 
@@ -123,11 +117,9 @@ jobs:
           - comp: gnu
             amrex_build_args: 'COMP=gnu'
             amrex_build_flags: '--comp=gnu'
-            dependency_cmds:
           - comp: llvm
             amrex_build_args: 'COMP=llvm'
             amrex_build_flags: '--comp=llvm'
-            dependency_cmds:
           - comp: cuda
             amrex_build_args: 'COMP=gnu USE_CUDA=TRUE'
             amrex_build_flags: '--comp=gnu --with-cuda=yes'
@@ -140,44 +132,40 @@ jobs:
             amrex_build_args: 'USE_SYCL=TRUE'
             amrex_build_flags: '--with-sycl=yes'
             dependency_cmds: '.github/workflows/dependencies/dependencies_dpcpp.sh'
+    env:
+      PELE_PHYSICS_HOME: ${{github.workspace}}
+      MAKE_ARGS: TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
+      EXE: ./Pele2d.${{matrix.comp}}.TPROF.ex
+      # The GPU backends are only compiled: there is no device to run on.
+      RUN_TESTS: ${{matrix.comp == 'gnu' || matrix.comp == 'llvm'}}
+      # Manifold models are not built with SYCL.
+      BUILD_MANIFOLD: ${{matrix.comp != 'sycl'}}
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 5
+      CCACHE_MAXSIZE: 1G
+      # ccache for the CMake-built TPLs (SUNDIALS) too: CMake reads these as
+      # the default compiler launchers.
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_CUDA_COMPILER_LAUNCHER: ccache
+      CMAKE_HIP_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{matrix.python-version}}
       - name: Run image
+        if: env.RUN_TESTS == 'true'
         uses: abatilo/actions-poetry@v4.0.0
         with:
           poetry-version: ${{matrix.poetry-version}}
       - name: Clone PelePhysics
         uses: actions/checkout@v6
         with:
-          path: PelePhysics-${{matrix.comp}}
           submodules: recursive
-      - name: Set Environment Variables
-        run: |
-          echo "PELE_PHYSICS_HOME=${{github.workspace}}/PelePhysics-${{matrix.comp}}" >> $GITHUB_ENV
-          echo "UTILITIES_WORKING_DIRECTORY=${{github.workspace}}/PelePhysics-${{matrix.comp}}/Testing/Exec/UtilityUnitTest" >> $GITHUB_ENV
-          echo "TRANSPORT_WORKING_DIRECTORY=${{github.workspace}}/PelePhysics-${{matrix.comp}}/Testing/Exec/TranEval" >> $GITHUB_ENV
-          echo "EOS_WORKING_DIRECTORY=${{github.workspace}}/PelePhysics-${{matrix.comp}}/Testing/Exec/EosEval" >> $GITHUB_ENV
-          echo "REACT_WORKING_DIRECTORY=${{github.workspace}}/PelePhysics-${{matrix.comp}}/Testing/Exec/ReactEval" >> $GITHUB_ENV
-          echo "IGNDELAY_WORKING_DIRECTORY=${{github.workspace}}/PelePhysics-${{matrix.comp}}/Testing/Exec/IgnitionDelay" >> $GITHUB_ENV
-          echo "JAC_WORKING_DIRECTORY=${{github.workspace}}/PelePhysics-${{matrix.comp}}/Testing/Exec/Jacobian" >> $GITHUB_ENV
-          echo "NPROCS=$(nproc)" >> $GITHUB_ENV
-          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
-          echo "CCACHE_COMPRESSLEVEL=5" >> $GITHUB_ENV
-          echo "CCACHE_MAXSIZE=1G" >> $GITHUB_ENV
-          # ccache for the CMake-built TPLs (SUNDIALS) too: CMake reads these
-          # as the default compiler launchers.
-          for LANG in C CXX CUDA HIP; do echo "CMAKE_${LANG}_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV; done
-          if [ "${{matrix.comp}}" == 'cuda' ]; then \
-            echo "CUDA_HOME=/usr/local/cuda-12.6" >> $GITHUB_ENV; \
-            echo "LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:${LD_LIBRARY_PATH}" >> $GITHUB_ENV; \
-            echo "/usr/local/cuda-12.6/bin" >> $GITHUB_PATH; \
-          fi
       - name: Install Ccache
         run: |
-          wget https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
-          tar xvf ccache-4.8-linux-x86_64.tar.xz
+          wget -q https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
+          tar xf ccache-4.8-linux-x86_64.tar.xz
           sudo cp -f ccache-4.8-linux-x86_64/ccache /usr/local/bin/
       - name: Set Up Ccache
         uses: actions/cache@v5
@@ -186,213 +174,138 @@ jobs:
           key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}
           restore-keys: |
                ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-
-      - name: Dependencies
-        working-directory: ${{env.TRANSPORT_WORKING_DIRECTORY}}
+      # The dependency scripts also export the toolchain's environment to the
+      # steps after this one.
+      - name: Compiler Dependencies
+        if: matrix.dependency_cmds
+        run: ${{matrix.dependency_cmds}}
+      - name: SUNDIALS and AMReX
+        working-directory: Testing/Exec/TranEval
         run: |
-          printf "\n-------- Compiler Dependencies --------\n"; \
-          if [ "${{matrix.comp}}" == 'cuda' ]; then \
-            ${{github.workspace}}/PelePhysics-${{matrix.comp}}/${{matrix.dependency_cmds}}; \
-            echo "CUDA_HOME=${CUDA_HOME}"; \
-            ls ${CUDA_HOME} > /dev/null; \
-            which nvcc || echo "nvcc not in PATH!"; \
-          fi
-          if [ "${{matrix.comp}}" == 'hip' ]; then \
-            ${{github.workspace}}/PelePhysics-${{matrix.comp}}/${{matrix.dependency_cmds}}; \
-            source /etc/profile.d/rocm.sh
-            which hipcc || echo "hipcc not in PATH!"; \
-          fi
-          if [ "${{matrix.comp}}" == 'sycl' ]; then \
-            ${{github.workspace}}/PelePhysics-${{matrix.comp}}/${{matrix.dependency_cmds}}; \
-            source /opt/intel/oneapi/setvars.sh || true
-            which icpx || echo "icpx not in PATH!"; \
-          fi
-          printf "\n-------- PelePhysics TPLs --------\n"; \
-          cmake --version
-          make TPL ${{matrix.amrex_build_args}};
-          printf "\n-------- AMReX --------\n"; \
-          cd ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Submodules/amrex/
+          echo "::add-matcher::${{github.workspace}}/.github/problem-matchers/gcc.json"
+          ccache -z
+          make TPL ${{matrix.amrex_build_args}}
+          cd ${PELE_PHYSICS_HOME}/Submodules/amrex
           ./configure --dim=2 --with-mpi=no --enable-particle=no --with-fortran=no --enable-linear-solver=no --enable-fortran-api=no --prefix=./ --enable-tiny-profile=yes ${{matrix.amrex_build_flags}}
-          make -j ${{env.NPROCS}} ${{matrix.amrex_build_args}} USE_CCACHE=TRUE USE_SUNDIALS=TRUE SUNDIALS_HOME=${{github.workspace}}/PelePhysics-${{matrix.comp}}/ThirdParty/INSTALL/*/
+          make -j $(nproc) ${{matrix.amrex_build_args}} USE_CCACHE=TRUE USE_SUNDIALS=TRUE SUNDIALS_HOME=${PELE_PHYSICS_HOME}/ThirdParty/INSTALL/*/
           make install
       - name: Unit Test Utilities
-        working-directory: ${{env.UTILITIES_WORKING_DIRECTORY}}
+        working-directory: Testing/Exec/UtilityUnitTest
         run: |
-          echo "::add-matcher::${{github.workspace}}/PelePhysics-${{matrix.comp}}/.github/problem-matchers/gcc.json"
-          if [ "${{matrix.comp}}" == 'hip' ]; then source /etc/profile.d/rocm.sh; fi;
-          if [ "${{matrix.comp}}" == 'sycl' ]; then source /opt/intel/oneapi/setvars.sh || true; fi;
-          ccache -z
-          make -j ${{env.NPROCS}} TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}; \
-          if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
-            ./Pele2d.${{matrix.comp}}.TPROF.ex input;
-          fi;
-          make realclean;
-          if [ $? -ne 0 ]; then exit 1; fi; \
-      - name: Utilities ccache report
-        working-directory: ${{env.UTILITIES_WORKING_DIRECTORY}}
-        run: |
-          ccache -s
-          du -hs ${HOME}/.cache/ccache
+          make -j $(nproc) ${MAKE_ARGS}
+          if [ ${RUN_TESTS} = true ]; then ${EXE} input; fi
+          make realclean
       - name: Test Transport
-        working-directory: ${{env.TRANSPORT_WORKING_DIRECTORY}}
+        working-directory: Testing/Exec/TranEval
         run: |
-          echo "::add-matcher::${{github.workspace}}/PelePhysics-${{matrix.comp}}/.github/problem-matchers/gcc.json"
-          if [ "${{matrix.comp}}" == 'hip' ]; then source /etc/profile.d/rocm.sh; fi;
-          if [ "${{matrix.comp}}" == 'sycl' ]; then source /opt/intel/oneapi/setvars.sh || true; fi;
-          ccache -z
-          for TYPE in Constant Simple Sutherland Manifold; do \
-            printf "\n-------- ${TYPE} --------\n"; \
-            if [ "${TYPE}" == 'Manifold' ]; then EOSMODEL=Manifold; else EOSMODEL=Fuego; fi; \
-            if [ "${TYPE}" == 'Manifold' ]; then CHEMISTRY=Null; else CHEMISTRY=air; fi; \
-            if [ "${TYPE}" != 'Manifold' ] || [ "${{matrix.comp}}" != 'sycl' ]; then \
-              make -j ${{env.NPROCS}} Eos_Model=${EOSMODEL} Chemistry_Model=${CHEMISTRY} Transport_Model=${TYPE} TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}; \
-            fi; \
-            if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
-              ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_${TYPE}; \
-              if [ "${TYPE}" == 'Manifold' ]; then \
-                 ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Network
-              fi; \
-              if [ "${TYPE}" == 'Simple' ]; then \
-                 ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_Matrix; \
-                 ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=1; \
-                 ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=30 tran_eval.matrix_ref_tol=1.e-6; \
-                 for LCT in lct1 lct3; do \
-                   ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_LCT transport.conductivity_model=${LCT}; \
-                   ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d_Simple_LCT transport.conductivity_model=${LCT} transport.conductivity_niter=30 tran_eval.lct_ref_tol=1.e-6; \
-                 done; \
-              fi; \
-            fi; \
-            make realclean; \
-            if [ $? -ne 0 ]; then exit 1; fi; \
+          run_simple() {
+            ${EXE} inputs.2d_Simple_Matrix
+            ${EXE} inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=1
+            ${EXE} inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=30 tran_eval.matrix_ref_tol=1.e-6
+            for LCT in lct1 lct3; do
+              ${EXE} inputs.2d_Simple_LCT transport.conductivity_model=${LCT}
+              ${EXE} inputs.2d_Simple_LCT transport.conductivity_model=${LCT} transport.conductivity_niter=30 tran_eval.lct_ref_tol=1.e-6
+            done
+          }
+          for TYPE in Constant Simple Sutherland Manifold; do
+            printf "\n-------- ${TYPE} --------\n"
+            case ${TYPE} in
+              Manifold) EOS=Manifold; CHEMISTRY=Null ;;
+              *)        EOS=Fuego;    CHEMISTRY=air ;;
+            esac
+            if [ ${TYPE} = Manifold ] && [ ${BUILD_MANIFOLD} != true ]; then continue; fi
+            make -j $(nproc) Eos_Model=${EOS} Chemistry_Model=${CHEMISTRY} Transport_Model=${TYPE} ${MAKE_ARGS}
+            if [ ${RUN_TESTS} = true ]; then
+              ${EXE} inputs.2d_${TYPE}
+              case ${TYPE} in
+                Manifold) ${EXE} inputs.2d_Network ;;
+                Simple)   run_simple ;;
+              esac
+            fi
+            make realclean
           done
-          if [ "${{matrix.comp}}" == 'gnu' ]; then \
-            printf "\n-------- Simple (LiDryer, multicomponent diffusion) --------\n"; \
-            make -j ${{env.NPROCS}} Eos_Model=Fuego Chemistry_Model=LiDryer Transport_Model=Simple TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}; \
-            ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_Matrix; \
-            ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=1; \
-            ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=30 tran_eval.matrix_ref_tol=1.e-6; \
-            for LCT in lct1 lct3; do \
-              ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_LCT transport.conductivity_model=${LCT}; \
-              ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_LCT transport.conductivity_model=${LCT} transport.conductivity_niter=30 tran_eval.lct_ref_tol=1.e-6; \
-            done; \
-            make realclean; \
-            if [ $? -ne 0 ]; then exit 1; fi; \
-            printf "\n-------- Simple (LiDryer, LCT models not compiled in) --------\n"; \
-            make -j ${{env.NPROCS}} Eos_Model=Fuego Chemistry_Model=LiDryer Transport_Model=Simple USE_LCT_TRANSPORT=FALSE TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}; \
-            ./Pele2d.gnu.TPROF.ex inputs.2d_Simple; \
-            ./Pele2d.gnu.TPROF.ex inputs.2d_Simple_Matrix; \
-            make realclean; \
-            if [ $? -ne 0 ]; then exit 1; fi; \
+          if [ "${{matrix.comp}}" = gnu ]; then
+            printf "\n-------- Simple (LiDryer, multicomponent diffusion) --------\n"
+            make -j $(nproc) Eos_Model=Fuego Chemistry_Model=LiDryer Transport_Model=Simple ${MAKE_ARGS}
+            run_simple
+            make realclean
+            printf "\n-------- Simple (LiDryer, LCT models not compiled in) --------\n"
+            make -j $(nproc) Eos_Model=Fuego Chemistry_Model=LiDryer Transport_Model=Simple USE_LCT_TRANSPORT=FALSE ${MAKE_ARGS}
+            ${EXE} inputs.2d_Simple
+            ${EXE} inputs.2d_Simple_Matrix
+            make realclean
           fi
-      - name: Transport ccache report
-        working-directory: ${{env.TRANSPORT_WORKING_DIRECTORY}}
-        run: |
-          ccache -s
-          du -hs ${HOME}/.cache/ccache
       - name: Test EOS
-        working-directory: ${{env.EOS_WORKING_DIRECTORY}}
+        working-directory: Testing/Exec/EosEval
         run: |
-          echo "::add-matcher::${{github.workspace}}/PelePhysics-${{matrix.comp}}/.github/problem-matchers/gcc.json"
-          if [ "${{matrix.comp}}" == 'hip' ]; then source /etc/profile.d/rocm.sh; fi;
-          if [ "${{matrix.comp}}" == 'sycl' ]; then source /opt/intel/oneapi/setvars.sh || true; fi;
-          ccache -z
-          for TYPE in Fuego GammaLaw Soave-Redlich-Kwong Manifold; do \
-            if [ "${TYPE}" == 'Fuego' ] || [ "${TYPE}" == 'Soave-Redlich-Kwong' ]; then CHEMISTRY=LiDryer; else CHEMISTRY=Null; fi; \
-            if [ "${TYPE}" == 'Soave-Redlich-Kwong' ]; then TRANSPORT=Simple; else TRANSPORT=Constant; fi; \
-            if [ "${TYPE}" == 'Manifold' ]; then INPUTFILE=inputs.2d.table2d; else INPUTFILE=inputs.2d; fi; \
-            printf "\n-------- ${TYPE} --------\n"; \
-            if [ "${TYPE}" != 'Manifold' ] || [ "${{matrix.comp}}" != 'sycl' ]; then \
-              make -j ${{env.NPROCS}} Eos_Model=${TYPE} Chemistry_Model=${CHEMISTRY} Transport_Model=${TRANSPORT} TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}; \
-            fi; \
-            if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
-              ./Pele2d.${{matrix.comp}}.TPROF.ex ${INPUTFILE}; \
-              if [ "${TYPE}" == 'Manifold' ]; then \
-                 ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.2d.network
-              fi; \
-            fi; \
-            make realclean; \
-            if [ $? -ne 0 ]; then exit 1; fi; \
+          for TYPE in Fuego GammaLaw Soave-Redlich-Kwong Manifold; do
+            printf "\n-------- ${TYPE} --------\n"
+            case ${TYPE} in
+              Fuego)               CHEMISTRY=LiDryer; TRANSPORT=Constant ;;
+              Soave-Redlich-Kwong) CHEMISTRY=LiDryer; TRANSPORT=Simple ;;
+              *)                   CHEMISTRY=Null;    TRANSPORT=Constant ;;
+            esac
+            if [ ${TYPE} = Manifold ] && [ ${BUILD_MANIFOLD} != true ]; then continue; fi
+            make -j $(nproc) Eos_Model=${TYPE} Chemistry_Model=${CHEMISTRY} Transport_Model=${TRANSPORT} ${MAKE_ARGS}
+            if [ ${RUN_TESTS} = true ]; then
+              if [ ${TYPE} = Manifold ]; then
+                ${EXE} inputs.2d.table2d
+                ${EXE} inputs.2d.network
+              else
+                ${EXE} inputs.2d
+              fi
+            fi
+            make realclean
           done
-      - name: EOS ccache report
-        working-directory: ${{env.EOS_WORKING_DIRECTORY}}
-        run: |
-          ccache -s
-          du -hs ${HOME}/.cache/ccache
       - name: Test Integration
-        working-directory: ${{env.REACT_WORKING_DIRECTORY}}
+        working-directory: Testing/Exec/ReactEval
         run: |
-          echo "::add-matcher::${{github.workspace}}/PelePhysics-${{matrix.comp}}/.github/problem-matchers/gcc.json"
-          if [ "${{matrix.comp}}" == 'hip' ]; then source /etc/profile.d/rocm.sh; fi;
-          if [ "${{matrix.comp}}" == 'sycl' ]; then source /opt/intel/oneapi/setvars.sh || true; fi;
-          ccache -z
-          make -j ${{env.NPROCS}} Eos_Model=Fuego Chemistry_Model=drm19 TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
-          if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
-            for TYPE in Cvode Arkode RK64; do \
-              printf "\n-------- ${TYPE} --------\n"; \
-              ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.3d_Array4 ode.dt=1.e-05 ode.ndt=100 chem_integrator="Reactor${TYPE}"; \
-              ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.3d_1dArray ode.dt=1.e-05 ode.ndt=100 chem_integrator="Reactor${TYPE}"; \
-              if [ $? -ne 0 ]; then exit 1; fi; \
-            done \
-          fi;
-          make realclean
-          make -j ${{env.NPROCS}} Eos_Model=Fuego Chemistry_Model=LiDryer TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
-          if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
-            for TYPE in Cvode Arkode RK64; do \
-              printf "\n-------- ${TYPE} --------\n"; \
-               ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.3d_Array4 fuel_name=H2 ode.dt=1.e-05 ode.ndt=100 chem_integrator="Reactor${TYPE}"; \
-               ./Pele2d.${{matrix.comp}}.TPROF.ex inputs.3d_1dArray fuel_name=H2 ode.dt=1.e-05 ode.ndt=100 chem_integrator="Reactor${TYPE}"; \
-              if [ $? -ne 0 ]; then exit 1; fi; \
-            done \
-          fi
-          make realclean
-      - name: Integration ccache report
-        working-directory: ${{env.REACT_WORKING_DIRECTORY}}
-        run: |
-          ccache -s
-          du -hs ${HOME}/.cache/ccache
+          # Mechanism, then any extra run arguments
+          for SPEC in "drm19" "LiDryer fuel_name=H2"; do
+            read -r CHEMISTRY EXTRA <<< "${SPEC}"
+            printf "\n-------- ${CHEMISTRY} --------\n"
+            make -j $(nproc) Eos_Model=Fuego Chemistry_Model=${CHEMISTRY} ${MAKE_ARGS}
+            if [ ${RUN_TESTS} = true ]; then
+              for TYPE in Cvode Arkode RK64; do
+                printf "\n-------- ${TYPE} --------\n"
+                for INPUT in inputs.3d_Array4 inputs.3d_1dArray; do
+                  ${EXE} ${INPUT} ${EXTRA} ode.dt=1.e-05 ode.ndt=100 chem_integrator="Reactor${TYPE}"
+                done
+              done
+            fi
+            make realclean
+          done
       - name: Test Ignition delay
-        working-directory: ${{env.IGNDELAY_WORKING_DIRECTORY}}
+        if: env.RUN_TESTS == 'true'
+        working-directory: Testing/Exec/IgnitionDelay
         run: |
-          echo "::add-matcher::${{github.workspace}}/PelePhysics-${{matrix.comp}}/.github/problem-matchers/gcc.json"
-          if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
-              python -m pip install --upgrade pip
-              pip install numpy
-              ccache -z
-              make -j ${{env.NPROCS}} Eos_Model=Fuego Chemistry_Model=dodecane_lu TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
-              bash exec_ignDelay.sh firstpass
-              python check_ignDelay.py
-              if [ $? -ne 0 ]; then exit 1; fi; \
-              rm log PPreaction.txt inputs/inputs.0d_refine
-              make realclean
-              make -j ${{env.NPROCS}} Eos_Model=Manifold Transport_Model=Manifold Manifold_Dim=1 Chemistry_Model=Null TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
-              bash exec_ignDelay.sh manifold
-              python check_ignDelay.py 0.0766 10
-              if [ $? -ne 0 ]; then exit 1; fi; \
-          fi;
+          pip install numpy
+          make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu ${MAKE_ARGS}
+          bash exec_ignDelay.sh firstpass
+          python check_ignDelay.py
+          rm log PPreaction.txt inputs/inputs.0d_refine
           make realclean
-      - name: Ignition delay ccache report
-        working-directory: ${{env.IGNDELAY_WORKING_DIRECTORY}}
-        run: |
-          ccache -s
-          du -hs ${HOME}/.cache/ccache
+          make -j $(nproc) Eos_Model=Manifold Transport_Model=Manifold Manifold_Dim=1 Chemistry_Model=Null ${MAKE_ARGS}
+          bash exec_ignDelay.sh manifold
+          python check_ignDelay.py 0.0766 10
+          make realclean
       - name: Test Jacobian
-        working-directory: ${{env.JAC_WORKING_DIRECTORY}}
+        if: env.RUN_TESTS == 'true'
+        working-directory: Testing/Exec/Jacobian
         run: |
-          echo "::add-matcher::${{github.workspace}}/PelePhysics-${{matrix.comp}}/.github/problem-matchers/gcc.json"
-          if [ "${{matrix.comp}}" == 'gnu' ] || [ "${{matrix.comp}}" == 'llvm' ]; then \
-              ccache -z
-              cd ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Support/ceptr
-              poetry install
-              poetry run qssa -f ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Mechanisms/dodecane_lu_qss/skeletal.yaml -n ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Mechanisms/dodecane_lu_qss/non_qssa_list.yaml
-              poetry run convert -f ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Mechanisms/dodecane_lu_qss/qssa.yaml --qss_format_input ${{github.workspace}}/PelePhysics-${{matrix.comp}}/Mechanisms/dodecane_lu_qss/qssa_input_non_optimized.toml --qss_symbolic_jacobian
-              cd ${{env.JAC_WORKING_DIRECTORY}}
-              make TPL DEBUG=TRUE TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}
-              make -j ${{env.NPROCS}} Eos_Model=Fuego Chemistry_Model=dodecane_lu_qss DEBUG=TRUE TINY_PROFILE=TRUE USE_CCACHE=TRUE ${{matrix.amrex_build_args}}
-              ./Pele3d.${{matrix.comp}}.DEBUG.TPROF.ex; \
-              if [ $? -ne 0 ]; then exit 1; fi; \
-          fi;
+          MECH=${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss
+          (
+            cd ${PELE_PHYSICS_HOME}/Support/ceptr
+            poetry install
+            poetry run qssa -f ${MECH}/skeletal.yaml -n ${MECH}/non_qssa_list.yaml
+            poetry run convert -f ${MECH}/qssa.yaml --qss_format_input ${MECH}/qssa_input_non_optimized.toml --qss_symbolic_jacobian
+          )
+          make TPL DEBUG=TRUE TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}
+          make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu_qss DEBUG=TRUE TINY_PROFILE=TRUE USE_CCACHE=TRUE ${{matrix.amrex_build_args}}
+          ./Pele3d.${{matrix.comp}}.DEBUG.TPROF.ex
           make realclean
-      - name: Jacobian ccache report
-        working-directory: ${{env.JAC_WORKING_DIRECTORY}}
+      - name: Ccache Report
+        if: always()
         run: |
           ccache -s
           du -hs ${HOME}/.cache/ccache
