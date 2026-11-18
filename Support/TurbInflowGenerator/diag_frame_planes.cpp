@@ -30,7 +30,7 @@ write_frame_plane(
   pltfile.fillPatchFromPlt(save_level, geom, comp, 0, 1, mf);
   Box tbx{{0, 0, 0}, {bg[0] + 2, bg[1] + 2, 0}};
   FArrayBox TMP(tbx, 1);
-  TMP.setVal(1.2e34);
+  TMP.setVal<RunOn::Device>(1.2e34);
 
   const auto& pltarr = mf[0].const_array();
   const auto& planearr = TMP.array();
@@ -44,8 +44,8 @@ write_frame_plane(
   ifsh << ifsd.tellp() << std::endl;
   TMP.writeOn(ifsd);
   amrex::Print() << "for comp = " << comp << " and k = " << k
-                 << ": minval = " << TMP.min(0) << ", maxval = " << TMP.max(0)
-                 << std::endl;
+                 << ": minval = " << TMP.min<RunOn::Device>(0)
+                 << ", maxval = " << TMP.max<RunOn::Device>(0) << std::endl;
 }
 } // namespace
 

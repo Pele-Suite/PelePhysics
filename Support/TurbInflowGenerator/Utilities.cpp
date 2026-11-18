@@ -56,33 +56,6 @@ write_meshmap_trailer(
                     "coordinate\n";
 }
 
-// Map from save domain (z-normal, x,y-tangential) to input domain (arbitrary)
-IntVect
-index_mapper(
-  const IntVect& idx_in,
-  const IntVect& dim_map,
-  const Box& domain,
-  const IntVect& periodic)
-{
-  IntVect idx_out;
-  // periodic directions - populate periodically
-  // non periodic directions - FOExtrap
-  // new x and y are shifted up/right by 1 cell
-  // new z-direction must be a single cell width
-  for (int idim = 0; idim < 2; idim++) {
-    idx_out[dim_map[idim]] =
-      periodic[dim_map[idim]]
-        ? domain.smallEnd(dim_map[idim]) +
-            (domain.length(dim_map[idim]) + idx_in[idim] - 1) %
-              domain.length(dim_map[idim])
-        : amrex::Clamp(
-            idx_in[idim] - 1, domain.smallEnd(dim_map[idim]),
-            domain.bigEnd(dim_map[idim]));
-  }
-  idx_out[dim_map[2]] = idx_in[2];
-  return idx_out;
-}
-
 // -----------------------------------------------------------
 // Read a binary file
 // INPUTS/OUTPUTS:

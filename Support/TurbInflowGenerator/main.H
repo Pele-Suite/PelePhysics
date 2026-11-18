@@ -7,6 +7,7 @@
 #include "AMReX_ParmParse.H"
 #include <AMReX_ParallelDescriptor.H>
 #include <AMReX_FArrayBox.H>
+#include <AMReX_Algorithm.H>
 
 #include "PltFileManager.H"
 #include <MeshMapEvaluatorInputs.H>
@@ -34,11 +35,34 @@ void write_meshmap_trailer(
   const amrex::RealBox& probDomain,
   const amrex::IntVect& dim_map);
 
-amrex::IntVect index_mapper(
+/**
+ * Index in the plotfile of turbinflow plane cell \p idx_in: the plane's
+ * x and y are shifted up/right by one cell and mapped onto plotfile axes
+ * dim_map[0] and dim_map[1], periodically or by first-order extrapolation
+ * (clamping) according to \p periodic; its z is the plotfile's axis
+ * dim_map[2], a single cell wide.  Called from device kernels.
+ */
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::IntVect
+index_mapper(
   const amrex::IntVect& idx_in,
   const amrex::IntVect& dim_map,
   const amrex::Box& domain,
-  const amrex::IntVect& periodic);
+  const amrex::IntVect& periodic)
+{
+  amrex::IntVect idx_out;
+  for (int idim = 0; idim < 2; idim++) {
+    idx_out[dim_map[idim]] =
+      periodic[dim_map[idim]]
+        ? domain.smallEnd(dim_map[idim]) +
+            (domain.length(dim_map[idim]) + idx_in[idim] - 1) %
+              domain.length(dim_map[idim])
+        : amrex::Clamp(
+            idx_in[idim] - 1, domain.smallEnd(dim_map[idim]),
+            domain.bigEnd(dim_map[idim]));
+  }
+  idx_out[dim_map[2]] = idx_in[2];
+  return idx_out;
+}
 
 void read_binary(
   const std::string& iname,

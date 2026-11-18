@@ -96,15 +96,17 @@ readHIT(HITData* a_data)
   a_data->d_winput =
     (amrex::Real*)amrex::The_Arena()->alloc(nx * ny * nz * sizeof(amrex::Real));
 
-  for (int i = 0; i < nx; i++) {
-    a_data->d_xarray[i] = xarray[i];
-    a_data->d_xdiff[i] = xdiff[i];
-  }
-  for (int i = 0; i < nx * ny * nz; i++) {
-    a_data->d_uinput[i] = uinput[i];
-    a_data->d_vinput[i] = vinput[i];
-    a_data->d_winput[i] = winput[i];
-  }
+  // The_Arena is device memory on GPU builds
+  amrex::Gpu::copy(
+    amrex::Gpu::hostToDevice, xarray.begin(), xarray.end(), a_data->d_xarray);
+  amrex::Gpu::copy(
+    amrex::Gpu::hostToDevice, xdiff.begin(), xdiff.end(), a_data->d_xdiff);
+  amrex::Gpu::copy(
+    amrex::Gpu::hostToDevice, uinput.begin(), uinput.end(), a_data->d_uinput);
+  amrex::Gpu::copy(
+    amrex::Gpu::hostToDevice, vinput.begin(), vinput.end(), a_data->d_vinput);
+  amrex::Gpu::copy(
+    amrex::Gpu::hostToDevice, winput.begin(), winput.end(), a_data->d_winput);
 }
 
 void
@@ -167,8 +169,8 @@ turbinflow_from_turb_box(std::ofstream& ifsd, std::ofstream& ifsh)
       Box tbx(sm, bg);
       TMP.resize(tbx, 1);
       const auto& planearr = TMP.array();
-      ParallelFor(tbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        const IntVect idx_plane{i, j, k};
+      ParallelFor(tbx, [=] AMREX_GPU_DEVICE(int i, int j, int kp) noexcept {
+        const IntVect idx_plane{i, j, kp};
         const IntVect idx_plt =
           index_mapper(idx_plane, dim_map, box_turb, {1, 1, 1});
         planearr(idx_plane) = fab(idx_plt, dim_map[d]);
@@ -176,8 +178,8 @@ turbinflow_from_turb_box(std::ofstream& ifsd, std::ofstream& ifsh)
       ifsh << ifsd.tellp() << std::endl;
       TMP.writeOn(ifsd);
       amrex::Print() << "for d = " << d << " and k = " << k
-                     << ": minval = " << TMP.min(0)
-                     << ", maxval = " << TMP.max(0) << std::endl;
+                     << ": minval = " << TMP.min<RunOn::Device>(0)
+                     << ", maxval = " << TMP.max<RunOn::Device>(0) << std::endl;
     }
   }
 

@@ -46,8 +46,8 @@ write_component(
     ifsh << ifsd.tellp() << std::endl;
     TMP.writeOn(ifsd);
     amrex::Print() << "for comp = " << comp << " and k = " << k
-                   << ": minval = " << TMP.min(0) << ", maxval = " << TMP.max(0)
-                   << std::endl;
+                   << ": minval = " << TMP.min<RunOn::Device>(0)
+                   << ", maxval = " << TMP.max<RunOn::Device>(0) << std::endl;
   }
 }
 } // namespace
