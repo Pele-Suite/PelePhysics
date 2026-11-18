@@ -30,7 +30,11 @@ jobs:
   Detect-Changes:
     runs-on: ubuntu-latest
     outputs:
-      has-source-changes: ${{ steps.changes.outputs.src }}
+      # Scheduled and manual runs always build: without a push there is no
+      # previous commit to compare against, so paths-filter only looks at
+      # the last commit, and a docs-only one would skip every job (and leave
+      # the ccaches to be evicted).
+      has-source-changes: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.src }}
     steps:
       - uses: actions/checkout@v6
         with:
