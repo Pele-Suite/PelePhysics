@@ -17,3 +17,9 @@ which clang++
 which flang
 hipcc --version
 hipconfig --full
+
+# Make the toolchain available to the CI job's later steps (each GITHUB_PATH
+# entry is prepended, so add them in reverse to keep rocm.sh's order)
+if [ -n "${GITHUB_PATH:-}" ]; then
+  printf '%s\n' /opt/rocm/opencl/bin /opt/rocm/profiler/bin /opt/rocm/bin /opt/rocm/llvm/bin >> "${GITHUB_PATH}"
+fi
