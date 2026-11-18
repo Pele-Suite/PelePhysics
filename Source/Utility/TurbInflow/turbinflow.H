@@ -49,9 +49,15 @@ AMREX_ENUM(TurbInterpType, linear, quadratic);
  *
  * Obtained from TurbInflow::file_sampler() right before use: it points at the
  * plane chunk currently loaded in memory and holds the through-plane weights
- * for the requested position, so it is invalidated by the next load of that
- * file's planes.  Trivially copyable, so it can be captured by value in a
- * kernel or a boundary-fill functor.
+ * for the requested position.  Trivially copyable, so it can be captured by
+ * value in a kernel or a boundary-fill functor.
+ *
+ * It is only valid until that file's planes are next loaded: any later
+ * file_sampler() call on the same TurbParm may reload them, and a sampler
+ * kept across it then reads the new planes with its old weights, which
+ * gives wrong values without any error.  Get the sampler, launch the
+ * kernels that use it, and get a new one for the next position; on the
+ * host, TurbInflow::sampler_is_current() tells whether one is still valid.
  */
 struct TurbFileSampler
 {
@@ -70,6 +76,9 @@ struct TurbFileSampler
   // Through-plane stencil: planes k0, k0+1, k0+2 with weights cz
   int k0 = 0;
   amrex::GpuArray<amrex::Real, 3> cz = {{0.0, 0.0, 0.0}};
+
+  //! TurbParm::chunk_generation of the chunk this sampler points at
+  int generation = -1;
 
   bool has_map = false;
   pele::physics::MeshMapEvaluator map{};
@@ -227,6 +236,7 @@ struct TurbParm
   int izhi = -1;              // Currently loaded high plane
   amrex::Real szlo = -1.0e12; // Position of the current chunk low plane
   amrex::Real szhi = -1.0e11; // Position of the current chunk high plane
+  int chunk_generation = 0;   // Changed whenever the chunk is reloaded
 
   amrex::IntVect periodicity{AMREX_D_DECL(1, 1, 1)};
   bool istimeplanes = false; // false indicates turb data is periodic normal to
@@ -437,8 +447,18 @@ public:
     int& k0);
 
   //! Load the planes around through-plane position \p z and return the
-  //! sampler of \p a_tp's file there.  Host only; used on the device.
+  //! sampler of \p a_tp's file there.  Host only; used on the device.  The
+  //! sampler is invalidated by the next reload of \p a_tp's planes (see
+  //! TurbFileSampler).
   static TurbFileSampler file_sampler(TurbParm& a_tp, amrex::Real z);
+
+  //! Whether \p s still points at the plane chunk loaded in \p a_tp, i.e.
+  //! no reload has happened since file_sampler() returned it.
+  static bool
+  sampler_is_current(const TurbParm& a_tp, const TurbFileSampler& s) noexcept
+  {
+    return s.generation == a_tp.chunk_generation;
+  }
 
   static void fill_turb_plane(
     const TurbParm& a_tp,

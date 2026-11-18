@@ -368,6 +368,7 @@ TurbInflow::file_sampler(TurbParm& a_tp, const amrex::Real z)
   prepare_planes(a_tp, z, s.cz, s.k0);
 
   s.sd = a_tp.sdata->const_array();
+  s.generation = a_tp.chunk_generation;
   for (int d = 0; d < 2; ++d) {
     s.npboxcells[d] = a_tp.npboxcells[d];
     s.pboxlo[d] = a_tp.pboxlo[d];
@@ -725,6 +726,10 @@ wrap_plane_time(const TurbParm& a_tp, const amrex::Real z)
   const amrex::Real from_start = z - t_start;
   return t_start + from_start - std::floor(from_start / period) * period;
 }
+
+// Source of TurbParm::chunk_generation: one counter for all files and all
+// init() calls, so that a sampler never matches a chunk it did not come from
+int last_chunk_generation = 0;
 } // namespace
 
 void
@@ -770,6 +775,7 @@ TurbInflow::read_turb_planes(TurbParm& a_tp, const amrex::Real z)
   // chunk, possibly on other streams (callers loop over boxes inside an
   // MFIter, which switches streams); let them finish before overwriting it.
   amrex::Gpu::synchronize();
+  a_tp.chunk_generation = ++last_chunk_generation;
 
   for (int iplane = 0; iplane < a_tp.nplane; ++iplane) {
     int k = a_tp.izlo + iplane;
@@ -842,6 +848,11 @@ TurbInflow::fill_turb_plane(
   const amrex::Vector<amrex::Real>& y,
   amrex::FArrayBox& v)
 {
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+    sampler_is_current(a_tp, sampler),
+    "TurbInflow::fill_turb_plane(): sampler is stale, " + a_tp.m_turb_file +
+      " has been reloaded since it was obtained");
+
   const auto& bx = v.box();
   const auto& vd = v.array();
 
