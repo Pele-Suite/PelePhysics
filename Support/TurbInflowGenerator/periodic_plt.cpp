@@ -2,6 +2,56 @@
 
 using namespace amrex;
 
+namespace {
+// Dump plotfile component comp as planes normal to dim_map[2], appending the
+// data to DAT and the offsets to HDR.  A plain function rather than a lambda
+// so that the device lambda inside it is not nested in another lambda.
+void
+write_component(
+  pele::physics::pltfilemanager::PltFileManager& pltfile,
+  const int save_level,
+  const int comp,
+  const Box& domain,
+  const RealBox& probDomain,
+  const int coord_sys,
+  const Array<int, AMREX_SPACEDIM>& perio,
+  const IntVect& bg,
+  const IntVect& dim_map,
+  const IntVect& periodicity,
+  std::ofstream& ifsd,
+  std::ofstream& ifsh)
+{
+  // Construct a FAB on the level we want from the plt file data
+  BoxArray bxs{domain};
+  DistributionMapping dm{bxs, 1};
+  MultiFab mf{bxs, dm, 1, 0};
+  Geometry geom{domain, probDomain, coord_sys, perio};
+  pltfile.fillPatchFromPlt(save_level, geom, comp, 0, 1, mf);
+  const auto& pltarr = mf[0].const_array();
+
+  // Loop over normal direction dumping slices
+  // reverse order (assume flow in positive direction, this works backwards
+  // from outflow with Taylor's hypothesis)
+  for (int k = bg[2] - 1; k >= 0; --k) {
+    Box tbx{{0, 0, k}, {bg[0] + 2, bg[1] + 2, k}};
+    FArrayBox TMP(tbx, 1);
+    const auto& planearr = TMP.array();
+    ParallelFor(tbx, [=] AMREX_GPU_DEVICE(int i, int j, int kp) noexcept {
+      const IntVect idx_plane{i, j, kp};
+      const IntVect idx_plt =
+        index_mapper(idx_plane, dim_map, domain, periodicity);
+      planearr(idx_plane) = pltarr(idx_plt);
+    });
+    TMP.shift({0, 0, -k});
+    ifsh << ifsd.tellp() << std::endl;
+    TMP.writeOn(ifsd);
+    amrex::Print() << "for comp = " << comp << " and k = " << k
+                   << ": minval = " << TMP.min(0) << ", maxval = " << TMP.max(0)
+                   << std::endl;
+  }
+}
+} // namespace
+
 void
 turbinflow_from_periodic_plt(std::ofstream& ifsd, std::ofstream& ifsh)
 {
@@ -103,43 +153,12 @@ turbinflow_from_periodic_plt(std::ofstream& ifsd, std::ofstream& ifsh)
 
   IntVect periodicity{perio[0], perio[1], perio[2]};
 
-  // Dump plotfile component comp as planes normal to dim_map[2], appending
-  // the data to DAT and the offsets to HDR
-  auto write_component = [&](const int comp) {
-    // Construct a FAB on the level we want from the plt file data
-    BoxArray bxs{domain};
-    DistributionMapping dm{bxs, 1};
-    MultiFab mf{bxs, dm, 1, 0};
-    Geometry geom{domain, probDomain, coord_sys, perio};
-    pltfile.fillPatchFromPlt(save_level, geom, comp, 0, 1, mf);
-    const auto& pltarr = mf[0].const_array();
-
-    // Loop over normal direction dumping slices
-    // reverse order (assume flow in positive direction, this works backwards
-    // from outflow with Taylor's hypothesis)
-    for (int k = bg[2] - 1; k >= 0; --k) {
-      Box tbx{{0, 0, k}, {bg[0] + 2, bg[1] + 2, k}};
-      FArrayBox TMP(tbx, 1);
-      const auto& planearr = TMP.array();
-      ParallelFor(tbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-        const IntVect idx_plane{i, j, k};
-        const IntVect idx_plt =
-          index_mapper(idx_plane, dim_map, domain, periodicity);
-        planearr(idx_plane) = pltarr(idx_plt);
-      });
-      TMP.shift({0, 0, -k});
-      ifsh << ifsd.tellp() << std::endl;
-      TMP.writeOn(ifsd);
-      amrex::Print() << "for comp = " << comp << " and k = " << k
-                     << ": minval = " << TMP.min(0)
-                     << ", maxval = " << TMP.max(0) << std::endl;
-    }
-  };
-
   // Output FABS
   for (int d = 0; d < varidx.size(); ++d) {
     std::cout << "Loading component " << d << " ... " << std::flush;
-    write_component(varidx[d]);
+    write_component(
+      pltfile, save_level, varidx[d], domain, probDomain, coord_sys, perio, bg,
+      dim_map, periodicity, ifsd, ifsh);
     std::cout << "done" << std::endl;
   }
 
