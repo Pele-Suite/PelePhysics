@@ -744,6 +744,11 @@ TurbInflow::read_turb_planes(TurbParm& a_tp, amrex::Real z)
                    << z << std::endl;
   }
 
+  // Kernels launched by earlier add_turb() calls may still be reading the
+  // chunk, possibly on other streams (callers loop over boxes inside an
+  // MFIter, which switches streams); let them finish before overwriting it.
+  amrex::Gpu::synchronize();
+
   for (int iplane = 0; iplane < a_tp.nplane; ++iplane) {
     int k = a_tp.izlo + iplane;
     if (!a_tp.istimeplanes) {
@@ -752,6 +757,10 @@ TurbInflow::read_turb_planes(TurbParm& a_tp, amrex::Real z)
     }
     read_one_turb_plane(a_tp, iplane, k);
   }
+
+  // The copies above run on the current stream; the chunk may next be read
+  // from another one.
+  amrex::Gpu::streamSynchronize();
 }
 
 void
@@ -824,7 +833,9 @@ TurbInflow::fill_turb_plane(
   const auto& vd = v.array();
 
   // Freed by a stream callback once the kernel below is done with them, so
-  // no synchronization is needed before they go out of scope
+  // no synchronization is needed before they go out of scope.  The kernel
+  // reads the plane chunk asynchronously: read_turb_planes() synchronizes
+  // before it overwrites the chunk.
   amrex::Gpu::AsyncArray<amrex::Real> x_dev(x.data(), x.size());
   amrex::Gpu::AsyncArray<amrex::Real> y_dev(y.data(), y.size());
   const amrex::Real* xd = x_dev.data();
