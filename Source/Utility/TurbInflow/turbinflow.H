@@ -417,6 +417,9 @@ public:
     }
   }
 
+  //! Load the chunk of planes around \p z, which for a time_periodic file
+  //! must already be wrapped into the file's period (prepare_planes() does
+  //! so).
   static void read_turb_planes(TurbParm& a_tp, amrex::Real z);
 
   static void read_one_turb_plane(TurbParm& a_tp, int iplane, int k);

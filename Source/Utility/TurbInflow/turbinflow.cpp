@@ -707,23 +707,30 @@ TurbInflow::read_one_turb_plane(TurbParm& a_tp, int iplane, int k)
   ifs.close();
 }
 
+namespace {
+// For a time-plane file with time_periodic, bring plane time z into
+// [t_0, t_{kmax-2}): the last plane is only there to interpolate towards.
+// Any other z is returned unchanged.
+amrex::Real
+wrap_plane_time(const TurbParm& a_tp, const amrex::Real z)
+{
+  if (!a_tp.istimeplanes || !a_tp.time_periodic || a_tp.kmax < 2) {
+    return z;
+  }
+  const amrex::Real t_start = a_tp.planeTimes[0];
+  const amrex::Real period = a_tp.planeTimes[a_tp.kmax - 2] - t_start;
+  if (period <= 0.0) {
+    return z;
+  }
+  const amrex::Real from_start = z - t_start;
+  return t_start + from_start - std::floor(from_start / period) * period;
+}
+} // namespace
+
 void
-TurbInflow::read_turb_planes(TurbParm& a_tp, amrex::Real z)
+TurbInflow::read_turb_planes(TurbParm& a_tp, const amrex::Real z)
 {
   if (a_tp.istimeplanes) {
-    // If time_periodic is enabled, wrap the time value to be within bounds
-    if (a_tp.time_periodic) {
-      const amrex::Real t_start = a_tp.planeTimes[0];
-      const amrex::Real t_end = a_tp.planeTimes[a_tp.kmax - 2];
-      const amrex::Real period = t_end - t_start;
-      if (period > 0.0) {
-        // Wrap z to be within [t_start, t_end)
-        amrex::Real z_wrapped = z - t_start;
-        z_wrapped = z_wrapped - std::floor(z_wrapped / period) * period;
-        z = z_wrapped + t_start;
-      }
-    }
-
     if (z < a_tp.planeTimes[0] || z >= a_tp.planeTimes[a_tp.kmax - 2]) {
       amrex::Error(
         "TurbInflow::read_turb_planes(): Requested time (" + std::to_string(z) +
@@ -782,18 +789,9 @@ void
 TurbInflow::prepare_planes(
   TurbParm& a_tp, amrex::Real z, amrex::GpuArray<amrex::Real, 3>& cz, int& k0)
 {
-  // If time_periodic is enabled and istimeplanes, wrap the time value
-  if (a_tp.istimeplanes && a_tp.time_periodic && a_tp.kmax > 0) {
-    const amrex::Real t_start = a_tp.planeTimes[0];
-    const amrex::Real t_end = a_tp.planeTimes[a_tp.kmax - 2];
-    const amrex::Real period = t_end - t_start;
-    if (period > 0.0) {
-      // Wrap z to be within [t_start, t_end)
-      amrex::Real z_wrapped = z - t_start;
-      z_wrapped = z_wrapped - std::floor(z_wrapped / period) * period;
-      z = z_wrapped + t_start;
-    }
-  }
+  // Wrapped once, here, so that the chunk loaded and the stencil computed
+  // below use the same z
+  z = wrap_plane_time(a_tp, z);
 
   const amrex::Real tplanes_lo = a_tp.szlo;
   const amrex::Real tplanes_hi = a_tp.szhi;
