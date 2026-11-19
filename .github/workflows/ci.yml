@@ -13,9 +13,11 @@ on:
 
 concurrency:
   # The event is in the group so that a scheduled run and a push to
-  # development do not cancel each other.
+  # development do not cancel each other. Only PR runs cancel an older run:
+  # on development a cancelled run would not save its caches, so runs queue
+  # (GitHub keeps only the newest pending one).
   group: ${{github.ref}}-${{github.head_ref}}-${{github.event_name}}-ci
-  cancel-in-progress: true
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
 # Run steps with bash -eo pipefail, so a failing command stops the step.
 defaults:
