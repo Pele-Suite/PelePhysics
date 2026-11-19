@@ -1192,7 +1192,7 @@ class SymbolicMath:
 
     def compute_spec_dependencies(self, sym_smp):
         """Routine to compute the sc and sc_qss dependencies."""
-        free_symb = sym_smp.free_symbols
+        free_symb = sorted(sym_smp.free_symbols, key=str)
         sc_depend = []
         scqss_depend = []
         for symbol in free_symb:

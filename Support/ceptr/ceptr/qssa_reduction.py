@@ -166,7 +166,7 @@ def identify_qssa_coupling(mechanism, qssa_species):
             if sum_coeff > 1:
                 qssa_problematic += qssa_species_involved
 
-    return list(set(qssa_problematic))
+    return sorted(set(qssa_problematic))
 
 
 def visualize_qssa(mechanism, reaction_info, qssa_species):

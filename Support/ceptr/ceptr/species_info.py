@@ -89,7 +89,9 @@ class SpeciesInfo:
         self.dict_qssdepend_kr = {}
         self.sc_qss_chain_stop = []
         for symbol in self.dict_qss_species:
-            free_symb = syms.sc_qss_smp[self.dict_qss_species[symbol]].free_symbols
+            free_symb = sorted(
+                syms.sc_qss_smp[self.dict_qss_species[symbol]].free_symbols, key=str
+            )
             qss_symb = []
             sc_symb = []
             g_rt_qss_symb = []
@@ -129,7 +131,9 @@ class SpeciesInfo:
         self.dict_nonqssdepend_kf = {}
         self.dict_nonqssdepend_kr = {}
         for symbol in self.dict_nonqss_species:
-            free_symb = syms.sc_smp[self.dict_nonqss_species[symbol]].free_symbols
+            free_symb = sorted(
+                syms.sc_smp[self.dict_nonqss_species[symbol]].free_symbols, key=str
+            )
             qss_symb = []
             sc_symb = []
             g_rt_qss_symb = []
@@ -167,7 +171,7 @@ class SpeciesInfo:
             if isinstance(symbolic_wdot, float):
                 free_symb = []
             else:
-                free_symb = symbolic_wdot.free_symbols
+                free_symb = sorted(symbolic_wdot.free_symbols, key=str)
 
             qss_symb = []
             sc_symb = []
