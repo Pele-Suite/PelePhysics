@@ -172,6 +172,7 @@ jobs:
           -DPELE_ENABLE_FCOMPARE_FOR_TESTS:BOOL=OFF \
           -DPELE_ENABLE_CLANG_TIDY:BOOL=ON \
           "-DCLANG_TIDY_EXE:STRING=clang-tidy-cache;$(command -v clang-tidy)" \
+          -DCMAKE_C_COMPILER_LAUNCHER:STRING=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER:STRING=ccache \
           ${{ matrix.cmake_args }} \
           ${{ github.workspace }}/${{ matrix.code }}
