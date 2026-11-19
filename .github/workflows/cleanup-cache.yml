@@ -32,7 +32,7 @@ jobs:
             # The run's own PR when it has one (same-repo PRs); otherwise search, keeping
             # only the PR whose head is this commit (a stacked PR also contains it).
             if [ -z "${pr_number}" ]; then
-              pr_number=$(gh pr list --search ${pr_head_sha} --json number,headRefOid \
+              pr_number=$(gh pr list --state all --search ${pr_head_sha} --json number,headRefOid \
                 --jq "map(select(.headRefOid == \"${pr_head_sha}\")) | .[0].number // empty") || true
             fi
             if [ -z "${pr_number}" ]; then
