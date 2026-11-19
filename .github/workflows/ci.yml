@@ -12,11 +12,10 @@ on:
      branches: [development]
 
 concurrency:
-  # The event is in the group so that a scheduled run and a push to
-  # development do not cancel each other. Only PR runs cancel an older run:
-  # on development a cancelled run would not save its caches, so runs queue
+  # Only PR runs cancel an older run: on development a cancelled run would
+  # not save its caches, so runs (pushes and scheduled) queue, one at a time
   # (GitHub keeps only the newest pending one).
-  group: ${{github.ref}}-${{github.head_ref}}-${{github.event_name}}-ci
+  group: ${{github.ref}}-${{github.head_ref}}-ci
   cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
 # Run steps with bash -eo pipefail, so a failing command stops the step.
@@ -162,9 +161,10 @@ jobs:
           submodules: recursive
       - name: Install Ccache
         run: |
-          # AMReX's install script (the same ccache as PeleC); it exits 0 even
-          # if the download fails, so check the result.
-          ${{github.workspace}}/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
+          # AMReX's install script (the same ccache as PeleC), run outside the
+          # checkout since it downloads into the current directory. It exits 0
+          # even if the download fails, so check the result.
+          (cd ${{runner.temp}} && ${{github.workspace}}/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null)
           ccache --version | sed -n 1p
           # Compress hard only when the cache is kept; a PR's new entries are
           # discarded at the end of the job.

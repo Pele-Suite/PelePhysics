@@ -12,11 +12,10 @@ on:
      branches: [development]
 
 concurrency:
-  # The event is in the group so that a scheduled run and a push to
-  # development do not cancel each other. Only PR runs cancel an older run:
-  # on development a cancelled run would not save its caches, so runs queue
+  # Only PR runs cancel an older run: on development a cancelled run would
+  # not save its caches, so runs (pushes and scheduled) queue, one at a time
   # (GitHub keeps only the newest pending one).
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Run steps with bash -eo pipefail, so `build | tee log` fails with the build.
@@ -125,8 +124,10 @@ jobs:
       - name: Install Ccache and clang-tidy-cache
         run: |
           # AMReX's install script, from the PR's amrex pin (the same ccache as
-          # PeleC); it exits 0 even if the download fails, so check the result.
-          ${{ github.workspace }}/${{ matrix.code }}/Submodules/PelePhysics/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
+          # PeleC), run outside the workspace since it downloads into the
+          # current directory. It exits 0 even if the download fails, so check
+          # the result.
+          (cd ${{ runner.temp }} && ${{ github.workspace }}/${{ matrix.code }}/Submodules/PelePhysics/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null)
           ccache --version | sed -n 1p
           # ctcache 1.2.0; the module is a self-contained script
           sudo curl -fsSL https://raw.githubusercontent.com/matus-chochlik/ctcache/e33c063ca6e52b48bcefbc45d46d8c150ffa81ca/src/ctcache/clang_tidy_cache.py -o /usr/local/bin/clang-tidy-cache
