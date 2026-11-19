@@ -302,7 +302,7 @@ Currently, the list of diagnostic contains:
   Ported from the ``isosurface`` tool of `PeleAnalysis <https://github.com/Pele-Suite/PeleAnalysis>`_.
 
 When using `DiagPDF`, `DiagConditional` or `DiagIsosurface`, it is possible to narrow down the diagnostic to a region of interest
-by specifying a set of filters, defining a range of interest for a variable. Note also that for these two diagnostics,
+by specifying a set of filters, defining a range of interest for a variable. Note also that for these diagnostics,
 fine-covered regions are masked (for `DiagIsosurface`, filters remove the parts of the surface lying in cells
 outside the range of interest). With embedded boundaries, cells covered by the EB (zero volume fraction) are masked
 as well, and the volume weights are the fluid volume of the cells (volume fraction times cell volume), so that the
@@ -375,8 +375,10 @@ The following provide examples for each diagnostic in PeleLMeX (in PeleC, all di
 cell centers as corners, with nodes placed by linear interpolation along the cube edges. A few details are worth
 knowing when using the output:
 
-* Each level contributes the cubes whose corners are not covered by a finer level. This leaves a gap about a
-  quarter of a coarse cell wide on each side of a coarse-fine interface, where the surface is not represented.
+* Each level contributes the cubes whose corners are not covered by a finer level. This leaves a gap of
+  :math:`(\Delta x_c - \Delta x_f)/2` on each side of a coarse-fine interface (a quarter of a coarse cell for a
+  refinement ratio of 2), where the surface is not represented. If the state passed to the diagnostic has no
+  ghost cells, the gap widens by :math:`\Delta x_f` on each side.
   The reported area/length is therefore slightly underestimated wherever the surface crosses a coarse-fine
   interface; the deficit shrinks with the coarse cell size.
 * Along non-periodic boundaries the surface stops at the outermost cell centers. Across periodic boundaries the

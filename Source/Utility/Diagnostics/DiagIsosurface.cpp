@@ -10,6 +10,7 @@
 #include <cmath>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 
 namespace {
@@ -398,7 +399,7 @@ getEdgeNode(
     mu = (a_isoVal - v1) / (v2 - v1);
   }
 
-  const int nodeID = static_cast<int>(a_surf.nodes.size()) / a_nNodeComp;
+  const int nodeID = static_cast<int>(a_surf.nodes.size() / a_nNodeComp);
   for (int n = 0; n < a_nNodeComp; ++n) {
     const amrex::Real p1 = a_data(a_iv1, n);
     const amrex::Real p2 = a_data(a_iv2, n);
@@ -472,7 +473,9 @@ DiagIsosurface::init(const std::string& a_prefix, std::string_view a_diagName)
 
   std::string format = "XDMF";
   pp.query("format", format);
-  std::transform(format.begin(), format.end(), format.begin(), ::toupper);
+  std::transform(
+    format.begin(), format.end(), format.begin(),
+    [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
   if (format == "XDMF") {
     m_format = SurfFormat::XDMF;
   } else if (format == "MEF") {
@@ -679,6 +682,7 @@ DiagIsosurface::processDiag(
     //    cube touches. This narrows the gap left at coarse-fine interfaces
     //    on the low side down to the one on the high side.
     // ------------------------------------------------------------------
+    const std::vector<amrex::IntVect> pshifts = period.shiftIntVect();
     for (amrex::MFIter mfi(*hwork); mfi.isValid(); ++mfi) {
       const amrex::Box& vbx = mfi.validbox();
       const int boxIdx = mfi.index();
@@ -699,11 +703,14 @@ DiagIsosurface::processDiag(
           if (same(base) != 0 || msk(base) == 0) {
             return;
           }
-          const auto isects =
-            ba.intersections(amrex::Box(base, base + amrex::IntVect(1)));
-          for (const auto& is : isects) {
-            if (is.first < boxIdx) {
-              return;
+          // Check every periodic image of the cube: across a periodic
+          // boundary another box may touch it in its own index frame.
+          const amrex::Box cube(base, base + amrex::IntVect(1));
+          for (const auto& shift : pshifts) {
+            for (const auto& is : ba.intersections(cube + shift)) {
+              if (is.first < boxIdx) {
+                return;
+              }
             }
           }
         }
@@ -795,7 +802,19 @@ DiagIsosurface::collateAndWrite(
   const bool isIO = PD::IOProcessor();
   const int nProcs = PD::NProcs();
 
-  const int nNodesLoc = static_cast<int>(a_surf.nodes.size()) / a_nNodeComp;
+  // MPI_Gatherv takes int counts and displacements: check that the gathered
+  // arrays fit before narrowing anything to int.
+  amrex::Long totSize = static_cast<amrex::Long>(
+    std::max({a_surf.nodes.size(), a_surf.keys.size(), a_surf.elts.size()}));
+  PD::ReduceLongSum(totSize);
+  if (totSize > static_cast<amrex::Long>(std::numeric_limits<int>::max())) {
+    amrex::Abort(
+      "DiagIsosurface " + m_diagfile +
+      ": surface too large to gather on one rank for output; use format = "
+      "None to only compute the measure");
+  }
+
+  const int nNodesLoc = static_cast<int>(a_surf.nodes.size() / a_nNodeComp);
   const int nEltIntsLoc = static_cast<int>(a_surf.elts.size());
   const std::vector<int> nNodesAll = PD::Gather(nNodesLoc, ioProc);
   const std::vector<int> nEltIntsAll = PD::Gather(nEltIntsLoc, ioProc);
@@ -1034,7 +1053,7 @@ DiagIsosurface::writeMEF(
   if (!ofs.good()) {
     amrex::FileOpenFailed(fileName);
   }
-  ofs << a_time << '\n';
+  ofs << std::setprecision(17) << a_time << '\n';
   ofs << vars << '\n';
   ofs << nElts << " " << nodesPerElt << '\n';
   fab.writeOn(ofs);
