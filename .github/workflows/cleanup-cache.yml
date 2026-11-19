@@ -36,7 +36,7 @@ jobs:
                 --jq "map(select(.headRefOid == \"${pr_head_sha}\")) | .[0].number // empty") || true
             fi
             if [ -z "${pr_number}" ]; then
-              echo "No open PR for ${pr_head_sha}; nothing to clean up."
+              echo "No PR for ${pr_head_sha}; nothing to clean up."
               exit 0
             fi
             echo "Clean up cache for PR ${pr_number}"
