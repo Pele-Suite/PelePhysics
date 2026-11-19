@@ -554,34 +554,6 @@ DiagIsosurface::addVars(amrex::Vector<std::string>& a_varList)
 }
 
 void
-DiagIsosurface::prepare(
-  int a_nlevels,
-  const amrex::Vector<amrex::Geometry>& a_geoms,
-  const amrex::Vector<amrex::BoxArray>& a_grids,
-  const amrex::Vector<amrex::DistributionMapping>& a_dmap,
-  const amrex::Vector<std::string>& a_varNames)
-{
-  if (first_time) {
-    DiagBase::prepare(a_nlevels, a_geoms, a_grids, a_dmap, a_varNames);
-    first_time = false;
-  }
-
-  m_geoms.resize(a_nlevels);
-  m_refRatio.resize(a_nlevels - 1);
-  for (int lev = 0; lev < a_nlevels; lev++) {
-    m_geoms[lev] = a_geoms[lev];
-    if (lev > 0) {
-      amrex::IntVect rr;
-      for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-        rr[d] = static_cast<int>(
-          std::lround(a_geoms[lev - 1].CellSize(d) / a_geoms[lev].CellSize(d)));
-      }
-      m_refRatio[lev - 1] = rr;
-    }
-  }
-}
-
-void
 DiagIsosurface::processDiag(
   int a_nstep,
   const amrex::Real& a_time,
@@ -632,40 +604,26 @@ DiagIsosurface::processDiag(
     // ------------------------------------------------------------------
     // Corner flags. levelBit: the cell belongs to the level (valid cell, or
     // ghost cell overlapping another box, possibly through periodicity).
-    // usableBit: the cell is not fine-covered, not outside a non-periodic
-    // boundary, holds data (without ghost cells from the caller only
-    // same-level ghosts do), and passes the filters.
+    // usableBit: the cell is not covered by a finer level or the EB, not
+    // outside a non-periodic boundary, holds data (without ghost cells from
+    // the caller only same-level ghosts do), and passes the filters.
     // ------------------------------------------------------------------
     amrex::iMultiFab cellType(ba, dm, 1, 1);
     cellType.BuildMask(geom.Domain(), period, 1, 0, 2, 1);
 
-    amrex::iMultiFab flags;
-    if (lev < nlev - 1) {
-      flags = amrex::makeFineMask(
-        ba, dm, amrex::IntVect(1), a_state[lev + 1]->boxArray(),
-        m_refRatio[lev], period, 1, 0);
-    } else {
-      flags.define(ba, dm, 1, 1);
-      flags.setVal(1);
-    }
+    amrex::iMultiFab flags = coveredMask(
+      lev, ba, dm, lev < nlev - 1 ? &a_state[lev + 1]->boxArray() : nullptr, 1);
+    applyFilters(flags, work, nOut);
 
     const bool ghostsFilled = ngState >= 1;
     auto const& flagArr = flags.arrays();
     auto const& typeArr = cellType.const_arrays();
-    auto const& workArr = work.const_arrays();
-    const auto* fdata_p = m_filterData.data();
     amrex::ParallelFor(
       flags, amrex::IntVect(1),
       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
         const int type = typeArr[box_no](i, j, k);
-        bool usable = flagArr[box_no](i, j, k) != 0 && type != 2 &&
-                      (ghostsFilled || type == 1);
-        for (int f = 0; f < nFilt; ++f) {
-          const amrex::Real v = workArr[box_no](i, j, k, nOut + f);
-          if (v < fdata_p[f].m_low_val || v > fdata_p[f].m_high_val) {
-            usable = false;
-          }
-        }
+        const bool usable = flagArr[box_no](i, j, k) != 0 && type != 2 &&
+                            (ghostsFilled || type == 1);
         flagArr[box_no](i, j, k) =
           (usable ? usableBit : 0) | (type == 1 ? levelBit : 0);
       });
@@ -855,25 +813,12 @@ DiagIsosurface::collateAndWrite(
     return;
   }
 
-  const std::string base = outputBase(a_nstep, a_time);
+  const std::string base = outputName(a_nstep, a_time);
   if (m_format == IsoSurfFormat::XDMF) {
     writeXDMF(base, a_time, nodes, eltsAll);
   } else if (m_format == IsoSurfFormat::MEF) {
     writeMEF(base, a_time, nodes, eltsAll);
   }
-}
-
-std::string
-DiagIsosurface::outputBase(int a_nstep, const amrex::Real& a_time) const
-{
-  std::string base = m_diagfile;
-  if (m_interval > 0) {
-    base = amrex::Concatenate(m_diagfile, a_nstep, 6);
-  }
-  if (m_per > 0.0) {
-    base = m_diagfile + std::to_string(a_time);
-  }
-  return base;
 }
 
 void

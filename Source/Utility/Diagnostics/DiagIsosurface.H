@@ -29,13 +29,6 @@ public:
 
   void init(const std::string& a_prefix, std::string_view a_diagName) override;
 
-  void prepare(
-    int a_nlevels,
-    const amrex::Vector<amrex::Geometry>& a_geoms,
-    const amrex::Vector<amrex::BoxArray>& a_grids,
-    const amrex::Vector<amrex::DistributionMapping>& a_dmap,
-    const amrex::Vector<std::string>& a_varNames) override;
-
   void processDiag(
     int a_nstep,
     const amrex::Real& a_time,
@@ -80,8 +73,6 @@ private:
     amrex::Real a_measure,
     amrex::Long a_nElts);
 
-  std::string outputBase(int a_nstep, const amrex::Real& a_time) const;
-
   // Iso-surface definition
   std::string m_isoFieldName;
   amrex::Real m_isoValue{0.0};
@@ -92,9 +83,6 @@ private:
   IsoSurfFormat m_format{IsoSurfFormat::XDMF};
   bool m_writeMeasure{true};
   bool m_measureHeaderDone{false};
-
-  amrex::Vector<amrex::Geometry> m_geoms;
-  amrex::Vector<amrex::IntVect> m_refRatio;
 };
 
 #endif

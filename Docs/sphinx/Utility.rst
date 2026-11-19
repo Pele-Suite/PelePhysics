@@ -384,6 +384,10 @@ knowing when using the output:
 * Along non-periodic boundaries the surface stops at the outermost cell centers. Across periodic boundaries the
   surface is continuous and may extend up to half a cell beyond the domain, so that every part of the domain
   is accounted for exactly once.
+* With embedded boundaries, cubes touching a covered cell are dropped, as their corners hold placeholder values.
+  The surface therefore stops up to one cell before the wall. Cut cells are used like regular cells, with their
+  values at the cell center, which can shift the surface by up to half a cell in the cut-cell layer. This matches
+  the ``isosurface`` tool of PeleAnalysis.
 * Node coordinates are cell-center coordinates of the AMReX grid (computational coordinates under a mesh mapping).
 * With ``format = XDMF``, each call writes a ``<file><step>.xmf`` descriptor and a ``<file><step>.bin`` binary
   file holding the connectivity, node coordinates and interpolated variables. With ``format = MEF``, a single
