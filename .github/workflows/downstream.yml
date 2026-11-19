@@ -5,6 +5,7 @@ on:
    schedule:
      # Twice a week, so the ccaches are refreshed before GitHub evicts them
      # after 7 days without access, with a margin for late scheduled starts.
+     # Jobs without a cache skip the scheduled runs (run-checks).
      - cron: '0 3 * * 1,4'
    push:
      branches: [development]
@@ -35,8 +36,7 @@ jobs:
 
   Run:
     needs: Detect-Changes
-    # No cache to refresh: skipped on the scheduled runs.
-    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true' && github.event_name != 'schedule'
+    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
     name: ${{ matrix.code }} GNU MPI Run [${{ matrix.case }}]
     runs-on: ubuntu-24.04
     strategy:
@@ -81,8 +81,8 @@ jobs:
 
   clang-tidy:
     needs: [Detect-Changes, Run]
-    # After Run, or without it on the scheduled runs, which skip it.
-    if: ${{ !cancelled() && needs['Detect-Changes'].outputs['has-source-changes'] == 'true' && (needs.Run.result == 'success' || needs.Run.result == 'skipped') }}
+    # !failure(): after Run, or without it on the scheduled runs, which skip it.
+    if: ${{ !failure() && !cancelled() && needs['Detect-Changes'].outputs['has-source-changes'] == 'true' }}
     name: ${{ matrix.code }} clang-tidy
     runs-on: ubuntu-24.04
     strategy:
@@ -122,12 +122,12 @@ jobs:
           git submodule update --recursive
           echo "PelePhysics submodule now at $(git rev-parse --short HEAD)"
       - name: Install Ccache and clang-tidy-cache
+        # Outside the workspace: AMReX's script downloads into the current directory.
+        working-directory: ${{ runner.temp }}
         run: |
           # AMReX's install script, from the PR's amrex pin (the same ccache as
-          # PeleC), run outside the workspace since it downloads into the
-          # current directory. It exits 0 even if the download fails, so check
-          # the result.
-          (cd ${{ runner.temp }} && ${{ github.workspace }}/${{ matrix.code }}/Submodules/PelePhysics/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null)
+          # PeleC). It exits 0 even if the download fails, so check the result.
+          ${{ github.workspace }}/${{ matrix.code }}/Submodules/PelePhysics/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
           ccache --version | sed -n 1p
           # ctcache 1.2.0; the module is a self-contained script
           sudo curl -fsSL https://raw.githubusercontent.com/matus-chochlik/ctcache/e33c063ca6e52b48bcefbc45d46d8c150ffa81ca/src/ctcache/clang_tidy_cache.py -o /usr/local/bin/clang-tidy-cache

@@ -5,6 +5,7 @@ on:
    schedule:
      # Twice a week, so the ccaches are refreshed before GitHub evicts them
      # after 7 days without access, with a margin for late scheduled starts.
+     # Jobs without a cache skip the scheduled runs (run-checks).
      - cron: '0 3 * * 1,4'
    push:
      branches: [development]
@@ -29,8 +30,7 @@ jobs:
 
   Formatting:
     needs: Detect-Changes
-    # No cache to refresh: skipped on the scheduled runs.
-    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true' && github.event_name != 'schedule'
+    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Clone
@@ -44,7 +44,6 @@ jobs:
           clangFormatVersion: 20
 
   Codespell:
-    # No cache to refresh: skipped on the scheduled runs.
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
@@ -61,8 +60,7 @@ jobs:
 
   CEPTR:
     needs: Detect-Changes
-    # No cache to refresh: skipped on the scheduled runs.
-    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true' && github.event_name != 'schedule'
+    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -136,10 +134,10 @@ jobs:
       # Manifold models are not built with SYCL.
       BUILD_MANIFOLD: ${{matrix.comp != 'sycl'}}
       CCACHE_MAXSIZE: 1G
-      # Only development (pushes, scheduled and manual runs) saves the cache;
-      # PRs restore development's. The scheduled runs exist to keep it from
-      # being evicted. CCACHE_COMPRESSLEVEL is set from this in Install Ccache.
-      SAVE_CCACHE: ${{github.event_name != 'pull_request' && github.ref == 'refs/heads/development'}}
+      # Only development saves the cache (the scheduled runs keep it from
+      # being evicted); PRs restore it. CCACHE_COMPRESSLEVEL is set from this
+      # in Install Ccache.
+      SAVE_CCACHE: ${{github.ref == 'refs/heads/development'}}
       # ccache for the CMake-built TPLs (SUNDIALS) too: CMake reads these as
       # the default compiler launchers.
       CMAKE_C_COMPILER_LAUNCHER: ccache
@@ -160,11 +158,12 @@ jobs:
         with:
           submodules: recursive
       - name: Install Ccache
+        # Outside the checkout: AMReX's script downloads into the current directory.
+        working-directory: ${{runner.temp}}
         run: |
-          # AMReX's install script (the same ccache as PeleC), run outside the
-          # checkout since it downloads into the current directory. It exits 0
-          # even if the download fails, so check the result.
-          (cd ${{runner.temp}} && ${{github.workspace}}/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null)
+          # AMReX's install script (the same ccache as PeleC). It exits 0 even
+          # if the download fails, so check the result.
+          ${{github.workspace}}/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
           ccache --version | sed -n 1p
           # Compress hard only when the cache is kept; a PR's new entries are
           # discarded at the end of the job.

@@ -1,33 +1,36 @@
 name: Detect-Changes
 
 # Shared by PelePhysics-CI and Downstream-CI: whether this run touches
-# anything but docs, so that docs-only changes skip the builds.
+# anything but docs, so that docs-only changes skip the builds, and whether
+# the jobs without a cache run (not on the scheduled cache refreshes).
 on:
   workflow_call:
     outputs:
       has-source-changes:
         description: "'true' when source files changed, or the run is not filtered"
         value: ${{ jobs.filter.outputs['has-source-changes'] }}
+      run-checks:
+        description: "has-source-changes, except on scheduled runs"
+        value: ${{ jobs.filter.outputs['run-checks'] }}
 
 jobs:
   filter:
     runs-on: ubuntu-latest
-    env:
-      # Only pushes and PRs are filtered. Scheduled and manual runs always
-      # build, so they refresh the ccaches whatever the last commit touched;
-      # without a push there is no previous commit to compare against.
-      FILTER: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
     outputs:
       # Empty when the filter did not run, so those runs build.
       has-source-changes: ${{ steps.changes.outputs.src || 'true' }}
+      run-checks: ${{ github.event_name != 'schedule' && (steps.changes.outputs.src || 'true') == 'true' }}
     steps:
       # On PRs the filter lists the changed files through the API instead.
       - uses: actions/checkout@v6
         if: github.event_name == 'push'
         with:
           fetch-depth: 0
+      # Only pushes and PRs are filtered. Scheduled and manual runs always
+      # build, so they refresh the ccaches whatever the last commit touched;
+      # without a push there is no previous commit to compare against.
       - uses: dorny/paths-filter@v3
-        if: env.FILTER == 'true'
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         id: changes
         with:
           # A file counts only if it matches every pattern, so the '!'

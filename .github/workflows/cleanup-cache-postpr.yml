@@ -18,9 +18,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - name: Clean up ccache
-        # Event values go through the environment, not ${{ }} in the script:
-        # a branch name is chosen by whoever pushed it (forks included), and
-        # pasted into the script it could run shell commands.
+        # Event values go through env, not ${{ }} in the script.
         env:
           pr_head_sha: ${{ github.event.workflow_run.head_sha }}
           pr_number: ${{ github.event.workflow_run.pull_requests[0].number }}
