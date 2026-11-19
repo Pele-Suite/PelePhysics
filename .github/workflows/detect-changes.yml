@@ -17,7 +17,7 @@ jobs:
   filter:
     runs-on: ubuntu-latest
     outputs:
-      # Empty when the filter did not run, so those runs build.
+      # Empty when the filter did not run or failed, so those runs build.
       has-source-changes: ${{ steps.changes.outputs.src || 'true' }}
       run-checks: ${{ github.event_name != 'schedule' && (steps.changes.outputs.src || 'true') == 'true' }}
     steps:
@@ -32,6 +32,10 @@ jobs:
       - uses: dorny/paths-filter@v3
         if: github.event_name == 'push' || github.event_name == 'pull_request'
         id: changes
+        # Fail open: if the filter errors, its output is empty and everything
+        # builds. Otherwise the jobs that need it are skipped, and a skipped
+        # required check counts as passing.
+        continue-on-error: true
         with:
           # A file counts only if it matches every pattern, so the '!'
           # patterns exclude: with the default 'some', '**' matches every
