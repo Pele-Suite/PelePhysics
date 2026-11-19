@@ -135,10 +135,11 @@ struct DiagBins
   index(amrex::Real a_v) const noexcept
   {
     const amrex::Real x = (a_v - low) / width();
-    if (!(x >= 0.0 && x <= static_cast<amrex::Real>(nBins))) {
-      return -1;
+    // Written so that NaN, for which every comparison is false, also gives -1
+    if (x >= 0.0 && x <= static_cast<amrex::Real>(nBins)) {
+      return amrex::min(static_cast<int>(x), nBins - 1);
     }
-    return amrex::min(static_cast<int>(x), nBins - 1);
+    return -1;
   }
 };
 

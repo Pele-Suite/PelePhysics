@@ -286,10 +286,10 @@ DiagFramePlane::processDiag(
   int a_nstep,
   const amrex::Real& a_time,
   const amrex::Vector<const amrex::MultiFab*>& a_state,
-  const amrex::Vector<std::string>& a_stateVar)
+  const amrex::Vector<std::string>& a_varNames)
 {
   // Interpolate data to slice
-  const auto fieldIdx_d = fieldIndices(m_fieldNames, a_stateVar);
+  const auto fieldIdx_d = fieldIndices(m_fieldNames, a_varNames);
   const auto* idx_d_p = fieldIdx_d.dataPtr();
   const int normal = m_normal;
   amrex::Vector<amrex::MultiFab> planeData(a_state.size());

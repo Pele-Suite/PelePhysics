@@ -8,11 +8,11 @@ DiagFilter::queryRange(
   amrex::Real& a_low,
   amrex::Real& a_high)
 {
-  if (a_pp.countval(a_key.c_str()) == 0) {
+  if (a_pp.countval(a_key) == 0) {
     return false;
   }
   amrex::Vector<amrex::Real> range;
-  a_pp.getarr(a_key.c_str(), range, 0, 2);
+  a_pp.getarr(a_key, range, 0, 2);
   a_low = amrex::min<amrex::Real>(range[0], range[1]);
   a_high = amrex::max<amrex::Real>(range[0], range[1]);
   return true;
