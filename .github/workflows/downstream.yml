@@ -62,7 +62,10 @@ jobs:
           git clone --depth 1 --recursive --shallow-submodules --single-branch \
             https://github.com/Pele-Suite/${{ matrix.code }}.git
           cd ${{ matrix.code }}/Submodules/PelePhysics
-          git fetch "${GITHUB_WORKSPACE}/pelephysics-pr"
+          # --depth=1: the checkout is shallow, and git will not fetch its
+          # shallow root into this shallow clone otherwise (it skips it with a
+          # warning, leaving FETCH_HEAD unset).
+          git fetch --depth=1 "${GITHUB_WORKSPACE}/pelephysics-pr" HEAD
           git checkout FETCH_HEAD
           git submodule update --recursive
           echo "PelePhysics submodule now at $(git rev-parse --short HEAD)"
@@ -117,7 +120,10 @@ jobs:
           git clone --depth 1 --recursive --shallow-submodules --single-branch \
             https://github.com/Pele-Suite/${{ matrix.code }}.git
           cd ${{ matrix.code }}/Submodules/PelePhysics
-          git fetch "${GITHUB_WORKSPACE}/pelephysics-pr"
+          # --depth=1: the checkout is shallow, and git will not fetch its
+          # shallow root into this shallow clone otherwise (it skips it with a
+          # warning, leaving FETCH_HEAD unset).
+          git fetch --depth=1 "${GITHUB_WORKSPACE}/pelephysics-pr" HEAD
           git checkout FETCH_HEAD
           git submodule update --recursive
           echo "PelePhysics submodule now at $(git rev-parse --short HEAD)"
