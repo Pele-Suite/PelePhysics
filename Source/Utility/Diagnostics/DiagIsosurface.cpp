@@ -6,17 +6,50 @@
 #include <AMReX_Loop.H>
 
 #include <algorithm>
-#include <cctype>
+#include <array>
 #include <cmath>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <limits>
-#include <sstream>
+#include <unordered_map>
 
 namespace {
 
-constexpr int keySize = 1 + 2 * AMREX_SPACEDIM;
 constexpr int nodesPerElt = AMREX_SPACEDIM;
+
+// A dual-grid edge joins two cells differing by one along a single axis: it
+// is identified by its level, its low cell and that axis.
+constexpr int keySize = AMREX_SPACEDIM + 2;
+using EdgeKey = std::array<int, keySize>;
+
+struct EdgeKeyHash
+{
+  std::size_t operator()(const EdgeKey& a_key) const noexcept
+  {
+    std::size_t h = 0;
+    for (const int v : a_key) {
+      h ^= std::hash<int>{}(v) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    }
+    return h;
+  }
+};
+
+using EdgeMap = std::unordered_map<EdgeKey, int, EdgeKeyHash>;
+
+// Rank-local surface under construction
+struct LocalSurface
+{
+  std::vector<amrex::Real> nodes; // nNodeComp values per node
+  std::vector<int> keys;          // EdgeKey per node, flattened
+  std::vector<int> elts;          // AMREX_SPACEDIM node indices per element
+  EdgeMap edgeToNode;
+  amrex::Real measure{0.0};
+};
+
+// Corner flags built on the device for the marching
+constexpr int usableBit = 1; // corner can be used by a cube
+constexpr int levelBit = 2;  // corner is a cell of the level (valid somewhere)
 
 // Tolerance used when snapping an edge crossing onto a corner, as in
 // PeleAnalysis' isosurface tool.
@@ -344,49 +377,35 @@ constexpr int triTable[256][16] = {
 // clang-format on
 #endif
 
-DiagIsosurface::EdgeKey
-makeEdgeKey(int a_lev, const amrex::IntVect& a_iv1, const amrex::IntVect& a_iv2)
-{
-  // Order the two cells lexicographically so (a,b) and (b,a) share a key.
-  bool firstIsLow = true;
-  for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-    if (a_iv1[d] != a_iv2[d]) {
-      firstIsLow = a_iv1[d] < a_iv2[d];
-      break;
-    }
-  }
-  const amrex::IntVect& lo = firstIsLow ? a_iv1 : a_iv2;
-  const amrex::IntVect& hi = firstIsLow ? a_iv2 : a_iv1;
-  DiagIsosurface::EdgeKey key{};
-  key[0] = a_lev;
-  for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-    key[1 + d] = lo[d];
-    key[1 + AMREX_SPACEDIM + d] = hi[d];
-  }
-  return key;
-}
-
 // Return the index of the node where the iso-level cuts the edge between
-// cells a_iv1 and a_iv2, creating it if this rank has not seen the edge yet.
+// neighbouring cells a_iv1 and a_iv2, creating it if this rank has not seen
+// the edge yet. a_data holds the output fields, iso field first.
 int
 getEdgeNode(
-  DiagIsosurface::LocalSurface& a_surf,
+  LocalSurface& a_surf,
   int a_lev,
   const amrex::IntVect& a_iv1,
   const amrex::IntVect& a_iv2,
   const amrex::Array4<const amrex::Real>& a_data,
-  int a_nNodeComp,
-  int a_isoComp,
+  const amrex::GeometryData& a_geom,
+  int a_nFields,
   amrex::Real a_isoVal)
 {
-  const auto key = makeEdgeKey(a_lev, a_iv1, a_iv2);
-  auto found = a_surf.edgeToNode.find(key);
+  EdgeKey key{};
+  key[0] = a_lev;
+  for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+    key[1 + d] = std::min(a_iv1[d], a_iv2[d]);
+    if (a_iv1[d] != a_iv2[d]) {
+      key[keySize - 1] = d;
+    }
+  }
+  const auto found = a_surf.edgeToNode.find(key);
   if (found != a_surf.edgeToNode.end()) {
     return found->second;
   }
 
-  const amrex::Real v1 = a_data(a_iv1, a_isoComp);
-  const amrex::Real v2 = a_data(a_iv2, a_isoComp);
+  const amrex::Real v1 = a_data(a_iv1, 0);
+  const amrex::Real v2 = a_data(a_iv2, 0);
   // Same snapping logic as PeleAnalysis' VI_doIt
   amrex::Real mu = 0.0;
   if (std::abs(a_isoVal - v1) < isoEps) {
@@ -399,8 +418,16 @@ getEdgeNode(
     mu = (a_isoVal - v1) / (v2 - v1);
   }
 
-  const int nodeID = static_cast<int>(a_surf.nodes.size() / a_nNodeComp);
-  for (int n = 0; n < a_nNodeComp; ++n) {
+  const int nNodeComp = AMREX_SPACEDIM + a_nFields;
+  const int nodeID = static_cast<int>(a_surf.nodes.size() / nNodeComp);
+  const amrex::Real* plo = a_geom.ProbLo();
+  const amrex::Real* dx = a_geom.CellSize();
+  for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+    const amrex::Real x1 = plo[d] + (a_iv1[d] + 0.5) * dx[d];
+    const amrex::Real x2 = plo[d] + (a_iv2[d] + 0.5) * dx[d];
+    a_surf.nodes.push_back(x1 + mu * (x2 - x1));
+  }
+  for (int n = 0; n < a_nFields; ++n) {
     const amrex::Real p1 = a_data(a_iv1, n);
     const amrex::Real p2 = a_data(a_iv2, n);
     a_surf.nodes.push_back(p1 + mu * (p2 - p1));
@@ -414,7 +441,7 @@ getEdgeNode(
 // (length in 2D, area in 3D).
 void
 addElement(
-  DiagIsosurface::LocalSurface& a_surf,
+  LocalSurface& a_surf,
   const std::array<int, nodesPerElt>& a_ids,
   int a_nNodeComp)
 {
@@ -447,6 +474,44 @@ addElement(
 #endif
 }
 
+#ifdef AMREX_USE_GPU
+// Copy of a (i)MultiFab, ghost cells included, in host-accessible memory
+template <class MF>
+MF
+pinnedCopy(const MF& a_src)
+{
+  MF dst(
+    a_src.boxArray(), a_src.DistributionMap(), a_src.nComp(), a_src.nGrowVect(),
+    amrex::MFInfo().SetArena(amrex::The_Pinned_Arena()));
+  amrex::Copy(dst, a_src, 0, 0, a_src.nComp(), a_src.nGrowVect());
+  return dst;
+}
+#endif
+
+// Gather a_loc from every rank onto the IO rank, concatenated in rank order.
+// On the IO rank, a_disp[r] is where rank r's data starts (a_disp has NProcs+1
+// entries, the last one being the total size).
+template <class T>
+std::vector<T>
+gatherToIO(const std::vector<T>& a_loc, std::vector<int>& a_disp)
+{
+  namespace PD = amrex::ParallelDescriptor;
+  const int ioProc = PD::IOProcessorNumber();
+  const int nLoc = static_cast<int>(a_loc.size());
+  const std::vector<int> counts = PD::Gather(nLoc, ioProc);
+  std::vector<T> all;
+  a_disp.clear();
+  if (PD::IOProcessor()) {
+    a_disp.resize(counts.size() + 1, 0);
+    for (std::size_t r = 0; r < counts.size(); ++r) {
+      a_disp[r + 1] = a_disp[r] + counts[r];
+    }
+    all.resize(a_disp.back());
+  }
+  PD::Gatherv(a_loc.data(), nLoc, all.data(), counts, a_disp, ioProc);
+  return all;
+}
+
 } // namespace
 
 void
@@ -471,23 +536,7 @@ DiagIsosurface::init(const std::string& a_prefix, std::string_view a_diagName)
     }
   }
 
-  std::string format = "XDMF";
-  pp.query("format", format);
-  std::transform(
-    format.begin(), format.end(), format.begin(),
-    [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-  if (format == "XDMF") {
-    m_format = SurfFormat::XDMF;
-  } else if (format == "MEF") {
-    m_format = SurfFormat::MEF;
-  } else if (format == "NONE") {
-    m_format = SurfFormat::None;
-  } else {
-    amrex::Abort(
-      "DiagIsosurface: unknown format '" + format +
-      "', expected XDMF, MEF or None");
-  }
-
+  pp.query_enum_case_insensitive("format", m_format);
   pp.query("write_measure", m_writeMeasure);
   pp.query("verbose", m_verbose);
 }
@@ -541,9 +590,7 @@ DiagIsosurface::processDiag(
   const int nlev = static_cast<int>(a_state.size());
   const int nOut = static_cast<int>(m_fieldNames.size());
   const int nFilt = static_cast<int>(m_filters.size());
-  const int nNodeComp = AMREX_SPACEDIM + nOut;
-  const int isoComp = AMREX_SPACEDIM; // m_fieldNames[0] is the iso field
-  const amrex::Real isoVal = m_isoValue;
+  const int nNC = nNodeComp();
 
   amrex::Vector<int> stateComp(nOut);
   for (int n = 0; n < nOut; ++n) {
@@ -560,135 +607,89 @@ DiagIsosurface::processDiag(
     const amrex::Periodicity period = geom.periodicity();
 
     // ------------------------------------------------------------------
-    // Working copy with one ghost cell: coordinates, output fields, then
-    // filter fields. Ghost cells come from the caller where available, and
-    // FillBoundary takes care of same-level and periodic neighbours.
+    // Working copy with one ghost cell: output fields (iso field first),
+    // then filter fields. Ghost cells come from the caller where available,
+    // and FillBoundary takes care of same-level and periodic neighbours.
     // ------------------------------------------------------------------
     const int ngState = state.nGrowVect().min();
     const int ngCopy = std::min(ngState, 1);
-    const int nWork = nNodeComp + nFilt;
-    amrex::MultiFab work(ba, dm, nWork, 1);
-    work.setVal(0.0);
+    amrex::MultiFab work(ba, dm, nOut + nFilt, 1);
+    if (ngCopy == 0) {
+      work.setBndry(0.0);
+    }
     for (int n = 0; n < nOut; ++n) {
-      amrex::MultiFab::Copy(
-        work, state, stateComp[n], AMREX_SPACEDIM + n, 1, ngCopy);
+      amrex::MultiFab::Copy(work, state, stateComp[n], n, 1, ngCopy);
     }
     for (int f = 0; f < nFilt; ++f) {
       amrex::MultiFab::Copy(
-        work, state, m_filters[f].m_fdata.m_filterVarIdx, nNodeComp + f, 1,
-        ngCopy);
+        work, state, m_filters[f].m_fdata.m_filterVarIdx, nOut + f, 1, ngCopy);
     }
-    work.FillBoundary(AMREX_SPACEDIM, nOut + nFilt, period);
-
-    // Cell-center coordinates, computed from the index so that across a
-    // periodic boundary they continue past the domain rather than wrapping:
-    // the surface stays continuous and every element spans one cell.
-    const auto geomdata = geom.data();
-    auto const& warr = work.arrays();
-    amrex::ParallelFor(
-      work, amrex::IntVect(1),
-      [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-        const amrex::Real* plo = geomdata.ProbLo();
-        const amrex::Real* dx = geomdata.CellSize();
-        AMREX_D_TERM(warr[box_no](i, j, k, 0) = plo[0] + (i + 0.5) * dx[0];
-                     , warr[box_no](i, j, k, 1) = plo[1] + (j + 0.5) * dx[1];
-                     , warr[box_no](i, j, k, 2) = plo[2] + (k + 0.5) * dx[2];)
-        amrex::ignore_unused(k);
-      });
+    work.FillBoundary(period);
 
     // ------------------------------------------------------------------
-    // Mask of usable cube corners (1) vs unusable (0): fine-covered,
-    // outside a non-periodic domain boundary, ghost cell left unfilled,
-    // or rejected by a filter.
+    // Corner flags. levelBit: the cell belongs to the level (valid cell, or
+    // ghost cell overlapping another box, possibly through periodicity).
+    // usableBit: the cell is not fine-covered, not outside a non-periodic
+    // boundary, holds data (without ghost cells from the caller only
+    // same-level ghosts do), and passes the filters.
     // ------------------------------------------------------------------
-    amrex::iMultiFab mask;
+    amrex::iMultiFab cellType(ba, dm, 1, 1);
+    cellType.BuildMask(geom.Domain(), period, 1, 0, 2, 1);
+
+    amrex::iMultiFab flags;
     if (lev < nlev - 1) {
-      mask = amrex::makeFineMask(
+      flags = amrex::makeFineMask(
         ba, dm, amrex::IntVect(1), a_state[lev + 1]->boxArray(),
         m_refRatio[lev], period, 1, 0);
     } else {
-      mask.define(ba, dm, 1, 1);
-      mask.setVal(1);
+      flags.define(ba, dm, 1, 1);
+      flags.setVal(1);
     }
 
-    // 1 on the cells of this level (valid cells and ghost cells that
-    // overlap another box of the level, possibly through periodicity),
-    // 0 on coarse-fine and physical-boundary ghost cells.
-    amrex::iMultiFab sameLevel(ba, dm, 1, 1);
-    sameLevel.setVal(0);
-    sameLevel.setVal(1, 0, 1, 0);
-    sameLevel.FillBoundary(period);
-    // Without ghost cells from the caller, only same-level ghosts are filled
     const bool ghostsFilled = ngState >= 1;
-
-    const amrex::Box domain = geom.Domain();
-    const auto dlo = amrex::lbound(domain);
-    const auto dhi = amrex::ubound(domain);
-    const amrex::GpuArray<int, AMREX_SPACEDIM> isPer{
-      AMREX_D_DECL(geom.isPeriodic(0), geom.isPeriodic(1), geom.isPeriodic(2))};
-    auto const& marr = mask.arrays();
-    auto const& sarr = sameLevel.const_arrays();
+    auto const& flagArr = flags.arrays();
+    auto const& typeArr = cellType.const_arrays();
+    auto const& workArr = work.const_arrays();
     const auto* fdata_p = m_filterData.data();
     amrex::ParallelFor(
-      mask, amrex::IntVect(1),
+      flags, amrex::IntVect(1),
       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-        bool ok = marr[box_no](i, j, k) != 0 &&
-                  (ghostsFilled || sarr[box_no](i, j, k) != 0);
-        const int idx[3] = {i, j, k};
-        const int lo[3] = {dlo.x, dlo.y, dlo.z};
-        const int hi[3] = {dhi.x, dhi.y, dhi.z};
-        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-          if (isPer[d] == 0 && (idx[d] < lo[d] || idx[d] > hi[d])) {
-            ok = false;
-          }
-        }
+        const int type = typeArr[box_no](i, j, k);
+        bool usable = flagArr[box_no](i, j, k) != 0 && type != 2 &&
+                      (ghostsFilled || type == 1);
         for (int f = 0; f < nFilt; ++f) {
-          const amrex::Real v = warr[box_no](i, j, k, nNodeComp + f);
+          const amrex::Real v = workArr[box_no](i, j, k, nOut + f);
           if (v < fdata_p[f].m_low_val || v > fdata_p[f].m_high_val) {
-            ok = false;
+            usable = false;
           }
         }
-        marr[box_no](i, j, k) = ok ? 1 : 0;
+        flagArr[box_no](i, j, k) =
+          (usable ? usableBit : 0) | (type == 1 ? levelBit : 0);
       });
-    amrex::Gpu::streamSynchronize();
 
     // The marching itself runs on the host.
-    const amrex::MultiFab* hwork = &work;
-    const amrex::iMultiFab* hmask = &mask;
-    const amrex::iMultiFab* hsame = &sameLevel;
 #ifdef AMREX_USE_GPU
-    amrex::MultiFab hworkStore(
-      ba, dm, nNodeComp, 1,
-      amrex::MFInfo().SetArena(amrex::The_Pinned_Arena()));
-    amrex::iMultiFab hmaskStore(
-      ba, dm, 1, 1, amrex::MFInfo().SetArena(amrex::The_Pinned_Arena()));
-    amrex::MultiFab::Copy(hworkStore, work, 0, 0, nNodeComp, 1);
-    amrex::iMultiFab hsameStore(
-      ba, dm, 1, 1, amrex::MFInfo().SetArena(amrex::The_Pinned_Arena()));
-    amrex::iMultiFab::Copy(hmaskStore, mask, 0, 0, 1, 1);
-    amrex::iMultiFab::Copy(hsameStore, sameLevel, 0, 0, 1, 1);
-    amrex::Gpu::streamSynchronize();
-    hwork = &hworkStore;
-    hmask = &hmaskStore;
-    hsame = &hsameStore;
+    const amrex::MultiFab hwork = pinnedCopy(work);
+    const amrex::iMultiFab hflags = pinnedCopy(flags);
+#else
+    const amrex::MultiFab& hwork = work;
+    const amrex::iMultiFab& hflags = flags;
 #endif
+    amrex::Gpu::streamSynchronize();
 
     // ------------------------------------------------------------------
-    // March over the cubes owned by each box, so that every cube of the
-    // level is processed exactly once:
-    //  - cubes whose lowest corner (base) is a valid cell of the box;
-    //  - cubes whose base is a coarse-fine ghost cell on the low side of
-    //    the box, when this box has the lowest index of all the boxes the
-    //    cube touches. This narrows the gap left at coarse-fine interfaces
-    //    on the low side down to the one on the high side.
+    // March over the cubes owned by each box: a cube is owned by the box
+    // holding, as a valid cell, the first of its corners (in corner order)
+    // that belongs to the level. Periodic images share that corner, so every
+    // cube of the level is processed exactly once. Looping over the box
+    // grown by one on the low side visits every cube touching the box,
+    // including those based in a coarse-fine ghost cell.
     // ------------------------------------------------------------------
-    const std::vector<amrex::IntVect> pshifts = period.shiftIntVect();
-    for (amrex::MFIter mfi(*hwork); mfi.isValid(); ++mfi) {
+    const auto geomdata = geom.data();
+    for (amrex::MFIter mfi(hwork); mfi.isValid(); ++mfi) {
       const amrex::Box& vbx = mfi.validbox();
-      const int boxIdx = mfi.index();
-      auto const& data = hwork->const_array(mfi);
-      auto const& msk = hmask->const_array(mfi);
-      auto const& same = hsame->const_array(mfi);
+      auto const& data = hwork.const_array(mfi);
+      auto const& flg = hflags.const_array(mfi);
 
       amrex::Box loopBox = vbx;
       for (int d = 0; d < AMREX_SPACEDIM; ++d) {
@@ -699,52 +700,47 @@ DiagIsosurface::processDiag(
         const amrex::IntVect base(AMREX_D_DECL(i, j, k));
         amrex::ignore_unused(k);
 
-        if (!vbx.contains(base)) {
-          if (same(base) != 0 || msk(base) == 0) {
-            return;
-          }
-          // Check every periodic image of the cube: across a periodic
-          // boundary another box may touch it in its own index frame.
-          const amrex::Box cube(base, base + amrex::IntVect(1));
-          for (const auto& shift : pshifts) {
-            for (const auto& is : ba.intersections(cube + shift)) {
-              if (is.first < boxIdx) {
-                return;
-              }
-            }
-          }
-        }
-
         std::array<amrex::IntVect, nCorners> corner;
         int caseIdx = 0;
         for (int c = 0; c < nCorners; ++c) {
           corner[c] = base + amrex::IntVect(AMREX_D_DECL(
                                cornerOffset[c][0], cornerOffset[c][1],
                                cornerOffset[c][2]));
-          if (msk(corner[c]) == 0) {
+          if (data(corner[c], 0) < m_isoValue) {
+            caseIdx |= (1 << c);
+          }
+        }
+        if (caseIdx == 0 || caseIdx == (1 << nCorners) - 1) {
+          return;
+        }
+
+        bool ownerFound = false;
+        for (int c = 0; c < nCorners; ++c) {
+          const int f = flg(corner[c]);
+          if ((f & usableBit) == 0) {
             return;
           }
-          if (data(corner[c], isoComp) < isoVal) {
-            caseIdx |= (1 << c);
+          if (!ownerFound && (f & levelBit) != 0) {
+            if (!vbx.contains(corner[c])) {
+              return;
+            }
+            ownerFound = true;
           }
         }
 
         auto node = [&](int e) {
           return getEdgeNode(
             surf, lev, corner[edgeCorners[e][0]], corner[edgeCorners[e][1]],
-            data, nNodeComp, isoComp, isoVal);
+            data, geomdata, nOut, m_isoValue);
         };
 
 #if AMREX_SPACEDIM == 2
         for (int s = 0; s < 4 && segTable[caseIdx][s] != -1; s += 2) {
           std::array<int, nodesPerElt> ids{
             node(segTable[caseIdx][s]), node(segTable[caseIdx][s + 1])};
-          addElement(surf, ids, nNodeComp);
+          addElement(surf, ids, nNC);
         }
 #else
-        if (edgeTable[caseIdx] == 0) {
-          return;
-        }
         std::array<int, nEdges> vert{};
         for (int e = 0; e < nEdges; ++e) {
           if ((edgeTable[caseIdx] & (1 << e)) != 0) {
@@ -755,7 +751,7 @@ DiagIsosurface::processDiag(
           std::array<int, nodesPerElt> ids{
             vert[triTable[caseIdx][t]], vert[triTable[caseIdx][t + 1]],
             vert[triTable[caseIdx][t + 2]]};
-          addElement(surf, ids, nNodeComp);
+          addElement(surf, ids, nNC);
         }
 #endif
       });
@@ -783,29 +779,27 @@ DiagIsosurface::processDiag(
     writeMeasure(a_nstep, a_time, measure, nElts);
   }
 
-  if (m_format != SurfFormat::None) {
-    collateAndWrite(surf, a_nstep, a_time, nNodeComp);
+  if (m_format != IsoSurfFormat::None) {
+    collateAndWrite(surf.nodes, surf.keys, surf.elts, a_nstep, a_time);
   }
 }
 
 void
 DiagIsosurface::collateAndWrite(
-  LocalSurface& a_surf,
+  const std::vector<amrex::Real>& a_nodes,
+  const std::vector<int>& a_keys,
+  const std::vector<int>& a_elts,
   int a_nstep,
-  const amrex::Real& a_time,
-  int a_nNodeComp) const
+  const amrex::Real& a_time) const
 {
   BL_PROFILE("DiagIsosurface::collateAndWrite()");
 
   namespace PD = amrex::ParallelDescriptor;
-  const int ioProc = PD::IOProcessorNumber();
-  const bool isIO = PD::IOProcessor();
-  const int nProcs = PD::NProcs();
 
   // MPI_Gatherv takes int counts and displacements: check that the gathered
   // arrays fit before narrowing anything to int.
   amrex::Long totSize = static_cast<amrex::Long>(
-    std::max({a_surf.nodes.size(), a_surf.keys.size(), a_surf.elts.size()}));
+    std::max({a_nodes.size(), a_keys.size(), a_elts.size()}));
   PD::ReduceLongSum(totSize);
   if (totSize > static_cast<amrex::Long>(std::numeric_limits<int>::max())) {
     amrex::Abort(
@@ -814,59 +808,21 @@ DiagIsosurface::collateAndWrite(
       "None to only compute the measure");
   }
 
-  const int nNodesLoc = static_cast<int>(a_surf.nodes.size() / a_nNodeComp);
-  const int nEltIntsLoc = static_cast<int>(a_surf.elts.size());
-  const std::vector<int> nNodesAll = PD::Gather(nNodesLoc, ioProc);
-  const std::vector<int> nEltIntsAll = PD::Gather(nEltIntsLoc, ioProc);
+  std::vector<int> dispNode, dispKey, dispElt;
+  const std::vector<amrex::Real> nodesAll = gatherToIO(a_nodes, dispNode);
+  const std::vector<int> keysAll = gatherToIO(a_keys, dispKey);
+  std::vector<int> eltsAll = gatherToIO(a_elts, dispElt);
 
-  std::vector<int> rcNode, dispNode, rcKey, dispKey, rcElt, dispElt;
-  std::vector<int> nodeOffset;
-  std::vector<amrex::Real> nodesAll;
-  std::vector<int> keysAll, eltsAll;
-  if (isIO) {
-    rcNode.resize(nProcs);
-    dispNode.resize(nProcs, 0);
-    rcKey.resize(nProcs);
-    dispKey.resize(nProcs, 0);
-    rcElt.resize(nProcs);
-    dispElt.resize(nProcs, 0);
-    nodeOffset.resize(nProcs, 0);
-    for (int r = 0; r < nProcs; ++r) {
-      rcNode[r] = nNodesAll[r] * a_nNodeComp;
-      rcKey[r] = nNodesAll[r] * keySize;
-      rcElt[r] = nEltIntsAll[r];
-      if (r > 0) {
-        dispNode[r] = dispNode[r - 1] + rcNode[r - 1];
-        dispKey[r] = dispKey[r - 1] + rcKey[r - 1];
-        dispElt[r] = dispElt[r - 1] + rcElt[r - 1];
-        nodeOffset[r] = nodeOffset[r - 1] + nNodesAll[r - 1];
-      }
-    }
-    nodesAll.resize(dispNode.back() + rcNode.back());
-    keysAll.resize(dispKey.back() + rcKey.back());
-    eltsAll.resize(dispElt.back() + rcElt.back());
-  }
-  PD::Gatherv(
-    a_surf.nodes.data(), static_cast<int>(a_surf.nodes.size()), nodesAll.data(),
-    rcNode, dispNode, ioProc);
-  PD::Gatherv(
-    a_surf.keys.data(), static_cast<int>(a_surf.keys.size()), keysAll.data(),
-    rcKey, dispKey, ioProc);
-  PD::Gatherv(
-    a_surf.elts.data(), nEltIntsLoc, eltsAll.data(), rcElt, dispElt, ioProc);
-
-  a_surf.nodes.clear();
-  a_surf.keys.clear();
-  a_surf.elts.clear();
-
-  if (!isIO) {
+  if (!PD::IOProcessor()) {
     return;
   }
 
   // Merge the nodes shared between ranks (same level and same edge) and
   // renumber the elements accordingly.
+  const int nNC = nNodeComp();
   const int nNodesTot = static_cast<int>(keysAll.size()) / keySize;
-  std::map<EdgeKey, int> keyToNode;
+  EdgeMap keyToNode;
+  keyToNode.reserve(nNodesTot);
   std::vector<int> remap(nNodesTot);
   std::vector<amrex::Real> nodes;
   nodes.reserve(nodesAll.size());
@@ -874,21 +830,19 @@ DiagIsosurface::collateAndWrite(
     EdgeKey key;
     std::copy_n(&keysAll[g * keySize], keySize, key.begin());
     const int next = static_cast<int>(keyToNode.size());
-    auto res = keyToNode.emplace(key, next);
+    const auto res = keyToNode.emplace(key, next);
     if (res.second) {
       nodes.insert(
-        nodes.end(), nodesAll.begin() + g * a_nNodeComp,
-        nodesAll.begin() + (g + 1) * a_nNodeComp);
+        nodes.end(), nodesAll.begin() + g * nNC,
+        nodesAll.begin() + (g + 1) * nNC);
     }
     remap[g] = res.first->second;
   }
-  keysAll.clear();
-  nodesAll.clear();
 
-  for (int r = 0; r < nProcs; ++r) {
-    for (int n = 0; n < rcElt[r]; ++n) {
-      int& id = eltsAll[dispElt[r] + n];
-      id = remap[nodeOffset[r] + id];
+  for (int r = 0; r < PD::NProcs(); ++r) {
+    const int nodeOffset = dispKey[r] / keySize;
+    for (int n = dispElt[r]; n < dispElt[r + 1]; ++n) {
+      eltsAll[n] = remap[nodeOffset + eltsAll[n]];
     }
   }
 
@@ -899,10 +853,10 @@ DiagIsosurface::collateAndWrite(
   }
 
   const std::string base = outputBase(a_nstep, a_time);
-  if (m_format == SurfFormat::XDMF) {
-    writeXDMF(base, a_time, nodes, eltsAll, a_nNodeComp);
-  } else if (m_format == SurfFormat::MEF) {
-    writeMEF(base, a_time, nodes, eltsAll, a_nNodeComp);
+  if (m_format == IsoSurfFormat::XDMF) {
+    writeXDMF(base, a_time, nodes, eltsAll);
+  } else if (m_format == IsoSurfFormat::MEF) {
+    writeMEF(base, a_time, nodes, eltsAll);
   }
 }
 
@@ -924,11 +878,11 @@ DiagIsosurface::writeXDMF(
   const std::string& a_base,
   const amrex::Real& a_time,
   const std::vector<amrex::Real>& a_nodes,
-  const std::vector<int>& a_elts,
-  int a_nNodeComp) const
+  const std::vector<int>& a_elts) const
 {
-  const size_t nNodes = a_nodes.size() / a_nNodeComp;
-  const size_t nElts = a_elts.size() / nodesPerElt;
+  const int nNC = nNodeComp();
+  const std::size_t nNodes = a_nodes.size() / nNC;
+  const std::size_t nElts = a_elts.size() / nodesPerElt;
   const std::string binFile = a_base + ".bin";
   // The .xmf references the binary file relative to its own location
   const std::string binName = binFile.substr(binFile.find_last_of('/') + 1);
@@ -945,18 +899,18 @@ DiagIsosurface::writeXDMF(
       reinterpret_cast<const char*>(a_elts.data()),
       static_cast<std::streamsize>(sizeof(int) * a_elts.size()));
     std::vector<amrex::Real> buf(nNodes * AMREX_SPACEDIM);
-    for (size_t i = 0; i < nNodes; ++i) {
+    for (std::size_t i = 0; i < nNodes; ++i) {
       for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-        buf[i * AMREX_SPACEDIM + d] = a_nodes[i * a_nNodeComp + d];
+        buf[i * AMREX_SPACEDIM + d] = a_nodes[i * nNC + d];
       }
     }
     ofs.write(
       reinterpret_cast<const char*>(buf.data()),
       static_cast<std::streamsize>(sizeof(amrex::Real) * buf.size()));
     buf.resize(nNodes);
-    for (int n = AMREX_SPACEDIM; n < a_nNodeComp; ++n) {
-      for (size_t i = 0; i < nNodes; ++i) {
-        buf[i] = a_nodes[i * a_nNodeComp + n];
+    for (int n = AMREX_SPACEDIM; n < nNC; ++n) {
+      for (std::size_t i = 0; i < nNodes; ++i) {
+        buf[i] = a_nodes[i * nNC + n];
       }
       ofs.write(
         reinterpret_cast<const char*>(buf.data()),
@@ -968,8 +922,16 @@ DiagIsosurface::writeXDMF(
   if (!xmf.good()) {
     amrex::FileOpenFailed(a_base + ".xmf");
   }
-  const int realSize = static_cast<int>(sizeof(amrex::Real));
-  size_t seek = sizeof(int) * a_elts.size();
+  std::size_t seek = sizeof(int) * a_elts.size();
+  // Binary Real data item starting at byte 'seek' of the .bin file
+  auto floatItem = [&](std::size_t a_dims) {
+    xmf << "        <DataItem Format=\"Binary\" DataType=\"Float\" "
+           "Precision=\""
+        << sizeof(amrex::Real) << "\" Endian=\"Native\" Seek=\"" << seek
+        << "\" Dimensions=\"" << a_dims << "\">" << binName << "</DataItem>\n";
+    seek += sizeof(amrex::Real) * a_dims;
+  };
+
   xmf << std::setprecision(17);
   xmf << "<?xml version=\"1.0\"?>\n";
   xmf << "<Xdmf Version=\"3.0\" "
@@ -995,21 +957,13 @@ DiagIsosurface::writeXDMF(
   xmf << "      </Topology>\n";
   xmf << "      <Geometry GeometryType=\""
       << (AMREX_SPACEDIM == 2 ? "XY" : "XYZ") << "\">\n";
-  xmf << "        <DataItem Format=\"Binary\" DataType=\"Float\" Precision=\""
-      << realSize << "\" Endian=\"Native\" Seek=\"" << seek
-      << "\" Dimensions=\"" << nNodes * AMREX_SPACEDIM << "\">" << binName
-      << "</DataItem>\n";
+  floatItem(nNodes * AMREX_SPACEDIM);
   xmf << "      </Geometry>\n";
-  seek += sizeof(amrex::Real) * nNodes * AMREX_SPACEDIM;
-  for (int n = 0; n < a_nNodeComp - AMREX_SPACEDIM; ++n) {
-    xmf << "      <Attribute Name=\"" << m_fieldNames[n]
+  for (const auto& name : m_fieldNames) {
+    xmf << "      <Attribute Name=\"" << name
         << "\" AttributeType=\"Scalar\" Center=\"Node\">\n";
-    xmf << "        <DataItem Format=\"Binary\" DataType=\"Float\" "
-           "Precision=\""
-        << realSize << "\" Endian=\"Native\" Seek=\"" << seek
-        << "\" Dimensions=\"" << nNodes << "\">" << binName << "</DataItem>\n";
+    floatItem(nNodes);
     xmf << "      </Attribute>\n";
-    seek += sizeof(amrex::Real) * nNodes;
   }
   xmf << "    </Grid>\n";
   xmf << "  </Domain>\n";
@@ -1021,14 +975,14 @@ DiagIsosurface::writeMEF(
   const std::string& a_base,
   const amrex::Real& a_time,
   const std::vector<amrex::Real>& a_nodes,
-  const std::vector<int>& a_elts,
-  int a_nNodeComp) const
+  const std::vector<int>& a_elts) const
 {
   // Same layout as PeleAnalysis' isosurface tool, so its MEF utilities can
   // read the output: label, variable names, element count, a FAB holding the
   // nodes (node-major), then 1-based connectivity.
-  const int nNodes = static_cast<int>(a_nodes.size()) / a_nNodeComp;
-  const size_t nElts = a_elts.size() / nodesPerElt;
+  const int nNC = nNodeComp();
+  const int nNodes = static_cast<int>(a_nodes.size()) / nNC;
+  const std::size_t nElts = a_elts.size() / nodesPerElt;
 
   std::string vars = AMREX_SPACEDIM == 2 ? "X Y" : "X Y Z";
   for (const auto& name : m_fieldNames) {
@@ -1039,11 +993,11 @@ DiagIsosurface::writeMEF(
     amrex::Box(
       amrex::IntVect::TheZeroVector(),
       amrex::IntVect(AMREX_D_DECL(nNodes - 1, 0, 0))),
-    a_nNodeComp, amrex::The_Pinned_Arena());
+    nNC, amrex::The_Cpu_Arena());
   std::copy(a_nodes.begin(), a_nodes.end(), fab.dataPtr());
 
   std::vector<int> elts(a_elts.size());
-  for (size_t n = 0; n < a_elts.size(); ++n) {
+  for (std::size_t n = 0; n < a_elts.size(); ++n) {
     elts[n] = a_elts[n] + 1;
   }
 
