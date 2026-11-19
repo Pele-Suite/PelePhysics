@@ -75,21 +75,6 @@ public:
   amrex::Vector<LevelCells>
   levelCells(const amrex::Vector<const amrex::MultiFab*>& a_state) const;
 
-  // Bin of a_v among a_nBins bins of width a_binWidth from a_low (the upper
-  // bound belongs to the last bin), -1 when a_v is outside the range
-  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE static int binIndex(
-    amrex::Real a_v,
-    amrex::Real a_low,
-    amrex::Real a_binWidth,
-    int a_nBins) noexcept
-  {
-    const amrex::Real x = (a_v - a_low) / a_binWidth;
-    if (!(x >= 0.0 && x <= static_cast<amrex::Real>(a_nBins))) {
-      return -1;
-    }
-    return amrex::min(static_cast<int>(x), a_nBins - 1);
-  }
-
   // Min and max of component a_comp over the cells kept by the masks
   static std::pair<amrex::Real, amrex::Real> maskedMinMax(
     const amrex::Vector<const amrex::MultiFab*>& a_state,
@@ -97,6 +82,17 @@ public:
     int a_comp);
 
 protected:
+  // Output name for the current call: the file prefix with the step number
+  // (int) or the time (per)
+  std::string outputName(int a_nstep, amrex::Real a_time) const;
+
+  // Indices in a_varList of the fields a_names, on the device
+  static amrex::Gpu::DeviceVector<int> fieldIndices(
+    const amrex::Vector<std::string>& a_names,
+    const amrex::Vector<std::string>& a_varList);
+
+  void checkLevel(int a_lev) const;
+
   std::string m_diagfile;
   int m_verbose{0};
   amrex::Real m_per{-1.0};
@@ -106,9 +102,44 @@ protected:
   amrex::Vector<DiagFilter> m_filters{};
   amrex::Gpu::DeviceVector<DiagFilterData> m_filterData;
   // Set by prepare
-  void checkLevel(int a_lev) const;
   amrex::Vector<amrex::Geometry> m_geoms;
   amrex::Vector<amrex::IntVect> m_refRatio;
+};
+
+// Bins of a PDF or of conditional statistics: nBins bins of equal width over
+// [low, high], given by the `range` option or, by default, by the min/max of
+// the binned variable over the processed cells (fromData).
+struct DiagBins
+{
+  int nBins{-1};
+  amrex::Real low{0.0};
+  amrex::Real high{0.0};
+  bool fromData{true};
+
+  // Read the nBins and range options
+  void init(const amrex::ParmParse& a_pp);
+
+  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real width() const noexcept
+  {
+    return (high - low) / nBins;
+  }
+
+  amrex::Real center(int a_n) const noexcept
+  {
+    return low + (a_n + 0.5) * width();
+  }
+
+  // Bin of a_v (the upper bound belongs to the last bin), -1 when a_v is
+  // outside the range
+  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE int
+  index(amrex::Real a_v) const noexcept
+  {
+    const amrex::Real x = (a_v - low) / width();
+    if (!(x >= 0.0 && x <= static_cast<amrex::Real>(nBins))) {
+      return -1;
+    }
+    return amrex::min(static_cast<int>(x), nBins - 1);
+  }
 };
 
 #endif

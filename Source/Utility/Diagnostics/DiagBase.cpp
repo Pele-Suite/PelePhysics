@@ -1,5 +1,4 @@
 #include "DiagBase.H"
-#include "AMReX_ParmParse.H"
 #include "AMReX_MultiFabUtil.H"
 #ifdef AMREX_USE_EB
 #include "AMReX_EB2.H"
@@ -21,17 +20,11 @@ DiagBase::init(const std::string& a_prefix, std::string_view a_diagName)
   AMREX_ASSERT(m_interval > 0 || m_per > 0.0);
 
   // Filters
-  int nFilters = 0;
-  nFilters = pp.countval("filters");
-  amrex::Vector<std::string> filtersName;
-  if (nFilters > 0) {
-    m_filters.resize(nFilters);
-    filtersName.resize(nFilters);
-  }
-  for (int n = 0; n < nFilters; ++n) {
-    pp.get("filters", filtersName[n], n);
-    const std::string filter_prefix = a_prefix + "." + filtersName[n];
-    m_filters[n].init(filter_prefix);
+  amrex::Vector<std::string> filterNames;
+  pp.queryarr("filters", filterNames);
+  m_filters.resize(filterNames.size());
+  for (int n = 0; n < filterNames.size(); ++n) {
+    m_filters[n].init(a_prefix + "." + filterNames[n]);
   }
 }
 
@@ -44,19 +37,17 @@ DiagBase::prepare(
   const amrex::Vector<std::string>& a_varNames)
 {
   if (first_time) {
-    int nFilters = static_cast<int>(m_filters.size());
     // Move the filter data to the device
-    for (int n = 0; n < nFilters; ++n) {
-      m_filters[n].setup(a_varNames);
-    }
     amrex::Vector<DiagFilterData> hostFilterData;
-    for (int n = 0; n < nFilters; ++n) {
-      hostFilterData.push_back(m_filters[n].m_fdata);
+    for (auto& filter : m_filters) {
+      filter.setup(a_varNames);
+      hostFilterData.push_back(filter.m_fdata);
     }
-    m_filterData.resize(nFilters);
+    m_filterData.resize(hostFilterData.size());
     amrex::Gpu::copy(
       amrex::Gpu::hostToDevice, hostFilterData.begin(), hostFilterData.end(),
       m_filterData.begin());
+    first_time = false;
   }
 
   m_geoms.resize(a_nlevels);
@@ -73,23 +64,57 @@ DiagBase::prepare(
 }
 
 namespace {
-// Fill a_vfrac (and its ghost cells) with the EB volume fraction, or with 1
-// without EB. Returns whether an EB is present.
 bool
+hasEB()
+{
+#ifdef AMREX_USE_EB
+  return amrex::EB2::TopIndexSpaceIfPresent() != nullptr;
+#else
+  return false;
+#endif
+}
+
+// Fill a_vfrac (and its ghost cells) with the EB volume fraction (an EB must
+// be present)
+void
 fillVolumeFraction(const amrex::Geometry& a_geom, amrex::MultiFab& a_vfrac)
 {
 #ifdef AMREX_USE_EB
-  if (const auto* ebis = amrex::EB2::TopIndexSpaceIfPresent()) {
-    ebis->getLevel(a_geom).fillVolFrac(a_vfrac, a_geom);
-    return true;
-  }
+  amrex::EB2::TopIndexSpace()->getLevel(a_geom).fillVolFrac(a_vfrac, a_geom);
 #else
-  amrex::ignore_unused(a_geom);
+  amrex::ignore_unused(a_geom, a_vfrac);
 #endif
-  a_vfrac.setVal(1.0);
-  return false;
 }
 } // namespace
+
+std::string
+DiagBase::outputName(int a_nstep, amrex::Real a_time) const
+{
+  std::string name;
+  if (m_interval > 0) {
+    name = amrex::Concatenate(m_diagfile, a_nstep, 6);
+  }
+  if (m_per > 0.0) {
+    name = m_diagfile + std::to_string(a_time);
+  }
+  return name;
+}
+
+amrex::Gpu::DeviceVector<int>
+DiagBase::fieldIndices(
+  const amrex::Vector<std::string>& a_names,
+  const amrex::Vector<std::string>& a_varList)
+{
+  amrex::Vector<int> indices;
+  for (const auto& name : a_names) {
+    indices.push_back(getFieldIndex(name, a_varList));
+  }
+  amrex::Gpu::DeviceVector<int> indices_d(indices.size());
+  amrex::Gpu::copy(
+    amrex::Gpu::hostToDevice, indices.begin(), indices.end(),
+    indices_d.begin());
+  return indices_d;
+}
 
 void
 DiagBase::checkLevel(int a_lev) const
@@ -123,10 +148,11 @@ DiagBase::coveredMask(
 
   amrex::MultiFab vfracLocal;
   if (a_vfrac == nullptr) {
-    vfracLocal.define(a_grids, a_dmap, 1, a_nGrow);
-    if (!fillVolumeFraction(geom, vfracLocal)) {
+    if (!hasEB()) {
       return mask;
     }
+    vfracLocal.define(a_grids, a_dmap, 1, a_nGrow);
+    fillVolumeFraction(geom, vfracLocal);
     a_vfrac = &vfracLocal;
   }
   AMREX_ALWAYS_ASSERT(a_vfrac->nGrowVect().allGE(amrex::IntVect(a_nGrow)));
@@ -184,18 +210,21 @@ DiagBase::levelCells(const amrex::Vector<const amrex::MultiFab*>& a_state) const
     const amrex::MultiFab& state = *a_state[lev];
     const amrex::BoxArray& ba = state.boxArray();
     const amrex::DistributionMapping& dm = state.DistributionMap();
-    amrex::MultiFab vfrac(ba, dm, 1, 0);
-    const bool hasEB = fillVolumeFraction(m_geoms[lev], vfrac);
+    amrex::MultiFab vfrac;
+    if (hasEB()) {
+      vfrac.define(ba, dm, 1, 0);
+      fillVolumeFraction(m_geoms[lev], vfrac);
+    }
 
     cells[lev].mask = coveredMask(
       lev, ba, dm, lev + 1 < nlev ? &a_state[lev + 1]->boxArray() : nullptr, 0,
-      &vfrac);
+      vfrac.ok() ? &vfrac : nullptr);
     applyFilters(cells[lev].mask, state);
 
     // Geometric volume (accounts for 2D-RZ) times the volume fraction
     cells[lev].volume.define(ba, dm, 1, 0);
     m_geoms[lev].GetVolume(cells[lev].volume);
-    if (hasEB) {
+    if (vfrac.ok()) {
       amrex::MultiFab::Multiply(cells[lev].volume, vfrac, 0, 0, 1, 0);
     }
   }
@@ -230,31 +259,23 @@ DiagBase::maskedMinMax(
     vmin = amrex::min(vmin, amrex::get<0>(mm));
     vmax = amrex::max(vmax, amrex::get<1>(mm));
   }
-  amrex::ParallelDescriptor::ReduceRealMin(vmin);
-  amrex::ParallelDescriptor::ReduceRealMax(vmax);
-  return {vmin, vmax};
+  amrex::Real mm[2] = {-vmin, vmax};
+  amrex::ParallelDescriptor::ReduceRealMax(mm, 2);
+  return {-mm[0], mm[1]};
 }
 
 bool
-DiagBase::doDiag(const amrex::Real& a_time, int a_nstep)
+DiagBase::doDiag(const amrex::Real& /*a_time*/, int a_nstep)
 {
-  bool willDo = false;
-  if (m_interval > 0 && (a_nstep % m_interval == 0)) {
-    willDo = true;
-  }
-
-  // TODO: using a_time
-  amrex::ignore_unused(a_time);
-
-  return willDo;
+  // TODO: using a_time (per)
+  return m_interval > 0 && a_nstep % m_interval == 0;
 }
 
 void
 DiagBase::addVars(amrex::Vector<std::string>& a_varList)
 {
-  int nFilters = static_cast<int>(m_filters.size());
-  for (int n = 0; n < nFilters; ++n) {
-    a_varList.push_back(m_filters[n].m_filterVar);
+  for (const auto& filter : m_filters) {
+    a_varList.push_back(filter.m_filterVar);
   }
 }
 
@@ -262,15 +283,19 @@ int
 DiagBase::getFieldIndex(
   const std::string& a_field, const amrex::Vector<std::string>& a_varList)
 {
-  int index = -1;
   for (int n{0}; n < a_varList.size(); ++n) {
     if (a_varList[n] == a_field) {
-      index = n;
-      break;
+      return n;
     }
   }
-  if (index < 0) {
-    amrex::Abort("Field : " + a_field + " wasn't found in available fields");
-  }
-  return index;
+  amrex::Abort("Field : " + a_field + " wasn't found in available fields");
+  return -1;
+}
+
+void
+DiagBins::init(const amrex::ParmParse& a_pp)
+{
+  a_pp.get("nBins", nBins);
+  AMREX_ASSERT(nBins > 0);
+  fromData = !DiagFilter::queryRange(a_pp, "range", low, high);
 }
