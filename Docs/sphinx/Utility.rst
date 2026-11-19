@@ -301,8 +301,11 @@ When using `DiagPDF` or `DiagConditional`, it is possible to narrow down the dia
 by specifying a set of filters, defining a range of interest for a variable. Note also that for these two diagnostics,
 fine-covered regions are masked. With embedded boundaries, cells covered by the EB (zero volume fraction) are masked
 as well, and the volume weights are the fluid volume of the cells (volume fraction times cell volume), so that the
-placeholder values held in covered cells do not contribute. ``DiagFramePlane`` interpolates the state as it is,
-including covered cells. An arbitrary number of diagnostics can be named in a list with the ``diagnostics``
+placeholder values held in covered cells do not contribute. Without a user-defined ``range``, the bins span the
+min/max of the variable over the cells that are kept. ``DiagFramePlane`` interpolates the state as it is,
+including covered cells. With ``conditional_type = Sum``, the variables and the conditioning variable are summed
+over the cells of each bin without volume weighting, while ``Average`` and ``Integral`` are volume weighted.
+An arbitrary number of diagnostics can be named in a list with the ``diagnostics``
 keyword, then each diagnostic name in the list becomes a keyword allowing the type and specific options for
 that diagnostic to be specified.
 The following provide examples for each diagnostic in PeleLMeX (in PeleC, all diagnostics would be prefixed with
@@ -346,9 +349,9 @@ The following provide examples for each diagnostic in PeleLMeX (in PeleC, all di
     peleLM.pdfTest.innerFlame.field_name = temp                     # Filter field
     peleLM.pdfTest.innerFlame.value_inrange = 450.0 1500.0          # Filter definition : value_greater, value_less, value_inrange
     peleLM.pdfTest.nBins = 50                                       # Number of bins for the PDF
-    peleLM.pdfTest.normalized = 1                                   # [OPT, DEF=1] PDF is normalized (i.e. integral is unity) ?
+    peleLM.pdfTest.normalized = 1                                   # [OPT, DEF=1] PDF is normalized (i.e. integral is unity) ? If not, its integral is the total volume (or cell count)
     peleLM.pdfTest.volume_weighted = 1                              # [OPT, DEF=1] Computation of the PDF is volume weighted ?
-    peleLM.pdfTest.range = 0.0 2.0                                  # [OPT, DEF=data min/max] Specify the range of the PDF
+    peleLM.pdfTest.range = 0.0 2.0                                  # [OPT, DEF=min/max over the kept cells] Specify the range of the PDF
     peleLM.pdfTest.field_name = x_velocity                          # Variable of interest
 
 

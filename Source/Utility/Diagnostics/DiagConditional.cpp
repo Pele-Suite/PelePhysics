@@ -1,6 +1,8 @@
 #include "DiagConditional.H"
 #include "AMReX_MultiFabUtil.H"
 
+#include <tuple>
+
 void
 DiagConditional::init(const std::string& a_prefix, std::string_view a_diagName)
 {
@@ -78,11 +80,14 @@ DiagConditional::processDiag(
   const amrex::Vector<const amrex::MultiFab*>& a_state,
   const amrex::Vector<std::string>& a_stateVar)
 {
+  // Cells to process (not covered by a finer level or the EB, passing the
+  // filters) and their fluid volume
+  const int cFieldIdx = getFieldIndex(m_cFieldName, a_stateVar);
+  const auto cells = levelCells(a_state);
+
   // Set conditional range
-  int cFieldIdx = getFieldIndex(m_cFieldName, a_stateVar);
   if (m_usecFieldMinMax) {
-    m_lowBnd = MFVecMin(a_state, cFieldIdx);
-    m_highBnd = MFVecMax(a_state, cFieldIdx);
+    std::tie(m_lowBnd, m_highBnd) = maskedMinMax(a_state, cells, cFieldIdx);
   }
   amrex::Real binWidth =
     (m_highBnd - m_lowBnd) / static_cast<amrex::Real>(m_nBins);
@@ -101,17 +106,9 @@ DiagConditional::processDiag(
 
   // Populate the data from each level on each proc
   for (int lev = 0; lev < a_state.size(); ++lev) {
-
-    // Mask out fine-covered, EB-covered and filtered cells
-    const amrex::iMultiFab mask = cellMask(
-      lev, *a_state[lev],
-      lev + 1 < a_state.size() ? a_state[lev + 1] : nullptr);
     auto const& sarrs = a_state[lev]->const_arrays();
-    auto const& marrs = mask.const_arrays();
-
-    const amrex::MultiFab volume = fluidVolume(
-      lev, a_state[lev]->boxArray(), a_state[lev]->DistributionMap());
-    auto const& varrs = volume.const_arrays();
+    auto const& marrs = cells[lev].mask.const_arrays();
+    auto const& varrs = cells[lev].volume.const_arrays();
 
     auto* cond_d_p = cond_d.dataPtr();
     auto* condAbs_d_p = condAbs_d.dataPtr();
@@ -124,9 +121,9 @@ DiagConditional::processDiag(
         [=, nBins = m_nBins, lowBnd = m_lowBnd] AMREX_GPU_DEVICE(
           int box_no, int i, int j, int k) noexcept {
           if (marrs[box_no](i, j, k) != 0) {
-            int cbin = static_cast<int>(std::floor(
-              (sarrs[box_no](i, j, k, cFieldIdx) - lowBnd) / binWidth));
-            if (cbin >= 0 && cbin < nBins) {
+            const int cbin = binIndex(
+              sarrs[box_no](i, j, k, cFieldIdx), lowBnd, binWidth, nBins);
+            if (cbin >= 0) {
               for (int f{0}; f < nProcessFields; ++f) {
                 int fidx = idx_d_p[f];
                 int binOffset = f * nBins;
@@ -152,9 +149,9 @@ DiagConditional::processDiag(
         [=, nBins = m_nBins, lowBnd = m_lowBnd] AMREX_GPU_DEVICE(
           int box_no, int i, int j, int k) noexcept {
           if (marrs[box_no](i, j, k) != 0) {
-            int cbin = static_cast<int>(std::floor(
-              (sarrs[box_no](i, j, k, cFieldIdx) - lowBnd) / binWidth));
-            if (cbin >= 0 && cbin < nBins) {
+            const int cbin = binIndex(
+              sarrs[box_no](i, j, k, cFieldIdx), lowBnd, binWidth, nBins);
+            if (cbin >= 0) {
               for (int f{0}; f < nProcessFields; ++f) {
                 int fidx = idx_d_p[f];
                 int binOffset = f * nBins;
@@ -174,9 +171,9 @@ DiagConditional::processDiag(
         [=, nBins = m_nBins, lowBnd = m_lowBnd] AMREX_GPU_DEVICE(
           int box_no, int i, int j, int k) noexcept {
           if (marrs[box_no](i, j, k) != 0) {
-            int cbin = static_cast<int>(std::floor(
-              (sarrs[box_no](i, j, k, cFieldIdx) - lowBnd) / binWidth));
-            if (cbin >= 0 && cbin < nBins) {
+            const int cbin = binIndex(
+              sarrs[box_no](i, j, k, cFieldIdx), lowBnd, binWidth, nBins);
+            if (cbin >= 0) {
               for (int f{0}; f < nProcessFields; ++f) {
                 int fidx = idx_d_p[f];
                 int binOffset = f * nBins;
@@ -184,8 +181,7 @@ DiagConditional::processDiag(
                   &(cond_d_p[binOffset + cbin]), sarrs[box_no](i, j, k, fidx));
               }
               amrex::HostDevice::Atomic::Add(
-                &(condAbs_d_p[cbin]),
-                varrs[box_no](i, j, k) * sarrs[box_no](i, j, k, cFieldIdx));
+                &(condAbs_d_p[cbin]), sarrs[box_no](i, j, k, cFieldIdx));
             }
           }
         });
@@ -241,34 +237,6 @@ DiagConditional::processDiag(
   } else if (m_condType == Sum) {
     writeSumDataToFile(a_nstep, a_time, condAbs, cond);
   }
-}
-
-amrex::Real
-DiagConditional::MFVecMin(
-  const amrex::Vector<const amrex::MultiFab*>& a_state, int comp)
-{
-  // TODO: skip fine-covered in search
-  amrex::Real mmin{AMREX_REAL_MAX};
-  for (const auto* st : a_state) {
-    mmin = amrex::min<amrex::Real>(mmin, st->min(comp, 0, true));
-  }
-
-  amrex::ParallelDescriptor::ReduceRealMin(mmin);
-  return mmin;
-}
-
-amrex::Real
-DiagConditional::MFVecMax(
-  const amrex::Vector<const amrex::MultiFab*>& a_state, int comp)
-{
-  // TODO: skip fine-covered in search
-  amrex::Real mmax{AMREX_REAL_LOWEST};
-  for (const auto* st : a_state) {
-    mmax = amrex::max<amrex::Real>(mmax, st->max(comp, 0, true));
-  }
-
-  amrex::ParallelDescriptor::ReduceRealMax(mmax);
-  return mmax;
 }
 
 void

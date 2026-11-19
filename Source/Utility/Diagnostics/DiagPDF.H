@@ -25,10 +25,6 @@ public:
 
   void addVars(amrex::Vector<std::string>& a_varList) override;
 
-  static amrex::Real
-  MFVecMin(const amrex::Vector<const amrex::MultiFab*>& a_state, int comp);
-  static amrex::Real
-  MFVecMax(const amrex::Vector<const amrex::MultiFab*>& a_state, int comp);
   void writePDFToFile(
     int a_nstep,
     const amrex::Real& a_time,

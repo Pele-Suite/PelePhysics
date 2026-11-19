@@ -6,6 +6,7 @@
 #endif
 
 #include <cmath>
+#include <limits>
 
 void
 DiagBase::init(const std::string& a_prefix, std::string_view a_diagName)
@@ -71,17 +72,47 @@ DiagBase::prepare(
   }
 }
 
+namespace {
+// Fill a_vfrac (and its ghost cells) with the EB volume fraction, or with 1
+// without EB. Returns whether an EB is present.
+bool
+fillVolumeFraction(const amrex::Geometry& a_geom, amrex::MultiFab& a_vfrac)
+{
+#ifdef AMREX_USE_EB
+  if (const auto* ebis = amrex::EB2::TopIndexSpaceIfPresent()) {
+    ebis->getLevel(a_geom).fillVolFrac(a_vfrac, a_geom);
+    return true;
+  }
+#else
+  amrex::ignore_unused(a_geom);
+#endif
+  a_vfrac.setVal(1.0);
+  return false;
+}
+} // namespace
+
+void
+DiagBase::checkLevel(int a_lev) const
+{
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+    a_lev >= 0 && a_lev < static_cast<int>(m_geoms.size()),
+    "Diagnostics: level not set up by DiagBase::prepare");
+}
+
 amrex::iMultiFab
 DiagBase::coveredMask(
   int a_lev,
   const amrex::BoxArray& a_grids,
   const amrex::DistributionMapping& a_dmap,
   const amrex::BoxArray* a_fineGrids,
-  int a_nGrow) const
+  int a_nGrow,
+  const amrex::MultiFab* a_vfrac) const
 {
+  checkLevel(a_lev);
   const amrex::Geometry& geom = m_geoms[a_lev];
   amrex::iMultiFab mask;
   if (a_fineGrids != nullptr) {
+    checkLevel(a_lev + 1);
     mask = amrex::makeFineMask(
       a_grids, a_dmap, amrex::IntVect(a_nGrow), *a_fineGrids, m_refRatio[a_lev],
       geom.periodicity(), 1, 0);
@@ -90,22 +121,25 @@ DiagBase::coveredMask(
     mask.setVal(1);
   }
 
-#ifdef AMREX_USE_EB
-  if (const auto* ebis = amrex::EB2::TopIndexSpaceIfPresent()) {
-    amrex::MultiFab vfrac(a_grids, a_dmap, 1, a_nGrow);
-    ebis->getLevel(geom).fillVolFrac(vfrac, geom);
-    auto const& marrs = mask.arrays();
-    auto const& vfarrs = vfrac.const_arrays();
-    amrex::ParallelFor(
-      mask, amrex::IntVect(a_nGrow),
-      [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-        if (vfarrs[box_no](i, j, k) <= 0.0) {
-          marrs[box_no](i, j, k) = 0;
-        }
-      });
-    amrex::Gpu::streamSynchronize();
+  amrex::MultiFab vfracLocal;
+  if (a_vfrac == nullptr) {
+    vfracLocal.define(a_grids, a_dmap, 1, a_nGrow);
+    if (!fillVolumeFraction(geom, vfracLocal)) {
+      return mask;
+    }
+    a_vfrac = &vfracLocal;
   }
-#endif
+  AMREX_ALWAYS_ASSERT(a_vfrac->nGrowVect().allGE(amrex::IntVect(a_nGrow)));
+  auto const& marrs = mask.arrays();
+  auto const& vfarrs = a_vfrac->const_arrays();
+  amrex::ParallelFor(
+    mask, amrex::IntVect(a_nGrow),
+    [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+      if (vfarrs[box_no](i, j, k) <= 0.0) {
+        marrs[box_no](i, j, k) = 0;
+      }
+    });
+  amrex::Gpu::streamSynchronize();
   return mask;
 }
 
@@ -119,6 +153,9 @@ DiagBase::applyFilters(
   if (nFilters == 0) {
     return;
   }
+  AMREX_ALWAYS_ASSERT(a_data.nGrowVect().allGE(a_mask.nGrowVect()));
+  AMREX_ALWAYS_ASSERT(
+    a_firstFilterComp < 0 || a_firstFilterComp + nFilters <= a_data.nComp());
   auto const& marrs = a_mask.arrays();
   auto const& darrs = a_data.const_arrays();
   const auto* fdata_p = m_filterData.data();
@@ -137,36 +174,65 @@ DiagBase::applyFilters(
   amrex::Gpu::streamSynchronize();
 }
 
-amrex::iMultiFab
-DiagBase::cellMask(
-  int a_lev,
-  const amrex::MultiFab& a_state,
-  const amrex::MultiFab* a_fineState) const
+amrex::Vector<DiagBase::LevelCells>
+DiagBase::levelCells(const amrex::Vector<const amrex::MultiFab*>& a_state) const
 {
-  amrex::iMultiFab mask = coveredMask(
-    a_lev, a_state.boxArray(), a_state.DistributionMap(),
-    a_fineState != nullptr ? &a_fineState->boxArray() : nullptr, 0);
-  applyFilters(mask, a_state);
-  return mask;
+  const int nlev = static_cast<int>(a_state.size());
+  amrex::Vector<LevelCells> cells(nlev);
+  for (int lev = 0; lev < nlev; ++lev) {
+    checkLevel(lev);
+    const amrex::MultiFab& state = *a_state[lev];
+    const amrex::BoxArray& ba = state.boxArray();
+    const amrex::DistributionMapping& dm = state.DistributionMap();
+    amrex::MultiFab vfrac(ba, dm, 1, 0);
+    const bool hasEB = fillVolumeFraction(m_geoms[lev], vfrac);
+
+    cells[lev].mask = coveredMask(
+      lev, ba, dm, lev + 1 < nlev ? &a_state[lev + 1]->boxArray() : nullptr, 0,
+      &vfrac);
+    applyFilters(cells[lev].mask, state);
+
+    // Geometric volume (accounts for 2D-RZ) times the volume fraction
+    cells[lev].volume.define(ba, dm, 1, 0);
+    m_geoms[lev].GetVolume(cells[lev].volume);
+    if (hasEB) {
+      amrex::MultiFab::Multiply(cells[lev].volume, vfrac, 0, 0, 1, 0);
+    }
+  }
+  return cells;
 }
 
-amrex::MultiFab
-DiagBase::fluidVolume(
-  int a_lev,
-  const amrex::BoxArray& a_grids,
-  const amrex::DistributionMapping& a_dmap) const
+std::pair<amrex::Real, amrex::Real>
+DiagBase::maskedMinMax(
+  const amrex::Vector<const amrex::MultiFab*>& a_state,
+  const amrex::Vector<LevelCells>& a_cells,
+  int a_comp)
 {
-  const amrex::Geometry& geom = m_geoms[a_lev];
-  amrex::MultiFab volume(a_grids, a_dmap, 1, 0);
-  geom.GetVolume(volume);
-#ifdef AMREX_USE_EB
-  if (const auto* ebis = amrex::EB2::TopIndexSpaceIfPresent()) {
-    amrex::MultiFab vfrac(a_grids, a_dmap, 1, 0);
-    ebis->getLevel(geom).fillVolFrac(vfrac, geom);
-    amrex::MultiFab::Multiply(volume, vfrac, 0, 0, 1, 0);
+  amrex::Real vmin = std::numeric_limits<amrex::Real>::max();
+  amrex::Real vmax = std::numeric_limits<amrex::Real>::lowest();
+  for (int lev = 0; lev < static_cast<int>(a_state.size()); ++lev) {
+    auto const& sarrs = a_state[lev]->const_arrays();
+    auto const& marrs = a_cells[lev].mask.const_arrays();
+    const auto mm = amrex::ParReduce(
+      amrex::TypeList<amrex::ReduceOpMin, amrex::ReduceOpMax>{},
+      amrex::TypeList<amrex::Real, amrex::Real>{}, *a_state[lev],
+      amrex::IntVect(0),
+      [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept
+        -> amrex::GpuTuple<amrex::Real, amrex::Real> {
+        if (marrs[box_no](i, j, k) == 0) {
+          return {
+            std::numeric_limits<amrex::Real>::max(),
+            std::numeric_limits<amrex::Real>::lowest()};
+        }
+        const amrex::Real v = sarrs[box_no](i, j, k, a_comp);
+        return {v, v};
+      });
+    vmin = amrex::min(vmin, amrex::get<0>(mm));
+    vmax = amrex::max(vmax, amrex::get<1>(mm));
   }
-#endif
-  return volume;
+  amrex::ParallelDescriptor::ReduceRealMin(vmin);
+  amrex::ParallelDescriptor::ReduceRealMax(vmax);
+  return {vmin, vmax};
 }
 
 bool
