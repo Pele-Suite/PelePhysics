@@ -26,39 +26,7 @@ defaults:
 
 jobs:
   Detect-Changes:
-    runs-on: ubuntu-latest
-    env:
-      # Only pushes and PRs are filtered. Scheduled and manual runs always
-      # build, so they refresh the ccaches whatever the last commit touched;
-      # without a push there is no previous commit to compare against.
-      FILTER: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
-    outputs:
-      # Empty when the filter did not run, so those runs build.
-      has-source-changes: ${{ steps.changes.outputs.src || 'true' }}
-    steps:
-      # On PRs the filter lists the changed files through the API instead.
-      - uses: actions/checkout@v6
-        if: github.event_name == 'push'
-        with:
-          fetch-depth: 0
-      - uses: dorny/paths-filter@v3
-        if: env.FILTER == 'true'
-        id: changes
-        with:
-          # A file counts only if it matches every pattern, so the '!'
-          # patterns exclude: with the default 'some', '**' matches every
-          # file and a docs-only change still ran everything.
-          predicate-quantifier: 'every'
-          filters: |
-            src:
-              - '**'
-              - '!**/*.rst'
-              - '!Docs/**'
-              - '!Source/Utility/**/*.py'
-              - '!README.md'
-              - '!CONTRIBUTING.md'
-              - '!.codespell*'
-              - '!.gitignore'
+    uses: ./.github/workflows/detect-changes.yml
 
   Formatting:
     needs: Detect-Changes
@@ -194,9 +162,10 @@ jobs:
           submodules: recursive
       - name: Install Ccache
         run: |
-          wget -q https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
-          tar xf ccache-4.8-linux-x86_64.tar.xz
-          sudo cp -f ccache-4.8-linux-x86_64/ccache /usr/local/bin/
+          # AMReX's install script (the same ccache as PeleC); it exits 0 even
+          # if the download fails, so check the result.
+          ${{github.workspace}}/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
+          ccache --version | sed -n 1p
           # Compress hard only when the cache is kept; a PR's new entries are
           # discarded at the end of the job.
           if [ "${SAVE_CCACHE}" = true ]; then level=10; else level=1; fi

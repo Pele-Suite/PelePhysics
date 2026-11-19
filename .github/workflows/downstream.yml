@@ -32,39 +32,7 @@ env:
 
 jobs:
   Detect-Changes:
-    runs-on: ubuntu-latest
-    env:
-      # Only pushes and PRs are filtered. Scheduled and manual runs always
-      # build, so they refresh the ccaches whatever the last commit touched;
-      # without a push there is no previous commit to compare against.
-      FILTER: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
-    outputs:
-      # Empty when the filter did not run, so those runs build.
-      has-source-changes: ${{ steps.changes.outputs.src || 'true' }}
-    steps:
-      # On PRs the filter lists the changed files through the API instead.
-      - uses: actions/checkout@v6
-        if: github.event_name == 'push'
-        with:
-          fetch-depth: 0
-      - uses: dorny/paths-filter@v3
-        if: env.FILTER == 'true'
-        id: changes
-        with:
-          # A file counts only if it matches every pattern, so the '!'
-          # patterns exclude: with the default 'some', '**' matches every
-          # file and a docs-only change still ran everything.
-          predicate-quantifier: 'every'
-          filters: |
-            src:
-              - '**'
-              - '!**/*.rst'
-              - '!Docs/**'
-              - '!Source/Utility/**/*.py'
-              - '!README.md'
-              - '!CONTRIBUTING.md'
-              - '!.codespell*'
-              - '!.gitignore'
+    uses: ./.github/workflows/detect-changes.yml
 
   Run:
     needs: Detect-Changes
@@ -89,7 +57,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           path: pelephysics-pr
-          fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Clone ${{ matrix.code }}, pointing its PelePhysics at this PR
         run: |
@@ -145,7 +112,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           path: pelephysics-pr
-          fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Clone ${{ matrix.code }}, pointing its PelePhysics at this PR
         run: |
@@ -158,9 +124,10 @@ jobs:
           echo "PelePhysics submodule now at $(git rev-parse --short HEAD)"
       - name: Install Ccache and clang-tidy-cache
         run: |
-          wget -q https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
-          tar xf ccache-4.8-linux-x86_64.tar.xz
-          sudo cp -f ccache-4.8-linux-x86_64/ccache /usr/local/bin/
+          # AMReX's install script, from the PR's amrex pin (the same ccache as
+          # PeleC); it exits 0 even if the download fails, so check the result.
+          ${{ github.workspace }}/${{ matrix.code }}/Submodules/PelePhysics/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
+          ccache --version | sed -n 1p
           # ctcache 1.2.0; the module is a self-contained script
           sudo curl -fsSL https://raw.githubusercontent.com/matus-chochlik/ctcache/e33c063ca6e52b48bcefbc45d46d8c150ffa81ca/src/ctcache/clang_tidy_cache.py -o /usr/local/bin/clang-tidy-cache
           sudo chmod +x /usr/local/bin/clang-tidy-cache

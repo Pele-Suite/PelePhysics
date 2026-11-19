@@ -1,0 +1,46 @@
+name: Detect-Changes
+
+# Shared by PelePhysics-CI and Downstream-CI: whether this run touches
+# anything but docs, so that docs-only changes skip the builds.
+on:
+  workflow_call:
+    outputs:
+      has-source-changes:
+        description: "'true' when source files changed, or the run is not filtered"
+        value: ${{ jobs.filter.outputs['has-source-changes'] }}
+
+jobs:
+  filter:
+    runs-on: ubuntu-latest
+    env:
+      # Only pushes and PRs are filtered. Scheduled and manual runs always
+      # build, so they refresh the ccaches whatever the last commit touched;
+      # without a push there is no previous commit to compare against.
+      FILTER: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+    outputs:
+      # Empty when the filter did not run, so those runs build.
+      has-source-changes: ${{ steps.changes.outputs.src || 'true' }}
+    steps:
+      # On PRs the filter lists the changed files through the API instead.
+      - uses: actions/checkout@v6
+        if: github.event_name == 'push'
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v3
+        if: env.FILTER == 'true'
+        id: changes
+        with:
+          # A file counts only if it matches every pattern, so the '!'
+          # patterns exclude: with the default 'some', '**' matches every
+          # file and a docs-only change still ran everything.
+          predicate-quantifier: 'every'
+          filters: |
+            src:
+              - '**'
+              - '!**/*.rst'
+              - '!Docs/**'
+              - '!Source/Utility/**/*.py'
+              - '!README.md'
+              - '!CONTRIBUTING.md'
+              - '!.codespell*'
+              - '!.gitignore'
