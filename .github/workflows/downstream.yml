@@ -31,18 +31,22 @@ env:
 jobs:
   Detect-Changes:
     runs-on: ubuntu-latest
+    env:
+      # Only pushes and PRs are filtered. Scheduled and manual runs always
+      # build, so they refresh the ccaches whatever the last commit touched;
+      # without a push there is no previous commit to compare against.
+      FILTER: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
     outputs:
-      # Scheduled and manual runs always build, so they refresh the ccaches
-      # whatever the last commit touched. Without a push there is no previous
-      # commit to compare against, so the filter does not run for them.
-      has-source-changes: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.src }}
+      # Empty when the filter did not run, so those runs build.
+      has-source-changes: ${{ steps.changes.outputs.src || 'true' }}
     steps:
+      # On PRs the filter lists the changed files through the API instead.
       - uses: actions/checkout@v6
-        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        if: github.event_name == 'push'
         with:
           fetch-depth: 0
       - uses: dorny/paths-filter@v3
-        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        if: env.FILTER == 'true'
         id: changes
         with:
           # A file counts only if it matches every pattern, so the '!'
@@ -62,7 +66,8 @@ jobs:
 
   Run:
     needs: Detect-Changes
-    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
+    # No cache to refresh: skipped on the scheduled runs.
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true' && github.event_name != 'schedule'
     name: ${{ matrix.code }} GNU MPI Run [${{ matrix.case }}]
     runs-on: ubuntu-24.04
     strategy:
@@ -107,7 +112,9 @@ jobs:
         run: mpirun -n 2 ${{ matrix.run }}
 
   clang-tidy:
-    needs: Run
+    needs: [Detect-Changes, Run]
+    # After Run, or without it on the scheduled runs, which skip it.
+    if: ${{ !cancelled() && needs['Detect-Changes'].outputs['has-source-changes'] == 'true' && (needs.Run.result == 'success' || needs.Run.result == 'skipped') }}
     name: ${{ matrix.code }} clang-tidy
     runs-on: ubuntu-24.04
     strategy:
@@ -161,6 +168,7 @@ jobs:
       # when the whole job passes, so a run that finds warnings would throw
       # away the cache it just filled.
       - name: Set Up Ccache
+        id: ccache
         uses: actions/cache/restore@v5
         with:
           path: |
@@ -228,10 +236,8 @@ jobs:
           path: |
             ~/.cache/ccache
             ~/.cache/ctcache
-          key: ccache-${{ github.workflow }}-${{ github.job }}-${{ matrix.code }}-git-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
       - name: Short report
         if: ${{ !cancelled() }}
         working-directory: ${{ env.BUILD_DIR }}
-        run: |
-          echo "::add-matcher::${{ github.workspace }}/pelephysics-pr/.github/problem-matchers/gcc.json"
-          ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt
+        run: ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt

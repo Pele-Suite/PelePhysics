@@ -25,18 +25,22 @@ defaults:
 jobs:
   Detect-Changes:
     runs-on: ubuntu-latest
+    env:
+      # Only pushes and PRs are filtered. Scheduled and manual runs always
+      # build, so they refresh the ccaches whatever the last commit touched;
+      # without a push there is no previous commit to compare against.
+      FILTER: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
     outputs:
-      # Scheduled and manual runs always build, so they refresh the ccaches
-      # whatever the last commit touched. Without a push there is no previous
-      # commit to compare against, so the filter does not run for them.
-      has-source-changes: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.src }}
+      # Empty when the filter did not run, so those runs build.
+      has-source-changes: ${{ steps.changes.outputs.src || 'true' }}
     steps:
+      # On PRs the filter lists the changed files through the API instead.
       - uses: actions/checkout@v6
-        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        if: github.event_name == 'push'
         with:
           fetch-depth: 0
       - uses: dorny/paths-filter@v3
-        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        if: env.FILTER == 'true'
         id: changes
         with:
           # A file counts only if it matches every pattern, so the '!'
@@ -56,7 +60,8 @@ jobs:
 
   Formatting:
     needs: Detect-Changes
-    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
+    # No cache to refresh: skipped on the scheduled runs.
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true' && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Clone
@@ -70,6 +75,8 @@ jobs:
           clangFormatVersion: 20
 
   Codespell:
+    # No cache to refresh: skipped on the scheduled runs.
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Clone
@@ -85,7 +92,8 @@ jobs:
 
   CEPTR:
     needs: Detect-Changes
-    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
+    # No cache to refresh: skipped on the scheduled runs.
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true' && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -198,6 +206,7 @@ jobs:
       # copy (~1.5 GB per PR across the matrix) for little gain over
       # development's cache.
       - name: Set Up Ccache
+        id: ccache
         uses: actions/cache/restore@v5
         with:
           path: ~/.cache/ccache
@@ -356,4 +365,4 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ~/.cache/ccache
-          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}-${{github.run_id}}-${{github.run_attempt}}
+          key: ${{steps.ccache.outputs.cache-primary-key}}
