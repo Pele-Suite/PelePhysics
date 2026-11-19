@@ -130,7 +130,11 @@ jobs:
       MAKE_ARGS: TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
       EXE: ./Pele2d.${{matrix.comp}}.TPROF.ex
       # The GPU backends are only compiled: there is no device to run on.
-      RUN_TESTS: ${{matrix.comp == 'gnu' || matrix.comp == 'llvm'}}
+      HOST_BUILD: ${{matrix.comp == 'gnu' || matrix.comp == 'llvm'}}
+      # The scheduled runs only refresh the ccache: they build everything a
+      # host run builds (Trim Ccache keeps only what this run used) but skip
+      # the tests, which already ran on this commit.
+      RUN_TESTS: ${{(matrix.comp == 'gnu' || matrix.comp == 'llvm') && github.event_name != 'schedule'}}
       # Manifold models are not built with SYCL.
       BUILD_MANIFOLD: ${{matrix.comp != 'sycl'}}
       CCACHE_MAXSIZE: 1G
@@ -149,7 +153,7 @@ jobs:
         with:
           python-version: ${{matrix.python-version}}
       - name: Run image
-        if: env.RUN_TESTS == 'true'
+        if: env.HOST_BUILD == 'true'
         uses: abatilo/actions-poetry@v4.0.0
         with:
           poetry-version: ${{matrix.poetry-version}}
@@ -236,12 +240,14 @@ jobs:
           if [ "${{matrix.comp}}" = gnu ]; then
             printf "\n-------- Simple (LiDryer, multicomponent diffusion) --------\n"
             make -j $(nproc) Eos_Model=Fuego Chemistry_Model=LiDryer Transport_Model=Simple ${MAKE_ARGS}
-            run_simple
+            if [ ${RUN_TESTS} = true ]; then run_simple; fi
             make realclean
             printf "\n-------- Simple (LiDryer, LCT models not compiled in) --------\n"
             make -j $(nproc) Eos_Model=Fuego Chemistry_Model=LiDryer Transport_Model=Simple USE_LCT_TRANSPORT=FALSE ${MAKE_ARGS}
-            ${EXE} inputs.2d_Simple
-            ${EXE} inputs.2d_Simple_Matrix
+            if [ ${RUN_TESTS} = true ]; then
+              ${EXE} inputs.2d_Simple
+              ${EXE} inputs.2d_Simple_Matrix
+            fi
             make realclean
           fi
       - name: Test EOS
@@ -285,21 +291,25 @@ jobs:
             make realclean
           done
       - name: Test Ignition delay
-        if: env.RUN_TESTS == 'true'
+        if: env.HOST_BUILD == 'true'
         working-directory: Testing/Exec/IgnitionDelay
         run: |
-          pip install numpy
+          if [ ${RUN_TESTS} = true ]; then pip install numpy; fi
           make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu ${MAKE_ARGS}
-          bash exec_ignDelay.sh firstpass
-          python check_ignDelay.py
-          rm log PPreaction.txt inputs/inputs.0d_refine
+          if [ ${RUN_TESTS} = true ]; then
+            bash exec_ignDelay.sh firstpass
+            python check_ignDelay.py
+            rm log PPreaction.txt inputs/inputs.0d_refine
+          fi
           make realclean
           make -j $(nproc) Eos_Model=Manifold Transport_Model=Manifold Manifold_Dim=1 Chemistry_Model=Null ${MAKE_ARGS}
-          bash exec_ignDelay.sh manifold
-          python check_ignDelay.py 0.0766 10
+          if [ ${RUN_TESTS} = true ]; then
+            bash exec_ignDelay.sh manifold
+            python check_ignDelay.py 0.0766 10
+          fi
           make realclean
       - name: Test Jacobian
-        if: env.RUN_TESTS == 'true'
+        if: env.HOST_BUILD == 'true'
         working-directory: Testing/Exec/Jacobian
         run: |
           MECH=${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss
@@ -311,7 +321,7 @@ jobs:
           )
           make TPL DEBUG=TRUE TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}
           make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu_qss DEBUG=TRUE TINY_PROFILE=TRUE USE_CCACHE=TRUE ${{matrix.amrex_build_args}}
-          ./Pele3d.${{matrix.comp}}.DEBUG.TPROF.ex
+          if [ ${RUN_TESTS} = true ]; then ./Pele3d.${{matrix.comp}}.DEBUG.TPROF.ex; fi
           make realclean
       - name: Ccache Report
         if: always()
