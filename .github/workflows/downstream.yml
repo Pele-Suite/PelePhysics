@@ -99,7 +99,6 @@ jobs:
     env:
       BUILD_DIR: ${{ github.workspace }}/build-clang-tidy-${{ matrix.code }}
       CCACHE_COMPRESSLEVEL: 10
-      CCACHE_EXTRAFILES: ${{ github.workspace }}/${{ matrix.code }}/.clang-tidy
       CCACHE_MAXSIZE: 100M
       # clang-tidy-cache skips files whose preprocessed source, flags and
       # resolved clang-tidy config are unchanged. SAVE_OUTPUT/SAVE_ALL store
