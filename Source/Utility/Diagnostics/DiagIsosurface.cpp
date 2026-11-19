@@ -61,12 +61,15 @@ constexpr int nCorners = 4;
 constexpr int cornerOffset[nCorners][2] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
 constexpr int nEdges = 4;
 constexpr int edgeCorners[nEdges][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
-// Up to two segments per square, as pairs of edge indices.
+// Up to two segments per square, as pairs of edge indices. Segments are
+// oriented with the corners below the iso-value on their left, so that the
+// iso-lines are consistently oriented: complementary cases have opposite
+// segments.
 constexpr int segTable[16][4] = {
-  {-1, -1, -1, -1}, {0, 3, -1, -1}, {0, 1, -1, -1}, {1, 3, -1, -1},
-  {1, 2, -1, -1},   {0, 1, 2, 3},   {0, 2, -1, -1}, {2, 3, -1, -1},
-  {2, 3, -1, -1},   {0, 2, -1, -1}, {0, 1, 2, 3},   {1, 2, -1, -1},
-  {1, 3, -1, -1},   {0, 1, -1, -1}, {0, 3, -1, -1}, {-1, -1, -1, -1}};
+  {-1, -1, -1, -1}, {0, 3, -1, -1}, {1, 0, -1, -1}, {1, 3, -1, -1},
+  {2, 1, -1, -1},   {0, 1, 2, 3},   {2, 0, -1, -1}, {2, 3, -1, -1},
+  {3, 2, -1, -1},   {0, 2, -1, -1}, {1, 0, 3, 2},   {1, 2, -1, -1},
+  {3, 1, -1, -1},   {0, 1, -1, -1}, {3, 0, -1, -1}, {-1, -1, -1, -1}};
 #else
 // Marching cubes (Lorensen & Cline; tables from Paul Bourke). Corners:
 // 0=(0,0,0) 1=(1,0,0) 2=(1,1,0) 3=(0,1,0) 4=(0,0,1) 5=(1,0,1) 6=(1,1,1)
