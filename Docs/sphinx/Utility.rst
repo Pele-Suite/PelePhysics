@@ -299,7 +299,10 @@ Currently, the list of diagnostic contains:
 
 When using `DiagPDF` or `DiagConditional`, it is possible to narrow down the diagnostic to a region of interest
 by specifying a set of filters, defining a range of interest for a variable. Note also that for these two diagnostics,
-fine-covered regions are masked. An arbitrary number of diagnostics can be named in a list with the ``diagnostics``
+fine-covered regions are masked. With embedded boundaries, cells covered by the EB (zero volume fraction) are masked
+as well, and the volume weights are the fluid volume of the cells (volume fraction times cell volume), so that the
+placeholder values held in covered cells do not contribute. ``DiagFramePlane`` interpolates the state as it is,
+including covered cells. An arbitrary number of diagnostics can be named in a list with the ``diagnostics``
 keyword, then each diagnostic name in the list becomes a keyword allowing the type and specific options for
 that diagnostic to be specified.
 The following provide examples for each diagnostic in PeleLMeX (in PeleC, all diagnostics would be prefixed with

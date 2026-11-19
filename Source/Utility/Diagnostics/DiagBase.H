@@ -3,6 +3,7 @@
 
 #include <AMReX_ParmParse.H>
 #include <AMReX_MultiFab.H>
+#include <AMReX_iMultiFab.H>
 #include "DiagFilter.H"
 #include "Factory.H"
 
@@ -37,6 +38,40 @@ public:
   static int getFieldIndex(
     const std::string& a_field, const amrex::Vector<std::string>& a_varList);
 
+  // Helpers for the derived diagnostics (public: CUDA extended lambdas
+  // cannot be enclosed in protected member functions).
+
+  // Mask of the cells of level a_lev to process, with a_nGrow ghost cells:
+  // 0 where the cell is covered by level a_lev + 1 (a_fineGrids, nullptr on
+  // the finest level) or by the EB, 1 elsewhere.
+  amrex::iMultiFab coveredMask(
+    int a_lev,
+    const amrex::BoxArray& a_grids,
+    const amrex::DistributionMapping& a_dmap,
+    const amrex::BoxArray* a_fineGrids,
+    int a_nGrow) const;
+
+  // Zero a_mask where a filter rejects the cell, including in ghost cells.
+  // Filter f is read from component a_firstFilterComp + f of a_data, or from
+  // its state index when a_firstFilterComp < 0.
+  void applyFilters(
+    amrex::iMultiFab& a_mask,
+    const amrex::MultiFab& a_data,
+    int a_firstFilterComp = -1) const;
+
+  // coveredMask and applyFilters on a state without ghost cells
+  amrex::iMultiFab cellMask(
+    int a_lev,
+    const amrex::MultiFab& a_state,
+    const amrex::MultiFab* a_fineState) const;
+
+  // Fluid volume of the cells of level a_lev: the geometric volume (which
+  // accounts for 2D-RZ) times the EB volume fraction.
+  amrex::MultiFab fluidVolume(
+    int a_lev,
+    const amrex::BoxArray& a_grids,
+    const amrex::DistributionMapping& a_dmap) const;
+
 protected:
   std::string m_diagfile;
   int m_verbose{0};
@@ -46,6 +81,9 @@ protected:
   bool first_time{true};
   amrex::Vector<DiagFilter> m_filters{};
   amrex::Gpu::DeviceVector<DiagFilterData> m_filterData;
+  // Set by prepare
+  amrex::Vector<amrex::Geometry> m_geoms;
+  amrex::Vector<amrex::IntVect> m_refRatio;
 };
 
 #endif

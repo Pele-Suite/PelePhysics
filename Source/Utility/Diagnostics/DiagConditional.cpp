@@ -57,8 +57,8 @@ DiagConditional::prepare(
   const amrex::Vector<amrex::DistributionMapping>& a_dmap,
   const amrex::Vector<std::string>& a_varNames)
 {
+  DiagBase::prepare(a_nlevels, a_geoms, a_grids, a_dmap, a_varNames);
   if (first_time) {
-    DiagBase::prepare(a_nlevels, a_geoms, a_grids, a_dmap, a_varNames);
     first_time = false;
     int nProcessFields = static_cast<int>(m_fieldIndices_d.size());
     amrex::Vector<int> m_fieldIndices(nProcessFields, 0);
@@ -68,17 +68,6 @@ DiagConditional::prepare(
     amrex::Gpu::copy(
       amrex::Gpu::hostToDevice, m_fieldIndices.begin(), m_fieldIndices.end(),
       m_fieldIndices_d.begin());
-  }
-
-  m_geoms.resize(a_nlevels);
-  m_refRatio.resize(a_nlevels - 1);
-  for (int lev = 0; lev < a_nlevels; lev++) {
-    m_geoms[lev] = a_geoms[lev];
-    if (lev > 0) {
-      m_refRatio[lev - 1] = amrex::IntVect(
-        static_cast<int>(
-          a_geoms[lev - 1].CellSize(0) / a_geoms[lev].CellSize(0)));
-    }
   }
 }
 
@@ -113,38 +102,15 @@ DiagConditional::processDiag(
   // Populate the data from each level on each proc
   for (int lev = 0; lev < a_state.size(); ++lev) {
 
-    // Make mask tagging fine-covered and filtered cells
-    amrex::iMultiFab mask;
-    if (lev == a_state.size() - 1) {
-      mask.define(
-        a_state[lev]->boxArray(), a_state[lev]->DistributionMap(), 1,
-        amrex::IntVect(0));
-      mask.setVal(1);
-    } else {
-      mask = amrex::makeFineMask(
-        *a_state[lev], *a_state[lev + 1], amrex::IntVect(0), m_refRatio[lev],
-        amrex::Periodicity::NonPeriodic(), 1, 0);
-    }
+    // Mask out fine-covered, EB-covered and filtered cells
+    const amrex::iMultiFab mask = cellMask(
+      lev, *a_state[lev],
+      lev + 1 < a_state.size() ? a_state[lev + 1] : nullptr);
     auto const& sarrs = a_state[lev]->const_arrays();
-    auto const& marrs = mask.arrays();
-    auto* fdata_p = m_filterData.data();
-    amrex::ParallelFor(
-      *a_state[lev], amrex::IntVect(0),
-      [=, nFilters = m_filters.size()] AMREX_GPU_DEVICE(
-        int box_no, int i, int j, int k) noexcept {
-        for (int f{0}; f < nFilters; ++f) {
-          amrex::Real fval = sarrs[box_no](i, j, k, fdata_p[f].m_filterVarIdx);
-          if (fval < fdata_p[f].m_low_val || fval > fdata_p[f].m_high_val) {
-            marrs[box_no](i, j, k) = 0;
-          }
-        }
-      });
-    amrex::Gpu::streamSynchronize();
+    auto const& marrs = mask.const_arrays();
 
-    // Get the geometry volume to account for 2D-RZ
-    amrex::MultiFab volume(
-      a_state[lev]->boxArray(), a_state[lev]->DistributionMap(), 1, 0);
-    m_geoms[lev].GetVolume(volume);
+    const amrex::MultiFab volume = fluidVolume(
+      lev, a_state[lev]->boxArray(), a_state[lev]->DistributionMap());
     auto const& varrs = volume.const_arrays();
 
     auto* cond_d_p = cond_d.dataPtr();

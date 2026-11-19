@@ -46,10 +46,6 @@ private:
   bool m_useFieldMinMax{true}; // Use min/max from field
   amrex::Real m_lowBnd{0.0};   // User-defined low bound
   amrex::Real m_highBnd{0.0};  // User-defined high bound
-
-  // Geometrical data
-  amrex::Vector<amrex::Geometry> m_geoms; // Squirrel away the geoms
-  amrex::Vector<amrex::IntVect> m_refRatio;
 };
 
 #endif
