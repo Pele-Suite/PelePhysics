@@ -32,6 +32,11 @@ env:
 
 jobs:
   Detect-Changes:
+    # A called workflow can only narrow the caller's token permissions, so
+    # grant here what its filter job needs.
+    permissions:
+      contents: read
+      pull-requests: read
     uses: ./.github/workflows/detect-changes.yml
 
   Run:
@@ -217,3 +222,22 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: ${{ env.BUILD_DIR }}
         run: ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt
+
+  # The one check for branch protection to require in Downstream-CI. A job
+  # skipped by its own `if:` (docs-only changes, scheduled runs) does not
+  # expand its matrix, so its per-entry checks never report and a PR
+  # requiring them waits forever; skipped jobs pass here. It also fails when Detect-Changes
+  # fails, which would otherwise skip every build.
+  Downstream-Status:
+    needs: [Detect-Changes, Run, clang-tidy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the job results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "${RESULTS}"
+          for r in ${RESULTS}; do
+            [ "$r" = success ] || [ "$r" = skipped ] || exit 1
+          done
