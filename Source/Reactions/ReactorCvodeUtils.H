@@ -31,6 +31,59 @@
 
 namespace pele::physics::reactions {
 
+#ifdef AMREX_USE_CUDA
+// cuSolver batched QR has separate entry points per precision (S = float,
+// D = double); these pick the one matching amrex::Real.
+inline cusolverStatus_t
+csrqrBufferInfoBatched(
+  cusolverSpHandle_t handle,
+  int m,
+  int n,
+  int nnz,
+  const cusparseMatDescr_t descrA,
+  const amrex::Real* csrVal,
+  const int* csrRowPtr,
+  const int* csrColInd,
+  int batchSize,
+  csrqrInfo_t info,
+  size_t* internalDataInBytes,
+  size_t* workspaceInBytes)
+{
+#ifdef AMREX_USE_FLOAT
+  return cusolverSpScsrqrBufferInfoBatched(
+#else
+  return cusolverSpDcsrqrBufferInfoBatched(
+#endif
+    handle, m, n, nnz, descrA, csrVal, csrRowPtr, csrColInd, batchSize, info,
+    internalDataInBytes, workspaceInBytes);
+}
+
+inline cusolverStatus_t
+csrqrsvBatched(
+  cusolverSpHandle_t handle,
+  int m,
+  int n,
+  int nnz,
+  const cusparseMatDescr_t descrA,
+  const amrex::Real* csrValA,
+  const int* csrRowPtrA,
+  const int* csrColIndA,
+  const amrex::Real* b,
+  amrex::Real* x,
+  int batchSize,
+  csrqrInfo_t info,
+  void* pBuffer)
+{
+#ifdef AMREX_USE_FLOAT
+  return cusolverSpScsrqrsvBatched(
+#else
+  return cusolverSpDcsrqrsvBatched(
+#endif
+    handle, m, n, nnz, descrA, csrValA, csrRowPtrA, csrColIndA, b, x, batchSize,
+    info, pBuffer);
+}
+#endif
+
 struct CVODEUserData
 {
   amrex::Real dt_save;     // Internal cvode dt holder
