@@ -3,17 +3,21 @@ name: PelePhysics-CI
 on:
    workflow_dispatch:
    schedule:
-     # Weekly, so the ccaches are refreshed before GitHub evicts them after
-     # 7 days without access.
-     - cron: '0 3 * * 1'
+     # Twice a week, so the ccaches are refreshed before GitHub evicts them
+     # after 7 days without access, with a margin for late scheduled starts.
+     # Jobs without a cache skip the scheduled runs (run-checks).
+     - cron: '0 3 * * 1,4'
    push:
      branches: [development]
    pull_request:
      branches: [development]
 
 concurrency:
+  # Only PR runs cancel an older run: on development a cancelled run would
+  # not save its caches, so runs (pushes and scheduled) queue, one at a time
+  # (GitHub keeps only the newest pending one).
   group: ${{github.ref}}-${{github.head_ref}}-ci
-  cancel-in-progress: true
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
 # Run steps with bash -eo pipefail, so a failing command stops the step.
 defaults:
@@ -22,30 +26,16 @@ defaults:
 
 jobs:
   Detect-Changes:
-    runs-on: ubuntu-latest
-    outputs:
-      has-source-changes: ${{ steps.changes.outputs.src }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            src:
-              - '**'
-              - '!**/*.rst'
-              - '!Docs/**'
-              - '!Source/Utility/**/*.py'
-              - '!README.md'
-              - '!CONTRIBUTING.md'
-              - '!.codespell*'
-              - '!.gitignore'
+    # A called workflow can only narrow the caller's token permissions, so
+    # grant here what its filter job needs.
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/detect-changes.yml
 
   Formatting:
     needs: Detect-Changes
-    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
+    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Clone
@@ -59,6 +49,7 @@ jobs:
           clangFormatVersion: 20
 
   Codespell:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Clone
@@ -74,7 +65,7 @@ jobs:
 
   CEPTR:
     needs: Detect-Changes
-    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
+    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -113,6 +104,9 @@ jobs:
     if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     runs-on: ubuntu-24.04
     strategy:
+      # One backend failing (e.g. a mirror hiccup) should not cancel the
+      # others before they report and save their caches.
+      fail-fast: false
       matrix:
         comp: [gnu, llvm, cuda, hip, sycl]
         python-version: ['3.11']
@@ -141,14 +135,20 @@ jobs:
       MAKE_ARGS: TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
       EXE: ./Pele2d.${{matrix.comp}}.TPROF.ex
       # The GPU backends are only compiled: there is no device to run on.
-      RUN_TESTS: ${{matrix.comp == 'gnu' || matrix.comp == 'llvm'}}
+      HOST_BUILD: ${{matrix.comp == 'gnu' || matrix.comp == 'llvm'}}
+      # The scheduled runs only refresh the ccache: they build everything a
+      # host run builds (Trim Ccache keeps only what this run used) but skip
+      # the tests, which already ran on this commit.
+      RUN_TESTS: ${{(matrix.comp == 'gnu' || matrix.comp == 'llvm') && github.event_name != 'schedule'}}
       # Manifold models are not built with SYCL.
       BUILD_MANIFOLD: ${{matrix.comp != 'sycl'}}
-      CCACHE_COMPRESS: 1
       CCACHE_MAXSIZE: 1G
-      # Only development (pushes and manual runs) saves the cache; PRs restore
-      # development's. CCACHE_COMPRESSLEVEL is set from this in Install Ccache.
-      SAVE_CCACHE: ${{github.event_name != 'pull_request' && github.ref == 'refs/heads/development'}}
+      # Only development saves the cache (the scheduled runs keep it from
+      # being evicted); PRs restore it.
+      SAVE_CCACHE: ${{github.ref == 'refs/heads/development'}}
+      # Compress hard only when the cache is kept; a PR's new entries are
+      # discarded at the end of the job.
+      CCACHE_COMPRESSLEVEL: ${{github.ref == 'refs/heads/development' && 10 || 1}}
       # ccache for the CMake-built TPLs (SUNDIALS) too: CMake reads these as
       # the default compiler launchers.
       CMAKE_C_COMPILER_LAUNCHER: ccache
@@ -160,7 +160,7 @@ jobs:
         with:
           python-version: ${{matrix.python-version}}
       - name: Run image
-        if: env.RUN_TESTS == 'true'
+        if: env.HOST_BUILD == 'true'
         uses: abatilo/actions-poetry@v4.0.0
         with:
           poetry-version: ${{matrix.poetry-version}}
@@ -169,14 +169,13 @@ jobs:
         with:
           submodules: recursive
       - name: Install Ccache
+        # Outside the checkout: AMReX's script downloads into the current directory.
+        working-directory: ${{runner.temp}}
         run: |
-          wget -q https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
-          tar xf ccache-4.8-linux-x86_64.tar.xz
-          sudo cp -f ccache-4.8-linux-x86_64/ccache /usr/local/bin/
-          # Compress hard only when the cache is kept; a PR's new entries are
-          # discarded at the end of the job.
-          if [ "${SAVE_CCACHE}" = true ]; then level=10; else level=1; fi
-          echo "CCACHE_COMPRESSLEVEL=${level}" >> $GITHUB_ENV
+          # AMReX's install script (the same ccache as PeleC). It exits 0 even
+          # if the download fails, so check the result.
+          ${{github.workspace}}/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
+          ccache --version | sed -n 1p
           # Marks the start of the run for Trim Ccache
           touch ${{runner.temp}}/ccache-start
       # Restore only; the cache is saved at the end of the job, and only from
@@ -184,10 +183,11 @@ jobs:
       # copy (~1.5 GB per PR across the matrix) for little gain over
       # development's cache.
       - name: Set Up Ccache
+        id: ccache
         uses: actions/cache/restore@v5
         with:
           path: ~/.cache/ccache
-          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}
+          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}-${{github.run_id}}-${{github.run_attempt}}
           restore-keys: |
                ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-
       # The dependency scripts also export the toolchain's environment to the
@@ -243,12 +243,14 @@ jobs:
           if [ "${{matrix.comp}}" = gnu ]; then
             printf "\n-------- Simple (LiDryer, multicomponent diffusion) --------\n"
             make -j $(nproc) Eos_Model=Fuego Chemistry_Model=LiDryer Transport_Model=Simple ${MAKE_ARGS}
-            run_simple
+            if [ ${RUN_TESTS} = true ]; then run_simple; fi
             make realclean
             printf "\n-------- Simple (LiDryer, LCT models not compiled in) --------\n"
             make -j $(nproc) Eos_Model=Fuego Chemistry_Model=LiDryer Transport_Model=Simple USE_LCT_TRANSPORT=FALSE ${MAKE_ARGS}
-            ${EXE} inputs.2d_Simple
-            ${EXE} inputs.2d_Simple_Matrix
+            if [ ${RUN_TESTS} = true ]; then
+              ${EXE} inputs.2d_Simple
+              ${EXE} inputs.2d_Simple_Matrix
+            fi
             make realclean
           fi
       - name: Test EOS
@@ -292,21 +294,25 @@ jobs:
             make realclean
           done
       - name: Test Ignition delay
-        if: env.RUN_TESTS == 'true'
+        if: env.HOST_BUILD == 'true'
         working-directory: Testing/Exec/IgnitionDelay
         run: |
-          pip install numpy
+          if [ ${RUN_TESTS} = true ]; then pip install numpy; fi
           make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu ${MAKE_ARGS}
-          bash exec_ignDelay.sh firstpass
-          python check_ignDelay.py
-          rm log PPreaction.txt inputs/inputs.0d_refine
+          if [ ${RUN_TESTS} = true ]; then
+            bash exec_ignDelay.sh firstpass
+            python check_ignDelay.py
+            rm log PPreaction.txt inputs/inputs.0d_refine
+          fi
           make realclean
           make -j $(nproc) Eos_Model=Manifold Transport_Model=Manifold Manifold_Dim=1 Chemistry_Model=Null ${MAKE_ARGS}
-          bash exec_ignDelay.sh manifold
-          python check_ignDelay.py 0.0766 10
+          if [ ${RUN_TESTS} = true ]; then
+            bash exec_ignDelay.sh manifold
+            python check_ignDelay.py 0.0766 10
+          fi
           make realclean
       - name: Test Jacobian
-        if: env.RUN_TESTS == 'true'
+        if: env.HOST_BUILD == 'true'
         working-directory: Testing/Exec/Jacobian
         run: |
           MECH=${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss
@@ -318,7 +324,7 @@ jobs:
           )
           make TPL DEBUG=TRUE TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}
           make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu_qss DEBUG=TRUE TINY_PROFILE=TRUE USE_CCACHE=TRUE ${{matrix.amrex_build_args}}
-          ./Pele3d.${{matrix.comp}}.DEBUG.TPROF.ex
+          if [ ${RUN_TESTS} = true ]; then ./Pele3d.${{matrix.comp}}.DEBUG.TPROF.ex; fi
           make realclean
       - name: Ccache Report
         if: always()
@@ -342,4 +348,23 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: ~/.cache/ccache
-          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}
+          key: ${{steps.ccache.outputs.cache-primary-key}}
+
+  # The one check for branch protection to require. A job skipped by
+  # its own `if:` (docs-only changes, scheduled runs) does not expand its
+  # matrix, so its per-entry checks never report and a PR requiring them
+  # waits forever; skipped jobs pass here. It also fails when Detect-Changes
+  # fails, which would otherwise skip every build.
+  CI-Status:
+    needs: [Detect-Changes, Formatting, Codespell, CEPTR, Transport-EOS-Reactions]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the job results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "${RESULTS}"
+          for r in ${RESULTS}; do
+            [ "$r" = success ] || [ "$r" = skipped ] || exit 1
+          done
