@@ -13,10 +13,10 @@ Tutorial 1 - Generating NC12H26 QSS mechanism with analytical Jacobian
 ----------------------------------------------------------------------
 .. _sec_tutqss1:
 
-Update ``poetry``::
+Install the CEPTR dependencies::
 
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
-  $ poetry update  
+  $ uv sync --locked
 
 Make sure the list of non-QSS species is correct in ``${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/non_qssa_list.yaml``
 
@@ -27,12 +27,12 @@ If only CHEMKIN files are available for the skeletal mechanism, see :ref:`Conver
 Generate ``qssa.yaml`` from ``skeletal.yaml`` and ``non_qssa_list.yaml``::
 
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
-  $ poetry run qssa -f ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/skeletal.yaml -n ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/non_qssa_list.yaml
+  $ uv run qssa -f ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/skeletal.yaml -n ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/non_qssa_list.yaml
 
 Generate ``mechanism.H`` and ``mechanism.cpp`` from ``qssa.yaml``::
   
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
-  $ poetry run convert -f ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/qssa.yaml --qss_format_input ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/qssa_input.toml --qss_symbolic_jacobian
+  $ uv run convert -f ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/qssa.yaml --qss_format_input ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/qssa_input.toml --qss_symbolic_jacobian
 
 We recommend using the following ``qssa_input.toml``::
  
@@ -62,10 +62,10 @@ Tutorial 2 - Generating NC12H26 QSS mechanism without analytical Jacobian
 -------------------------------------------------------------------------
 .. _sec_tutqss2:
 
-Update ``poetry``::
+Install the CEPTR dependencies::
 
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
-  $ poetry update  
+  $ uv sync --locked
 
 Make sure the list of non-QSS species is correct in ``Mechanisms/dodecane_lu_qss/non_qssa_list.yaml``
 
@@ -75,21 +75,21 @@ If only CHEMKIN files are available for the skeletal mechanism, see :ref:`Conver
 Generate ``qssa.yaml`` from ``skeletal.yaml`` and ``non_qssa_list.yaml``::
 
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
-  $ poetry run qssa -f ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/skeletal.yaml -n ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/non_qssa_list.yaml
+  $ uv run qssa -f ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/skeletal.yaml -n ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/non_qssa_list.yaml
 
 Generate ``mechanism.H`` and ``mechanism.cpp`` from ``qssa.yaml``::
   
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
-  $ poetry run convert -f ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/qssa.yaml
+  $ uv run convert -f ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss/qssa.yaml
 
 Tutorial 3 - Generating NC12H26 Skeletal mechanism
 --------------------------------------------------
 .. _sec_tutskel3:
 
-Update ``poetry``::
+Install the CEPTR dependencies::
 
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
-  $ poetry update  
+  $ uv sync --locked
 
 For all the available mechanisms, a Cantera yaml format is provided.
 If only CHEMKIN files are available, see :ref:`Converting CHEMKIN files <sec_convertCK>` for generating ``mechanism.yaml``.
@@ -97,5 +97,5 @@ If only CHEMKIN files are available, see :ref:`Converting CHEMKIN files <sec_con
 Generate ``mechanism.H`` and ``mechanism.cpp`` from ``mechanism.yaml``::
 
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
-  $ poetry run convert -f ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu/mechanism.yaml
+  $ uv run convert -f ${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu/mechanism.yaml
 

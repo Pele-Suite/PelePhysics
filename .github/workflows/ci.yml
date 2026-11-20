@@ -90,27 +90,25 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.10', '3.11']
-        poetry-version: ['1.4.2']
     defaults:
       run:
         working-directory: ${{github.workspace}}/Support/ceptr
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: ${{matrix.python-version}}
-      - name: Run image
-        uses: abatilo/actions-poetry@v4.0.0
-        with:
-          poetry-version: ${{matrix.poetry-version}}
-      - name: Install Dependencies using Poetry
-        run: poetry install
+          version-file: Support/ceptr/pyproject.toml
+          # Pull requests reuse the cache from development, without writing their own
+          save-cache: ${{github.ref == 'refs/heads/development'}}
+      - name: Install dependencies
+        run: uv sync --locked
       - name: Run tests
-        run: poetry run pytest
+        run: uv run pytest
       - name: Convert air mechanism
-        run: poetry run convert -f ${{github.workspace}}/Mechanisms/air/mechanism.yaml
+        run: uv run convert -f ${{github.workspace}}/Mechanisms/air/mechanism.yaml
       - name: Convert LiDryer mechanism
-        run: poetry run convert -f ${{github.workspace}}/Mechanisms/LiDryer/mechanism.yaml
+        run: uv run convert -f ${{github.workspace}}/Mechanisms/LiDryer/mechanism.yaml
 
   Transport-EOS-Reactions:
     needs: Detect-Changes
@@ -123,7 +121,6 @@ jobs:
       matrix:
         comp: [gnu, llvm, cuda, hip, sycl]
         python-version: ['3.11']
-        poetry-version: ['1.4.2']
         include:
           - comp: gnu
             amrex_build_args: 'COMP=gnu'
@@ -172,15 +169,16 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{matrix.python-version}}
-      - name: Run image
-        if: env.HOST_BUILD == 'true'
-        uses: abatilo/actions-poetry@v4.0.0
-        with:
-          poetry-version: ${{matrix.poetry-version}}
       - name: Clone PelePhysics
         uses: actions/checkout@v6
         with:
           submodules: recursive
+      - uses: astral-sh/setup-uv@v10.3.3
+        if: env.HOST_BUILD == 'true'
+        with:
+          python-version: ${{matrix.python-version}}
+          version-file: Support/ceptr/pyproject.toml
+          save-cache: ${{github.ref == 'refs/heads/development'}}
       - name: Install Ccache
         # Outside the checkout: AMReX's script downloads into the current directory.
         working-directory: ${{runner.temp}}
@@ -331,9 +329,9 @@ jobs:
           MECH=${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss
           (
             cd ${PELE_PHYSICS_HOME}/Support/ceptr
-            poetry install
-            poetry run qssa -f ${MECH}/skeletal.yaml -n ${MECH}/non_qssa_list.yaml
-            poetry run convert -f ${MECH}/qssa.yaml --qss_format_input ${MECH}/qssa_input_non_optimized.toml --qss_symbolic_jacobian
+            uv sync --locked
+            uv run qssa -f ${MECH}/skeletal.yaml -n ${MECH}/non_qssa_list.yaml
+            uv run convert -f ${MECH}/qssa.yaml --qss_format_input ${MECH}/qssa_input_non_optimized.toml --qss_symbolic_jacobian
           )
           make TPL DEBUG=TRUE TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}
           make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu_qss DEBUG=TRUE TINY_PROFILE=TRUE USE_CCACHE=TRUE ${{matrix.amrex_build_args}}
