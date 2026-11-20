@@ -22,7 +22,7 @@ def parse_lst_lines(lst, n_fields=1, default_pressure=None):
     """
     entries = []
     plog_pressures = []
-    with open(lst, "r") as f:
+    with open(lst) as f:
         for lineno, line in enumerate(f, start=1):
             line = line.strip()
             if not line or line.startswith("#"):

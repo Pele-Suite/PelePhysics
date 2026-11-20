@@ -1579,7 +1579,7 @@ def f_corr(t, eps_k):
     thtwo = 3.0 / 2.0
     return (
         1
-        + np.pi ** (thtwo) / 2.0 * np.sqrt((eps_k / t))
+        + np.pi ** (thtwo) / 2.0 * np.sqrt(eps_k / t)
         + (np.pi**2 / 4.0 + 2.0) * (eps_k / t)
         + (np.pi * eps_k / t) ** (thtwo)
     )

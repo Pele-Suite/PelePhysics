@@ -109,7 +109,7 @@ def process_qss(fname, nqssa, visualize, method):
 def process_qss_lst(lst, visualize, method):
     """Apply QSSA reduction to list of Cantera yaml files."""
     lpath = pathlib.Path(lst)
-    with open(lst, "r") as f:
+    with open(lst) as f:
         for line in f:
             if not line.startswith("#"):
                 _, _, skel_file, nqssa_file = line.split()

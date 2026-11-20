@@ -60,8 +60,8 @@ target-version = "py313"
 
 [tool.ruff.lint]
 # The rules of the former flake8 setup (pycodestyle, pyflakes, bugbear,
-# pep8-naming, docstrings), isort, and f-strings for flake8-use-fstring/flynt
-select = ["E", "W", "F", "B", "N", "D", "I", "UP031", "UP032"]
+# pep8-naming, docstrings), isort, and pyupgrade for the supported Python
+select = ["E", "W", "F", "B", "N", "D", "I", "UP"]
 
 [tool.ruff.lint.pycodestyle]
 # The formatter wraps code at 88; like flake8-bugbear's B950, only flag lines
