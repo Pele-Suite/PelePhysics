@@ -243,18 +243,10 @@ def analyze_thermodynamics(mechanism, species_list):
         if mtype == "nasa7":
             dct["coefficients"] = [model.coeffs[1:8]]
             if not np.allclose(model.coeffs[1:8], model.coeffs[8:15], atol=1e-22):
-                dct["interval"] = [model.coeffs[0]]
+                dct["interval"] = [float(model.coeffs[0])]
                 dct["coefficients"] = [model.coeffs[8:15], model.coeffs[1:8]]
         elif mtype == "nasa9":
-            nzones = int(model.coeffs[0])
-            dct["coefficients"] = [
-                model.coeffs[3 + 11 * x : 12 + 11 * x] for x in range(nzones)
-            ]
-            for c in dct["coefficients"]:
-                assert len(c) == 9, "NASA9 polynomial coefficients must be of length 9."
-            min_bounds = [model.coeffs[1 + 11 * x] for x in range(nzones)]
-            max_bounds = [model.coeffs[2 + 11 * x] for x in range(nzones)]
-            dct["interval"] = sorted(list(set(min_bounds) & set(max_bounds)))
+            dct["coefficients"], dct["interval"] = nasa9_zones(model)
 
         models.append(dct)
 
@@ -707,15 +699,23 @@ def cv_nasa9(fstream, parameters):
     cw.writer(fstream, expression if expression else "0.0")
 
 
-def eval_cv_species_nasa9(model, temp):
-    """Evaluate cv with NASA9 polynomial."""
+def nasa9_zones(model):
+    """Return the coefficients of each NASA9 zone and the inner zone bounds.
+
+    The bounds are Python floats, so that they print the same with numpy 2.
+    """
     nzones = int(model.coeffs[0])
     coeffs = [model.coeffs[3 + 11 * x : 12 + 11 * x] for x in range(nzones)]
     for c in coeffs:
         assert len(c) == 9, "NASA9 polynomial coefficients must be of length 9."
-    min_bounds = [model.coeffs[1 + 11 * x] for x in range(nzones)]
-    max_bounds = [model.coeffs[2 + 11 * x] for x in range(nzones)]
-    interval = sorted(list(set(min_bounds) & set(max_bounds)))
+    min_bounds = {float(model.coeffs[1 + 11 * x]) for x in range(nzones)}
+    max_bounds = {float(model.coeffs[2 + 11 * x]) for x in range(nzones)}
+    return coeffs, sorted(min_bounds & max_bounds)
+
+
+def eval_cv_species_nasa9(model, temp):
+    """Evaluate cv with NASA9 polynomial."""
+    coeffs, interval = nasa9_zones(model)
     idx = bisect.bisect_left(interval, temp)
     parameters = coeffs[idx]
 
