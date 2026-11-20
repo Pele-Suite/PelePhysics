@@ -18,11 +18,13 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - name: Clean up ccache
+        # Event values go through env, not ${{ }} in the script.
+        env:
+          pr_head_sha: ${{ github.event.workflow_run.head_sha }}
+          pr_number: ${{ github.event.workflow_run.pull_requests[0].number }}
         run: |
           # The run's own PR when it has one (same-repo PRs); otherwise search, keeping
           # only the PR whose head is this commit (a stacked PR also contains it).
-          pr_head_sha=${{ github.event.workflow_run.head_sha }}
-          pr_number=${{ github.event.workflow_run.pull_requests[0].number }}
           if [ -z "${pr_number}" ]; then
             pr_number=$(gh pr list --state all --search ${pr_head_sha} --json number,headRefOid \
               --jq "map(select(.headRefOid == \"${pr_head_sha}\")) | .[0].number // empty") || true
