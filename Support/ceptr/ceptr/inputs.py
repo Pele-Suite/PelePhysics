@@ -35,8 +35,7 @@ class Parameter:
         elif value is None:
             self.value = value
         else:
-            raise TypeError(f"Type does not match ({self.typer} is not {type(value)})"
-            )
+            raise TypeError(f"Type does not match ({self.typer} is not {type(value)})")
 
         if (self.choices is not None) and (value not in self.choices):
             raise ValueError(

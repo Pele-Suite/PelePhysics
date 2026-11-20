@@ -318,7 +318,7 @@ def production_rate(
                 cw.writer(
                     fstream,
                     "redP = Corr / k_f *"
-                    f" {10 ** (-dim * 6) * low_pef.m * 10 ** 3 ** dim:.15g} ",
+                    f" {10 ** (-dim * 6) * low_pef.m * 10**3**dim:.15g} ",
                 )
                 if (low_beta == 0) and (low_ae.m == 0):
                     cw.writer(
@@ -430,7 +430,7 @@ def production_rate(
                 else:
                     cw.writer(
                         fstream,
-                        f"qr[{idx}] *= Corr * k_f * {kc_e} *" f" ({kc_conv_inv});",
+                        f"qr[{idx}] *= Corr * k_f * {kc_e} * ({kc_conv_inv});",
                     )
             else:
                 if alpha is None:
@@ -694,7 +694,7 @@ def production_rate(
                         f" exp(-({(1.0 / cc.Rc / cc.ureg.kelvin * ae).m:.15g})"
                         " * invT);",
                     )
-                    coeff = (((1.0 / cc.Rc / cc.ureg.kelvin)) * ae).magnitude
+                    coeff = ((1.0 / cc.Rc / cc.ureg.kelvin) * ae).magnitude
                     k_f_smp *= sme.exp(-coeff * syms.invT_smp)
                 else:
                     cw.writer(
@@ -703,7 +703,7 @@ def production_rate(
                         f" ({(1.0 / cc.Rc / cc.ureg.kelvin * ae).m:.15g})"
                         " * invT);",
                     )
-                    coeff = ((1.0 / cc.Rc / cc.ureg.kelvin)) * ae
+                    coeff = (1.0 / cc.Rc / cc.ureg.kelvin) * ae
                     k_f_smp *= sme.exp(beta * syms.logT_smp - coeff * syms.invT_smp)
 
             alpha = None
@@ -743,7 +743,7 @@ def production_rate(
                 cw.writer(
                     fstream,
                     "const amrex::Real redP = Corr / k_f *"
-                    f" {10 ** (-dim * 6) * low_pef.m * 10 ** 3 ** dim:.15g} ",
+                    f" {10 ** (-dim * 6) * low_pef.m * 10**3**dim:.15g} ",
                 )
                 redp_smp = (
                     corr_smp / k_f_smp * (10 ** (-dim * 6) * low_pef.m * 10 ** (3**dim))
@@ -946,14 +946,13 @@ def production_rate(
                     else:
                         cw.writer(
                             fstream,
-                            "const amrex::Real qr = k_f *" f" {kc_e} * ({reverse_sc});",
+                            f"const amrex::Real qr = k_f * {kc_e} * ({reverse_sc});",
                         )
                     qr_smp = k_f_smp * sme.exp(-(kc_exp_arg_smp)) * reverse_sc_smp
                 else:
                     cw.writer(
                         fstream,
-                        "const amrex::Real qr = Corr * k_f *"
-                        f" {kc_e} * ({reverse_sc});",
+                        f"const amrex::Real qr = Corr * k_f * {kc_e} * ({reverse_sc});",
                     )
                     qr_smp = (
                         corr_smp * k_f_smp * sme.exp(-(kc_exp_arg_smp)) * reverse_sc_smp
@@ -985,9 +984,9 @@ def production_rate(
                 key=lambda v, dict_species=dict_species: dict_species[v[0]],
             )
             # Check for duplicates
-            assert len(agents) == len(
-                set(agents)
-            ), f"Reaction {reaction} contains duplicate agents"
+            assert len(agents) == len(set(agents)), (
+                f"Reaction {reaction} contains duplicate agents"
+            )
             # note that a species might appear as both reactant and product
             # a species might also appear twice or more on on each side
             # agents is a set that contains unique (symbol, coefficient)
@@ -1001,9 +1000,9 @@ def production_rate(
                                 f"wdot[{species_info.ordered_idx_map[symbol]}]"
                                 " -= qdot;",
                             )
-                            syms.wdot_smp[
-                                species_info.ordered_idx_map[symbol]
-                            ] -= qdot_smp
+                            syms.wdot_smp[species_info.ordered_idx_map[symbol]] -= (
+                                qdot_smp
+                            )
                         else:
                             cw.writer(
                                 fstream,
@@ -1022,9 +1021,9 @@ def production_rate(
                                 f"wdot[{species_info.ordered_idx_map[symbol]}]"
                                 " += qdot;",
                             )
-                            syms.wdot_smp[
-                                species_info.ordered_idx_map[symbol]
-                            ] += qdot_smp
+                            syms.wdot_smp[species_info.ordered_idx_map[symbol]] += (
+                                qdot_smp
+                            )
                         else:
                             cw.writer(
                                 fstream,
@@ -1288,7 +1287,7 @@ def production_rate_light(fstream, mechanism, species_info, reaction_info):
                 cw.writer(
                     fstream,
                     "const amrex::Real redP = Corr / k_f *"
-                    f" {10 ** (-dim * 6) * low_pef.m * 10 ** 3 ** dim:.15g} ",
+                    f" {10 ** (-dim * 6) * low_pef.m * 10**3**dim:.15g} ",
                 )
                 cw.writer(
                     fstream,
@@ -1414,13 +1413,12 @@ def production_rate_light(fstream, mechanism, species_info, reaction_info):
                     else:
                         cw.writer(
                             fstream,
-                            "const amrex::Real qr = k_f *" f" {kc_e} * ({reverse_sc});",
+                            f"const amrex::Real qr = k_f * {kc_e} * ({reverse_sc});",
                         )
                 else:
                     cw.writer(
                         fstream,
-                        "const amrex::Real qr = Corr * k_f *"
-                        f" {kc_e} * ({reverse_sc});",
+                        f"const amrex::Real qr = Corr * k_f * {kc_e} * ({reverse_sc});",
                     )
             remove_forward = cu.is_remove_forward(reaction_info, orig_idx)
 
@@ -1446,9 +1444,9 @@ def production_rate_light(fstream, mechanism, species_info, reaction_info):
                 key=lambda v, dict_species=dict_species: dict_species[v[0]],
             )
             # Check for duplicates
-            assert len(agents) == len(
-                set(agents)
-            ), f"Reaction {reaction} contains duplicate agents"
+            assert len(agents) == len(set(agents)), (
+                f"Reaction {reaction} contains duplicate agents"
+            )
             # note that a species might appear as both reactant and product
             # a species might also appear twice or more on on each side
             # agents is a set that contains unique (symbol, coefficient)

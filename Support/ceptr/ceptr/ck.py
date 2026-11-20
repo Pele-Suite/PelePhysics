@@ -2479,7 +2479,6 @@ def ckinu(fstream, mechanism, species_info, reaction_info, write_sk=False):
     nu = [[] for _ in range(n_reactions)]
 
     for orig_idx, _ in reaction_info.idxmap.items():
-
         # ignore heterogeneous reactions for CKINU and homogeneous reactions for SKINU
         if (phase == "gas" and orig_idx >= n_gas_reactions) or (
             phase == "surface" and orig_idx < n_gas_reactions
