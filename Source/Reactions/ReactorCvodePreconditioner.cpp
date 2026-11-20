@@ -115,10 +115,7 @@ PSolve(
     udata->cusolverHandle, NUM_SPECIES + 1, NUM_SPECIES + 1, NNZ, udata->descrA,
     csr_val_d, csr_row_count_d, csr_col_index_d, r_d, z_d, ncells, udata->info,
     udata->buffer_qr);
-  if (cuS_st != CUSOLVER_STATUS_SUCCESS) {
-    // Recoverable: CVODE may retry with a fresh preconditioner
-    return (1);
-  }
+  AMREX_ALWAYS_ASSERT(cuS_st == CUSOLVER_STATUS_SUCCESS);
 
   cudaError_t cuda_status = cudaDeviceSynchronize();
   AMREX_ASSERT(cuda_status == cudaSuccess);
