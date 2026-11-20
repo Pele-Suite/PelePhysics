@@ -11,22 +11,35 @@ import cantera as ct
 import ceptr.converter as converter
 
 
-def parse_lst_lines(lst):
+def parse_lst_lines(lst, n_fields=1):
     """Return the entries and PLOG pressures of a list file.
 
-    Blank lines and lines starting with '#' are skipped. An entry without
-    --plog= gets a pressure of None.
+    Blank lines and lines starting with '#' are skipped. Each entry must have
+    at least n_fields whitespace-separated fields before an optional
+    --plog=<pressure>; an entry without it gets a pressure of None.
     """
     entries = []
     plog_pressures = []
     with open(lst, "r") as f:
-        for line in f:
+        for lineno, line in enumerate(f, start=1):
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            parts = line.split("--plog=")
-            entries.append(parts[0].strip())
-            plog_pressures.append(float(parts[1].strip()) if len(parts) > 1 else None)
+            entry, _, plog = line.partition("--plog=")
+            if len(entry.split()) < n_fields:
+                raise ValueError(
+                    f"{lst}:{lineno}: expected {n_fields} file name(s), got '{line}'"
+                )
+            try:
+                pressure = float(plog) if plog.strip() else None
+            except ValueError:
+                raise ValueError(
+                    f"{lst}:{lineno}: invalid --plog= pressure '{plog.strip()}'"
+                ) from None
+            if "--plog=" in line and pressure is None:
+                raise ValueError(f"{lst}:{lineno}: --plog= needs a pressure")
+            entries.append(entry.strip())
+            plog_pressures.append(pressure)
     return entries, plog_pressures
 
 
@@ -40,7 +53,7 @@ def parse_lst_file(lst):
 def parse_qss_lst_file(lst):
     """Return mechanism paths give a file containing a list of qss mechanism files."""
     lpath = pathlib.Path(lst)
-    fnames, plog_pressures = parse_lst_lines(lst)
+    fnames, plog_pressures = parse_lst_lines(lst, n_fields=2)
     mechnames = [lpath.parents[0] / fn.split()[0].strip() for fn in fnames]
     qss_format_inputs = [lpath.parents[0] / fn.split()[1].strip() for fn in fnames]
     return mechnames, qss_format_inputs, plog_pressures

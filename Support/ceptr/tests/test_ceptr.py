@@ -5,6 +5,7 @@ import pathlib
 import random
 
 import cantera as ct
+import pytest
 
 import ceptr.converter as converter
 import ceptr.utilities as cu
@@ -125,35 +126,36 @@ def test_kc_unit_conversions():
     """Check the refC powers of the Kc unit conversions for any mole change."""
     import types
 
-    import sympy
+    import symengine
 
-    refc = sympy.Symbol("refC")
-    refcinv = sympy.Symbol("refCinv")
-    syms = types.SimpleNamespace(
-        refC_smp=refc,
-        refCinv_smp=refcinv,
-        remove_1=False,
-        convert_symb_to_int=lambda x: x,
-    )
-    env = {"refC": 2.0, "refCinv": 0.5}
-    for n_reac, n_prod in [(1, 2), (1, 3), (1, 4), (2, 1), (3, 1), (4, 1)]:
+    from ceptr.symbolic_math import SymbolicMath
+
+    # The real symbolic conversion helpers, without building a mechanism
+    syms = SymbolicMath.__new__(SymbolicMath)
+    syms.refC_smp = symengine.Symbol("refC")
+    syms.refCinv_smp = symengine.Symbol("refCinv")
+    syms.remove_1 = False
+    refc = 2.0
+    env = {"refC": refc, "refCinv": 1.0 / refc, "pow": pow, "max": max}
+    subs = {syms.refC_smp: refc, syms.refCinv_smp: 1.0 / refc}
+
+    def cpp(expr):
+        return eval(expr.replace("std::max", "max"), env)
+
+    # Integer mole changes, and fractional ones, which go through pow in C++
+    # (with 6 decimals, so the coefficients here are exact in 6 decimals)
+    moles = [(1, 2), (1, 3), (1, 4), (2, 1), (3, 1), (4, 1)]
+    moles += [(1, 1.5), (1, 2.5), (1, 2.75), (1.5, 1), (2.5, 1), (2.75, 1)]
+    for n_reac, n_prod in moles:
         reaction = types.SimpleNamespace(
             reactants={"A": float(n_reac)}, products={"B": float(n_prod)}
         )
         dim = n_prod - n_reac
         # Kc = Kp * refC**dim, and fkc_conv_inv converts by its inverse
-        assert eval(cu.kc_conv(None, reaction), env) == 2.0**dim
+        assert math.isclose(cpp(cu.kc_conv(None, reaction)), refc**dim)
         conv, conv_smp = cu.fkc_conv_inv(None, None, reaction, syms)
-        assert eval(conv, env) == 2.0**-dim
-        assert conv_smp.subs({refc: 2.0, refcinv: 0.5}) == 2.0**-dim
-
-    # Fractional coefficients go through pow in C++, but the symbolic form
-    # must still be the inverse of refC**dim
-    for n_prod in [2.5, 0.5, 1.75]:
-        reaction = types.SimpleNamespace(reactants={"A": 1.0}, products={"B": n_prod})
-        dim = n_prod - 1.0
-        _, conv_smp = cu.fkc_conv_inv(None, None, reaction, syms)
-        assert math.isclose(float(conv_smp.subs({refc: 2.0, refcinv: 0.5})), 2.0**-dim)
+        assert math.isclose(cpp(conv), refc**-dim)
+        assert math.isclose(float(symengine.sympify(conv_smp).subs(subs)), refc**-dim)
 
 
 def test_parse_lst_file(tmp_path):
@@ -173,3 +175,13 @@ def test_parse_lst_file(tmp_path):
     assert names == [tmp_path / "qss/mechanism.yaml"]
     assert formats == [tmp_path / "qss/format.toml"]
     assert pressures == [None]
+
+    # Malformed entries name the file and line
+    for text, parse in [
+        ("qss/mechanism.yaml\n", parse_qss_lst_file),
+        ("air/mechanism.yaml --plog=\n", parse_lst_file),
+        ("air/mechanism.yaml --plog=1 atm\n", parse_lst_file),
+    ]:
+        lst.write_text("# comment\n" + text)
+        with pytest.raises(ValueError, match=f"{lst}:2: "):
+            parse(lst)

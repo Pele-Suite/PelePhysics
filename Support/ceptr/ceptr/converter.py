@@ -4,7 +4,6 @@ import os
 import pathlib
 import shutil
 import subprocess as spr
-import sys
 
 import numpy as np
 
@@ -82,18 +81,20 @@ class Converter:
             # The pressure necessary for the plog evaluation is either provided via
             # the command line argument or during runtime
             if plog_pressure is None:  # runtime option
-                if not sys.stdin.isatty():
+                try:
+                    plog_pressure = float(
+                        input(
+                            "Please specify the pressure, at which you want to"
+                            f" evaluate the rates in Pascal (1 atm = {cc.Patm_pa}"
+                            " Pa, 1 bar = 1e5 Pa):\n"
+                        )
+                    )
+                except (EOFError, RuntimeError):
+                    # No input: stdin is empty (e.g. a worker process) or missing
                     raise ValueError(
                         "The mechanism has PLOG reactions: give the pressure with"
                         " -p/--plog_pressure, or with --plog= in a list file."
-                    )
-                plog_pressure = float(
-                    input(
-                        "Please specify the pressure, at which you want to evaluate"
-                        f" the rates in Pascal (1 atm = {cc.Patm_pa} Pa, 1 bar = 1e5"
-                        " Pa):\n"
-                    )
-                )
+                    ) from None
             print(
                 f"plog_pressure set to {plog_pressure} Pa /"
                 f" {plog_pressure / 1e5} bar /."
