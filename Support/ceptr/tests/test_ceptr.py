@@ -3,13 +3,17 @@
 import math
 import pathlib
 import random
+import types
 
 import cantera as ct
 import pytest
+import symengine
 
 import ceptr.converter as converter
 import ceptr.utilities as cu
 from ceptr import __version__
+from ceptr.ceptr import parse_lst_file, parse_qss_lst_file
+from ceptr.symbolic_math import SymbolicMath
 
 
 def mechanism_path(mname):
@@ -124,12 +128,6 @@ def test_kc_product_no_overflow():
 
 def test_kc_unit_conversions():
     """Check the refC powers of the Kc unit conversions for any mole change."""
-    import types
-
-    import symengine
-
-    from ceptr.symbolic_math import SymbolicMath
-
     # The real symbolic conversion helpers, without building a mechanism
     syms = SymbolicMath.__new__(SymbolicMath)
     syms.refC_smp = symengine.Symbol("refC")
@@ -160,8 +158,6 @@ def test_kc_unit_conversions():
 
 def test_parse_lst_file(tmp_path):
     """Blank and comment lines in a mechanism list file are skipped."""
-    from ceptr.ceptr import parse_lst_file, parse_qss_lst_file
-
     lst = tmp_path / "list_mech"
     lst.write_text(
         "# comment\n\nair/mechanism.yaml\n  \nplog/mechanism.yaml --plog=1e5\n\n"

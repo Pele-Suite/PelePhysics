@@ -192,107 +192,49 @@ def is_remove_forward(reaction_info, idx):
     return idx in reaction_info.remove_id_list
 
 
-def fkc_conv_inv(self, mechanism, reaction, syms=None):
-    """Return fkc_conv_inv."""
-    record_symbolic_operations = True
-    if syms is None:
-        record_symbolic_operations = False
+def mole_change(reaction):
+    """Return the moles of products minus the moles of reactants."""
     dim = 0
-    if record_symbolic_operations:
-        dim_smp = 0
-    for _, coefficient in reaction.reactants.items():
+    for coefficient in reaction.reactants.values():
         dim -= coefficient
-        if record_symbolic_operations:
-            dim_smp -= coefficient
-    # flip the signs
-    for _, coefficient in reaction.products.items():
+    for coefficient in reaction.products.values():
         dim += coefficient
-        if record_symbolic_operations:
-            dim_smp += coefficient
+    return dim
 
-    conversion_smp = 1.0
-    if record_symbolic_operations and syms.remove_1:
-        conversion_smp = 1
-    if dim == 0:
+
+def refc_power(power, syms=None):
+    """Return refC**power as a C++ expression, and as a symbol with syms.
+
+    Negative powers are written with refCinv, and power 0 gives "".
+    """
+    base = "refC" if power > 0 else "refCinv"
+    n = abs(power)
+    if n == 0:
         conversion = ""
-    elif dim > 0:
-        if dim == 1.0:
-            conversion = "*".join(["refCinv"])
-            if record_symbolic_operations:
-                conversion_smp *= syms.refCinv_smp
-        else:
-            if dim.is_integer():
-                mult_str = "*".join(["refCinv"] * int(dim))
-                conversion = "*".join([f"({mult_str})"])
-                if record_symbolic_operations:
-                    conversion_smp *= syms.refCinv_smp ** int(dim)
-            else:
-                conversion = "*".join(
-                    [f"pow(std::max(refCinv, {sc_cutoff(dim)}), {dim:f})"]
-                )
-                if record_symbolic_operations:
-                    conversion_smp *= syms.refCinv_smp**dim
+    elif n == 1:
+        conversion = base
+    elif n.is_integer():
+        conversion = "(" + " * ".join([base] * int(n)) + ")"
     else:
-        if dim == -1.0:
-            conversion = "*".join(["refC"])
-            if record_symbolic_operations:
-                conversion_smp *= syms.refC_smp
-        else:
-            if dim.is_integer():
-                mult_str = "*".join(["refC"] * int(abs(dim)))
-                conversion = f"({mult_str})"
-                if record_symbolic_operations:
-                    conversion_smp *= syms.refC_smp ** int(abs(dim))
-            else:
-                conversion = "*".join(
-                    [f"pow(std::max(refC, {sc_cutoff(abs(dim))}), {abs(dim):f})"]
-                )
-                if record_symbolic_operations:
-                    conversion_smp *= syms.refC_smp ** abs(dim)
-
-    if record_symbolic_operations:
-        conversion_smp = syms.convert_symb_to_int(conversion_smp)
-        return conversion, conversion_smp
-    else:
+        conversion = f"pow(std::max({base}, {sc_cutoff(n)}), {n:f})"
+    if syms is None:
         return conversion
+
+    conversion_smp = 1 if syms.remove_1 else 1.0
+    if n != 0:
+        base_smp = syms.refC_smp if power > 0 else syms.refCinv_smp
+        conversion_smp *= base_smp ** (int(n) if n.is_integer() else n)
+    return conversion, syms.convert_symb_to_int(conversion_smp)
+
+
+def fkc_conv_inv(self, mechanism, reaction, syms=None):
+    """Return the conversion of Kp to 1/Kc, refC**(-mole change)."""
+    return refc_power(-mole_change(reaction), syms)
 
 
 def kc_conv(mechanism, reaction):
-    """Return kc_conv."""
-    dim = 0
-    for _, coefficient in reaction.reactants.items():
-        dim -= coefficient
-    # flip the signs
-    for _, coefficient in reaction.products.items():
-        dim += coefficient
-
-    if dim == 0:
-        conversion = ""
-    elif dim > 0:
-        if dim == 1.0:
-            conversion = "*".join(["refC"])
-        else:
-            if dim == 2.0:
-                conversion = "*".join(["(refC * refC)"])
-            else:
-                if dim.is_integer():
-                    conversion = "*".join(["refC"] * int(dim))
-                else:
-                    conversion = "*".join(
-                        [f"pow(std::max(refC, {sc_cutoff(dim)}),{dim:f})"]
-                    )
-    else:
-        if dim == -1.0:
-            conversion = "*".join(["refCinv"])
-        else:
-            if dim.is_integer():
-                conversion = "*".join(["refCinv"] * int(abs(dim)))
-            else:
-                conversion = "*".join(
-                    [f"pow(std::max(refCinv, {sc_cutoff(abs(dim))}),{abs(dim):f})"]
-                )
-
-    return conversion
+    """Return the conversion of Kp to Kc, refC**(mole change)."""
+    return refc_power(mole_change(reaction))
 
 
 def sorted_kc(mechanism, species_info, reaction):
