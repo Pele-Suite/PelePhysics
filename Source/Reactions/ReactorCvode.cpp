@@ -1170,14 +1170,20 @@ ReactorCvode::allocUserData(
       udata->NNZ, udata->descrA, udata->csr_val_d, udata->csr_row_count_h,
       udata->csr_col_index_h, a_ncells, udata->info, &internalDataInBytes,
       &workspaceInBytes);
-    AMREX_ASSERT(cusolver_status == CUSOLVER_STATUS_SUCCESS);
+    if (cusolver_status != CUSOLVER_STATUS_SUCCESS) {
+      amrex::Abort("allocUserData: cuSolver csrqrBufferInfoBatched failed");
+    }
     // amrex::Print() << " BufferInfo workspaceInBytes " << workspaceInBytes
     // <<
     // "\n";
 
     cudaError_t cudaStat1 =
       cudaMalloc((void**)&(udata->buffer_qr), workspaceInBytes);
-    AMREX_ASSERT(cudaStat1 == cudaSuccess);
+    if (cudaStat1 != cudaSuccess) {
+      amrex::Abort(
+        "allocUserData: cudaMalloc of cuSolver QR workspace failed: " +
+        std::string(cudaGetErrorString(cudaStat1)));
+    }
 #else
     amrex::Abort("cuSparse_simplified_AJacobian is only available with CUDA");
 #endif
@@ -1763,6 +1769,8 @@ ReactorCvode::freeUserData(CVODEUserData* data_wk)
     AMREX_ASSERT(cusolver_status == CUSOLVER_STATUS_SUCCESS);
     cusolver_status = cusolverSpDestroyCsrqrInfo(data_wk->info);
     AMREX_ASSERT(cusolver_status == CUSOLVER_STATUS_SUCCESS);
+    cusparseStatus_t cusparse_status = cusparseDestroyMatDescr(data_wk->descrA);
+    AMREX_ASSERT(cusparse_status == CUSPARSE_STATUS_SUCCESS);
     cudaFree(data_wk->buffer_qr);
 #endif
   }
