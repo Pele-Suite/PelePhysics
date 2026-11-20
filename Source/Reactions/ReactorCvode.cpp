@@ -1163,7 +1163,7 @@ ReactorCvode::allocUserData(
     AMREX_ASSERT(cusolver_status == CUSOLVER_STATUS_SUCCESS);
 
     // allocate working space
-    cusolver_status = cusolverSpDcsrqrBufferInfoBatched(
+    cusolver_status = csrqrBufferInfoBatched(
       udata->cusolverHandle,
       NUM_SPECIES + 1, // size per subsystem
       NUM_SPECIES + 1, // size per subsystem
