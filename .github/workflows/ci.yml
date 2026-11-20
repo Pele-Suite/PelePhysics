@@ -63,6 +63,26 @@ jobs:
       - name: Run codespell
         run: codespell
 
+  CEPTR-Lint:
+    # ruff needs none of CEPTR's dependencies, nor a Python matrix
+    needs: Detect-Changes
+    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Formatting with ruff
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          src: Support/ceptr
+          version-file: Support/ceptr/pyproject.toml
+          args: format --diff
+      - name: Lint with ruff
+        uses: astral-sh/ruff-action@v4.1.0
+        with:
+          src: Support/ceptr
+          version-file: Support/ceptr/pyproject.toml
+          args: check
+
   CEPTR:
     needs: Detect-Changes
     if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
@@ -86,12 +106,6 @@ jobs:
           poetry-version: ${{matrix.poetry-version}}
       - name: Install Dependencies using Poetry
         run: poetry install
-      - name: Formatting with black
-        run: poetry run black --check .
-      - name: Sort imports with isort
-        run: poetry run isort --check-only --diff .
-      - name: Lint with flake8
-        run: poetry run flake8 .
       - name: Run tests
         run: poetry run pytest
       - name: Convert air mechanism

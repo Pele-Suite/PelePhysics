@@ -457,7 +457,7 @@ class SymbolicMath:
         final_expr_symbols = [expr.free_symbols for expr in final_expr]
 
         # Replacement loop
-        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs)):
+        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs, strict=True)):
             op_count = sme.count_ops(rhs)
             is_float = True
             is_single_symbol = True
@@ -508,7 +508,7 @@ class SymbolicMath:
         final_expr_symbols = [expr.free_symbols for expr in final_expr]
 
         # Replacement loop
-        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs)):
+        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs, strict=True)):
             op_count = sme.count_ops(rhs)
             # count how many times the expression is used later
             ind_rhs = [j + i for j, s in enumerate(common_expr_symbols[i:]) if lhs in s]
@@ -566,7 +566,7 @@ class SymbolicMath:
         final_expr_symbols = [expr.free_symbols for expr in final_expr]
 
         # Replacement loop
-        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs)):
+        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs, strict=True)):
             op_count = sme.count_ops(rhs)
             is_float = True
             try:
@@ -614,7 +614,7 @@ class SymbolicMath:
 
         # Replacement loop
         for i, (lhs, rhs) in reversed(
-            list(enumerate(zip(common_expr_lhs, common_expr_rhs)))
+            list(enumerate(zip(common_expr_lhs, common_expr_rhs, strict=True)))
         ):
             op_count = sme.count_ops(rhs)
             is_float = True

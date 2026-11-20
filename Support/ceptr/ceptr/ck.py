@@ -2313,7 +2313,8 @@ def temp_given_ey(fstream, mechanism, species_list):
                 mechanism.species(symbol).thermo.max_temp,
             )
             for symbol in species_list
-        ]
+        ],
+        strict=True,
     )
     tmax = min(tmax_ar)
     tmin = max(tmin_ar)
@@ -2393,7 +2394,8 @@ def temp_given_hy(fstream, mechanism, species_list):
                 mechanism.species(symbol).thermo.max_temp,
             )
             for symbol in species_list
-        ]
+        ],
+        strict=True,
     )
     tmax = min(tmax_ar)
     tmin = max(tmin_ar)

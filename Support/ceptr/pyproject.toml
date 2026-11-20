@@ -21,15 +21,8 @@ pyarrow = "^15.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
-black = {version = "^24.3.0"}
-isort = "^5.12.0"
+ruff = "^0.17.6"
 ipython = "^8.14.0"
-flake8 = "^4.0.1"
-flake8-bugbear = "^22.12.6"
-pep8-naming = "^0.12.1"
-flake8-docstrings = "^1.7.0"
-flake8-use-fstring = "^1.4"
-flynt = "^0.77"
 clang-format = "==20.1.5"
 
 [build-system]
@@ -40,36 +33,21 @@ build-backend = "poetry.core.masonry.api"
 convert = "ceptr.ceptr:main"
 qssa = "ceptr.qssa:main"
 
-[tool.black]
-line-length = 88
-target-version = ['py310']
-preview = true
-include = '\.pyi?$'
-exclude = '''
+[tool.ruff]
+target-version = "py310"
 
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-  )/
-)
-'''
+[tool.ruff.lint]
+# The rules of the former flake8 setup (pycodestyle, pyflakes, bugbear,
+# pep8-naming, docstrings), isort, and f-strings for flake8-use-fstring/flynt
+select = ["E", "W", "F", "B", "N", "D", "I", "UP031", "UP032"]
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-line_length = 88
+[tool.ruff.lint.pycodestyle]
+# The formatter wraps code at 88; like flake8-bugbear's B950, only flag lines
+# (long strings or comments) more than 10% over
+max-line-length = 96
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
 
 [tool.pytest.ini_options]
 filterwarnings = [
