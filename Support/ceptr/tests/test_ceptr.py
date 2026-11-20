@@ -119,3 +119,57 @@ def test_kc_product_no_overflow():
                     value *= eval(factor, env)
                     assert math.isfinite(value) and value > 0.0
                 assert math.isclose(value, math.exp(sign * arg), rel_tol=1e-10)
+
+
+def test_kc_unit_conversions():
+    """Check the refC powers of the Kc unit conversions for any mole change."""
+    import types
+
+    import sympy
+
+    refc = sympy.Symbol("refC")
+    refcinv = sympy.Symbol("refCinv")
+    syms = types.SimpleNamespace(
+        refC_smp=refc,
+        refCinv_smp=refcinv,
+        remove_1=False,
+        convert_symb_to_int=lambda x: x,
+    )
+    env = {"refC": 2.0, "refCinv": 0.5}
+    for n_reac, n_prod in [(1, 2), (1, 3), (1, 4), (2, 1), (3, 1), (4, 1)]:
+        reaction = types.SimpleNamespace(
+            reactants={"A": float(n_reac)}, products={"B": float(n_prod)}
+        )
+        dim = n_prod - n_reac
+        # Kc = Kp * refC**dim, and fkc_conv_inv converts by its inverse
+        assert eval(cu.kc_conv(None, reaction), env) == 2.0**dim
+        conv, conv_smp = cu.fkc_conv_inv(None, None, reaction, syms)
+        assert eval(conv, env) == 2.0**-dim
+        assert conv_smp.subs({refc: 2.0, refcinv: 0.5}) == 2.0**-dim
+
+    # Fractional coefficients go through pow in C++, but the symbolic form
+    # must still be the inverse of refC**dim
+    for n_prod in [2.5, 0.5, 1.75]:
+        reaction = types.SimpleNamespace(reactants={"A": 1.0}, products={"B": n_prod})
+        dim = n_prod - 1.0
+        _, conv_smp = cu.fkc_conv_inv(None, None, reaction, syms)
+        assert math.isclose(float(conv_smp.subs({refc: 2.0, refcinv: 0.5})), 2.0**-dim)
+
+
+def test_parse_lst_file(tmp_path):
+    """Blank and comment lines in a mechanism list file are skipped."""
+    from ceptr.ceptr import parse_lst_file, parse_qss_lst_file
+
+    lst = tmp_path / "list_mech"
+    lst.write_text(
+        "# comment\n\nair/mechanism.yaml\n  \nplog/mechanism.yaml --plog=1e5\n\n"
+    )
+    names, pressures = parse_lst_file(lst)
+    assert names == [tmp_path / "air/mechanism.yaml", tmp_path / "plog/mechanism.yaml"]
+    assert pressures == [None, 1e5]
+
+    lst.write_text("\nqss/mechanism.yaml qss/format.toml\n\n")
+    names, formats, pressures = parse_qss_lst_file(lst)
+    assert names == [tmp_path / "qss/mechanism.yaml"]
+    assert formats == [tmp_path / "qss/format.toml"]
+    assert pressures == [None]

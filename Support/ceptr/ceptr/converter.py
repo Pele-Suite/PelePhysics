@@ -4,6 +4,7 @@ import os
 import pathlib
 import shutil
 import subprocess as spr
+import sys
 
 import numpy as np
 
@@ -81,6 +82,11 @@ class Converter:
             # The pressure necessary for the plog evaluation is either provided via
             # the command line argument or during runtime
             if plog_pressure is None:  # runtime option
+                if not sys.stdin.isatty():
+                    raise ValueError(
+                        "The mechanism has PLOG reactions: give the pressure with"
+                        " -p/--plog_pressure, or with --plog= in a list file."
+                    )
                 plog_pressure = float(
                     input(
                         "Please specify the pressure, at which you want to evaluate"
@@ -734,7 +740,8 @@ class Converter:
         n_hom_reactions = self.mechanism.n_reactions
         site_density = n_het_b_elem = n_het_species = n_het_reactions = 0
 
-        all_species_list = self.species_info.nonqssa_species_list
+        # A copy: the surface species must not join the gas-phase list
+        all_species_list = list(self.species_info.nonqssa_species_list)
 
         cw.writer(fstream)
         cw.writer(fstream, "#include <AMReX_Gpu.H>")

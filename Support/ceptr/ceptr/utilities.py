@@ -225,7 +225,7 @@ def fkc_conv_inv(self, mechanism, reaction, syms=None):
                 mult_str = "*".join(["refCinv"] * int(dim))
                 conversion = "*".join([f"({mult_str})"])
                 if record_symbolic_operations:
-                    conversion_smp *= syms.refCinv_smp * syms.refCinv_smp
+                    conversion_smp *= syms.refCinv_smp ** int(dim)
             else:
                 conversion = "*".join(
                     [f"pow(std::max(refCinv, {sc_cutoff(dim)}), {dim:f})"]
@@ -239,13 +239,16 @@ def fkc_conv_inv(self, mechanism, reaction, syms=None):
                 conversion_smp *= syms.refC_smp
         else:
             if dim.is_integer():
-                conversion = "*".join(["refC"] * int(dim))
+                mult_str = "*".join(["refC"] * int(abs(dim)))
+                conversion = f"({mult_str})"
+                if record_symbolic_operations:
+                    conversion_smp *= syms.refC_smp ** int(abs(dim))
             else:
                 conversion = "*".join(
                     [f"pow(std::max(refC, {sc_cutoff(abs(dim))}), {abs(dim):f})"]
                 )
-            if record_symbolic_operations:
-                conversion_smp *= syms.refC_smp**dim
+                if record_symbolic_operations:
+                    conversion_smp *= syms.refC_smp ** abs(dim)
 
     if record_symbolic_operations:
         conversion_smp = syms.convert_symb_to_int(conversion_smp)
@@ -283,7 +286,7 @@ def kc_conv(mechanism, reaction):
             conversion = "*".join(["refCinv"])
         else:
             if dim.is_integer():
-                conversion = "*".join(["refCinv"] * int(dim))
+                conversion = "*".join(["refCinv"] * int(abs(dim)))
             else:
                 conversion = "*".join(
                     [f"pow(std::max(refCinv, {sc_cutoff(abs(dim))}),{abs(dim):f})"]

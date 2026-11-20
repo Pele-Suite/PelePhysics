@@ -11,38 +11,36 @@ import cantera as ct
 import ceptr.converter as converter
 
 
-def parse_lst_file(lst):
-    """Return mechanism paths give a file containing a list of mechanism files."""
-    lpath = pathlib.Path(lst)
-    fnames = []
+def parse_lst_lines(lst):
+    """Return the entries and PLOG pressures of a list file.
+
+    Blank lines and lines starting with '#' are skipped. An entry without
+    --plog= gets a pressure of None.
+    """
+    entries = []
     plog_pressures = []
     with open(lst, "r") as f:
         for line in f:
-            if not line.startswith("#"):
-                parts = line.split("--plog=")
-                fnames.append(parts[0])
-                if len(parts) > 1:
-                    plog_pressures.append(float(parts[1].strip()))
-                else:
-                    plog_pressures.append(None)
-    return [lpath.parents[0] / fn.strip() for fn in fnames], plog_pressures
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("--plog=")
+            entries.append(parts[0].strip())
+            plog_pressures.append(float(parts[1].strip()) if len(parts) > 1 else None)
+    return entries, plog_pressures
+
+
+def parse_lst_file(lst):
+    """Return mechanism paths give a file containing a list of mechanism files."""
+    lpath = pathlib.Path(lst)
+    fnames, plog_pressures = parse_lst_lines(lst)
+    return [lpath.parents[0] / fn for fn in fnames], plog_pressures
 
 
 def parse_qss_lst_file(lst):
     """Return mechanism paths give a file containing a list of qss mechanism files."""
     lpath = pathlib.Path(lst)
-    fnames = []
-    plog_pressures = []
-    with open(lst, "r") as f:
-        for line in f:
-            if not line.startswith("#"):
-                parts = line.split("--plog=")
-                fnames.append(parts[0])
-                if len(parts) > 1:
-                    plog_pressures.append(float(parts[1].strip()))
-                else:
-                    plog_pressures.append(None)
-
+    fnames, plog_pressures = parse_lst_lines(lst)
     mechnames = [lpath.parents[0] / fn.split()[0].strip() for fn in fnames]
     qss_format_inputs = [lpath.parents[0] / fn.split()[1].strip() for fn in fnames]
     return mechnames, qss_format_inputs, plog_pressures
@@ -95,9 +93,11 @@ def convert_lst(
     chemistry,
     gas_name,
     interface_name,
+    plog_pressure=None,
 ):
     """Convert mechanisms from a file containing a list of directories."""
     mechnames, plog_pressures = parse_lst_file(lst)
+    plog_pressures = [plog_pressure if p is None else p for p in plog_pressures]
     print(f"Using {ncpu} processes")
     with Pool(ncpu) as pool:
         pool.starmap(
@@ -122,9 +122,11 @@ def convert_lst_qss(
     chemistry,
     gas_name,
     interface_name,
+    plog_pressure=None,
 ):
     """Convert QSS mechanisms from a file of directories and format input."""
     mechnames, qss_format_inputs, plog_pressures = parse_qss_lst_file(lst)
+    plog_pressures = [plog_pressure if p is None else p for p in plog_pressures]
     print(f"Using {ncpu} processes")
     with Pool(ncpu) as pool:
         pool.starmap(
@@ -242,6 +244,7 @@ def main():
             args.chemistry,
             args.gas_name,
             args.interface_name,
+            args.plog_pressure,
         )
     elif args.lst_qss:
         convert_lst_qss(
@@ -251,6 +254,7 @@ def main():
             args.chemistry,
             args.gas_name,
             args.interface_name,
+            args.plog_pressure,
         )
     end = time.time()
     print(f"CEPTR run time: {end-start:.2f} s")
