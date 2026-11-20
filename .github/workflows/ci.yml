@@ -51,12 +51,10 @@ jobs:
       - name: Clone
         uses: actions/checkout@v6
       - name: Check formatting
-        uses: DoozyX/clang-format-lint-action@bcb4eb2cb0d707ee4f3e5cc3b456eb075f12cf73 # v0.20
-        with:
-          source: './Source ./Testing ./Mechanisms'
-          exclude: '.'
-          extensions: 'H,h,cpp'
-          clangFormatVersion: 20
+        run: |
+          pipx install clang-format==20.1.8
+          git ls-files -z -- '*.[Hh]' '*.cpp' | grep -zE '^(Source|Testing|Mechanisms)/' |
+            xargs -0 clang-format --dry-run --Werror
 
   Codespell:
     runs-on: ubuntu-latest
@@ -89,10 +87,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{matrix.python-version}}
-      - name: Run image
-        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1 # v4.0.0
-        with:
-          poetry-version: ${{matrix.poetry-version}}
+      - name: Install Poetry
+        run: pipx install poetry==${{matrix.poetry-version}}
       - name: Install Dependencies using Poetry
         run: poetry install
       - name: Formatting with black
@@ -159,11 +155,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{matrix.python-version}}
-      - name: Run image
+      - name: Install Poetry
         if: env.RUN_TESTS == 'true'
-        uses: abatilo/actions-poetry@3765cf608f2d4a72178a9fc5b918668e542b89b1 # v4.0.0
-        with:
-          poetry-version: ${{matrix.poetry-version}}
+        run: pipx install poetry==${{matrix.poetry-version}}
       - name: Clone PelePhysics
         uses: actions/checkout@v6
         with:
