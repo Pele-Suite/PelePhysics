@@ -3,17 +3,21 @@ name: Downstream-CI
 on:
    workflow_dispatch:
    schedule:
-     # Weekly, so the ccaches are refreshed before GitHub evicts them after
-     # 7 days without access.
-     - cron: '0 3 * * 1'
+     # Twice a week, so the ccaches are refreshed before GitHub evicts them
+     # after 7 days without access, with a margin for late scheduled starts.
+     # Jobs without a cache skip the scheduled runs (run-checks).
+     - cron: '0 3 * * 1,4'
    push:
      branches: [development]
    pull_request:
      branches: [development]
 
 concurrency:
+  # Only PR runs cancel an older run: on development a cancelled run would
+  # not save its caches, so runs (pushes and scheduled) queue, one at a time
+  # (GitHub keeps only the newest pending one).
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Run steps with bash -eo pipefail, so `build | tee log` fails with the build.
 defaults:
@@ -28,30 +32,16 @@ env:
 
 jobs:
   Detect-Changes:
-    runs-on: ubuntu-latest
-    outputs:
-      has-source-changes: ${{ steps.changes.outputs.src }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            src:
-              - '**'
-              - '!**/*.rst'
-              - '!Docs/**'
-              - '!Source/Utility/**/*.py'
-              - '!README.md'
-              - '!CONTRIBUTING.md'
-              - '!.codespell*'
-              - '!.gitignore'
+    # A called workflow can only narrow the caller's token permissions, so
+    # grant here what its filter job needs.
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/detect-changes.yml
 
   Run:
     needs: Detect-Changes
-    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
+    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
     name: ${{ matrix.code }} GNU MPI Run [${{ matrix.case }}]
     runs-on: ubuntu-24.04
     strategy:
@@ -67,18 +57,23 @@ jobs:
             make_args: DIM=3
             run: ./PeleC3d.gnu.MPI.ex example.inp max_step=2 amr.plot_int=-1 amr.check_int=-1 amrex.abort_on_unused_inputs=0 amr.n_cell=8 8 128
     steps:
-      - name: Checkout PelePhysics
+      # Defined once here and reused (*checkout_pr, *clone_code) by clang-tidy.
+      - &checkout_pr
+        name: Checkout PelePhysics
         uses: actions/checkout@v6
         with:
           path: pelephysics-pr
-          fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Clone ${{ matrix.code }}, pointing its PelePhysics at this PR
+      - &clone_code
+        name: Clone ${{ matrix.code }}, pointing its PelePhysics at this PR
         run: |
           git clone --depth 1 --recursive --shallow-submodules --single-branch \
             https://github.com/Pele-Suite/${{ matrix.code }}.git
           cd ${{ matrix.code }}/Submodules/PelePhysics
-          git fetch "${GITHUB_WORKSPACE}/pelephysics-pr"
+          # --depth=1: the checkout is shallow, and git will not fetch its
+          # shallow root into this shallow clone otherwise (it skips it with a
+          # warning, leaving FETCH_HEAD unset).
+          git fetch --depth=1 "${GITHUB_WORKSPACE}/pelephysics-pr" HEAD
           git checkout FETCH_HEAD
           git submodule update --recursive
           echo "PelePhysics submodule now at $(git rev-parse --short HEAD)"
@@ -96,7 +91,9 @@ jobs:
         run: mpirun -n 2 ${{ matrix.run }}
 
   clang-tidy:
-    needs: Run
+    needs: [Detect-Changes, Run]
+    # !failure(): after Run, or without it on the scheduled runs, which skip it.
+    if: ${{ !failure() && !cancelled() && needs['Detect-Changes'].outputs['has-source-changes'] == 'true' }}
     name: ${{ matrix.code }} clang-tidy
     runs-on: ubuntu-24.04
     strategy:
@@ -109,9 +106,7 @@ jobs:
             cmake_args: -DPELE_ENABLE_MASA:BOOL=OFF -DPELE_EXCLUDE_BUILD_IN_CI:BOOL=ON
     env:
       BUILD_DIR: ${{ github.workspace }}/build-clang-tidy-${{ matrix.code }}
-      CCACHE_COMPRESS: 1
       CCACHE_COMPRESSLEVEL: 10
-      CCACHE_EXTRAFILES: ${{ github.workspace }}/${{ matrix.code }}/.clang-tidy
       CCACHE_MAXSIZE: 100M
       # clang-tidy-cache skips files whose preprocessed source, flags and
       # resolved clang-tidy config are unchanged. SAVE_OUTPUT/SAVE_ALL store
@@ -122,38 +117,32 @@ jobs:
       CTCACHE_SAVE_ALL: 1
       CTCACHE_KEEP_COMMENTS: 1
     steps:
-      - name: Checkout PelePhysics
-        uses: actions/checkout@v6
-        with:
-          path: pelephysics-pr
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Clone ${{ matrix.code }}, pointing its PelePhysics at this PR
-        run: |
-          git clone --depth 1 --recursive --shallow-submodules --single-branch \
-            https://github.com/Pele-Suite/${{ matrix.code }}.git
-          cd ${{ matrix.code }}/Submodules/PelePhysics
-          git fetch "${GITHUB_WORKSPACE}/pelephysics-pr"
-          git checkout FETCH_HEAD
-          git submodule update --recursive
-          echo "PelePhysics submodule now at $(git rev-parse --short HEAD)"
+      - *checkout_pr
+      - *clone_code
       - name: Install Ccache and clang-tidy-cache
+        # Outside the workspace: AMReX's script downloads into the current directory.
+        working-directory: ${{ runner.temp }}
         run: |
-          wget -q https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
-          tar xf ccache-4.8-linux-x86_64.tar.xz
-          sudo cp -f ccache-4.8-linux-x86_64/ccache /usr/local/bin/
+          # AMReX's install script, from the PR's amrex pin (the same ccache as
+          # PeleC). It exits 0 even if the download fails, so check the result.
+          ${{ github.workspace }}/${{ matrix.code }}/Submodules/PelePhysics/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
+          ccache --version | sed -n 1p
           # ctcache 1.2.0; the module is a self-contained script
-          sudo curl -L https://raw.githubusercontent.com/matus-chochlik/ctcache/e33c063ca6e52b48bcefbc45d46d8c150ffa81ca/src/ctcache/clang_tidy_cache.py -o /usr/local/bin/clang-tidy-cache
+          sudo curl -fsSL https://raw.githubusercontent.com/matus-chochlik/ctcache/e33c063ca6e52b48bcefbc45d46d8c150ffa81ca/src/ctcache/clang_tidy_cache.py -o /usr/local/bin/clang-tidy-cache
           sudo chmod +x /usr/local/bin/clang-tidy-cache
           # Keyed on the clang-tidy version, which the ctcache hash does not include
           echo "CTCACHE_DIR=${HOME}/.cache/ctcache/$(clang-tidy --version | sha256sum | cut -c1-12)" >> $GITHUB_ENV
+      # Restore and save separately: the combined actions/cache saves only
+      # when the whole job passes, so a run that finds warnings would throw
+      # away the cache it just filled.
       - name: Set Up Ccache
-        uses: actions/cache@v5
+        id: ccache
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/.cache/ccache
             ~/.cache/ctcache
-          key: ccache-${{ github.workflow }}-${{ github.job }}-${{ matrix.code }}-git-${{ github.sha }}
+          key: ccache-${{ github.workflow }}-${{ github.job }}-${{ matrix.code }}-git-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             ccache-${{ github.workflow }}-${{ github.job }}-${{ matrix.code }}-git-
       - name: Configure
@@ -175,10 +164,12 @@ jobs:
           -DPELE_ENABLE_FCOMPARE_FOR_TESTS:BOOL=OFF \
           -DPELE_ENABLE_CLANG_TIDY:BOOL=ON \
           "-DCLANG_TIDY_EXE:STRING=clang-tidy-cache;$(command -v clang-tidy)" \
+          -DCMAKE_C_COMPILER_LAUNCHER:STRING=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER:STRING=ccache \
           ${{ matrix.cmake_args }} \
           ${{ github.workspace }}/${{ matrix.code }}
       - name: Check
+        id: check
         working-directory: ${{ env.BUILD_DIR }}
         run: |
           mkdir -p ${CTCACHE_DIR}
@@ -204,9 +195,37 @@ jobs:
           # characters); the per-directory stats files are not counted.
           echo "ctcache entries: $(find ${CTCACHE_DIR} -type f -regextype posix-extended -regex '.*/[0-9a-f]{38}' | wc -l)"
           ccache -s
+      # Saved on PRs too (a cold run takes hours, and the cache is small),
+      # whenever Check completed the build, even if Short report then fails
+      # on warnings.
+      - name: Save Ccache
+        if: ${{ !cancelled() && steps.check.outcome == 'success' }}
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ~/.cache/ccache
+            ~/.cache/ctcache
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
       - name: Short report
         if: ${{ !cancelled() }}
         working-directory: ${{ env.BUILD_DIR }}
+        run: ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt
+
+  # The one check for branch protection to require in Downstream-CI. A job
+  # skipped by its own `if:` (docs-only changes, scheduled runs) does not
+  # expand its matrix, so its per-entry checks never report and a PR
+  # requiring them waits forever; skipped jobs pass here. It also fails when Detect-Changes
+  # fails, which would otherwise skip every build.
+  Downstream-Status:
+    needs: [Detect-Changes, Run, clang-tidy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the job results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "::add-matcher::${{ github.workspace }}/${{ matrix.code }}/.github/problem-matchers/gcc.json"
-          ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt
+          echo "${RESULTS}"
+          for r in ${RESULTS}; do
+            [ "$r" = success ] || [ "$r" = skipped ] || exit 1
+          done
