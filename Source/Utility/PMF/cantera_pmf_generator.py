@@ -8,7 +8,6 @@
 # import :
 
 import argparse
-import csv
 import os
 import re
 
@@ -236,19 +235,21 @@ print("mixture averaged flamespeed = ", f.velocity[0])
 nz = f.flame.n_points
 csv_file = os.path.join(outdir, str(label_pre + "-" + label + "-X.dat"))
 with open(csv_file, "w") as outfile:
-    writer = csv.writer(
-        outfile, delimiter=" ", quotechar=" ", quoting=csv.QUOTE_MINIMAL
+    print(
+        'VARIABLES = "X" "temp" "u" "rho"',
+        *['"X_' + x + '"' for x in gas.species_names],
+        file=outfile,
     )
-    writer.writerow(
-        ['VARIABLES = "X" "temp" "u" "rho"']
-        + ['"X_' + x + '"' for x in gas.species_names]
-    )
-    writer.writerow(["ZONE I=" + str(nz) + " FORMAT=POINT" + " SPECFORMAT=MOLE"])
+    print("ZONE I=" + str(nz) + " FORMAT=POINT" + " SPECFORMAT=MOLE", file=outfile)
     for kk in range(len(f.grid)):
         f.set_gas_state(kk)
-        writer.writerow(
-            [f.grid[kk] * 1e2, gas.T, f.velocity[kk] * 1e2, gas.density * 1e-3]
-            + list(gas.X)
+        print(
+            f.grid[kk] * 1e2,
+            gas.T,
+            f.velocity[kk] * 1e2,
+            gas.density * 1e-3,
+            *gas.X,
+            file=outfile,
         )
 
 # QSS Mechanisms: save again with QSS species removed and others renormalized to unity sum
@@ -257,14 +258,12 @@ if mech_has_qssa:
         outdir, str(label_pre + "-" + label + "-X-qssa-removed.dat")
     )
     with open(csv_file, "w") as outfile:
-        writer = csv.writer(
-            outfile, delimiter=" ", quotechar=" ", quoting=csv.QUOTE_MINIMAL
+        print(
+            'VARIABLES = "X" "temp" "u" "rho"',
+            *['"X_' + x + '"' for x in gas.species_names if x in nonqss_spec_list],
+            file=outfile,
         )
-        writer.writerow(
-            ['VARIABLES = "X" "temp" "u" "rho"']
-            + ['"X_' + x + '"' for x in gas.species_names if x in nonqss_spec_list]
-        )
-        writer.writerow(["ZONE I=" + str(nz) + " FORMAT=POINT" + " SPECFORMAT=MOLE"])
+        print("ZONE I=" + str(nz) + " FORMAT=POINT" + " SPECFORMAT=MOLE", file=outfile)
         max_total_qss = 0.0
         for kk in range(len(f.grid)):
             f.set_gas_state(kk)
@@ -278,12 +277,16 @@ if mech_has_qssa:
             max_total_qss = max(max_total_qss, total_qss)
             # this will modify rho so that it is consistent with the right T/p with the modified mole fractions
             gas.TPX = gas.T, gas.P, zeroqss_mole_fracs
-            writer.writerow(
-                [f.grid[kk] * 1e2, gas.T, f.velocity[kk] * 1e2, gas.density * 1e-3]
-                + [
+            print(
+                f.grid[kk] * 1e2,
+                gas.T,
+                f.velocity[kk] * 1e2,
+                gas.density * 1e-3,
+                *[
                     X
                     for ii, X in enumerate(gas.X)
                     if (gas.species_name(ii) in nonqss_spec_list)
-                ]
+                ],
+                file=outfile,
             )
     print("Maximum local total mole fraction of QSS species: ", max_total_qss)
