@@ -7,3 +7,10 @@ updates:
     directory: /
     allow:
       - dependency-name: "Submodules/amrex"
+  # The actions the workflows use. Third-party ones are pinned to a commit
+  # (a tag can be moved), and Dependabot keeps those pins and the
+  # actions/* major versions up to date.
+  - package-ecosystem: github-actions
+    schedule:
+        interval: "monthly"
+    directory: /
