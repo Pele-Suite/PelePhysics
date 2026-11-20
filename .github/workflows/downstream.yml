@@ -57,12 +57,15 @@ jobs:
             make_args: DIM=3
             run: ./PeleC3d.gnu.MPI.ex example.inp max_step=2 amr.plot_int=-1 amr.check_int=-1 amrex.abort_on_unused_inputs=0 amr.n_cell=8 8 128
     steps:
-      - name: Checkout PelePhysics
+      # Defined once here and reused (*checkout_pr, *clone_code) by clang-tidy.
+      - &checkout_pr
+        name: Checkout PelePhysics
         uses: actions/checkout@v6
         with:
           path: pelephysics-pr
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Clone ${{ matrix.code }}, pointing its PelePhysics at this PR
+      - &clone_code
+        name: Clone ${{ matrix.code }}, pointing its PelePhysics at this PR
         run: |
           git clone --depth 1 --recursive --shallow-submodules --single-branch \
             https://github.com/Pele-Suite/${{ matrix.code }}.git
@@ -114,23 +117,8 @@ jobs:
       CTCACHE_SAVE_ALL: 1
       CTCACHE_KEEP_COMMENTS: 1
     steps:
-      - name: Checkout PelePhysics
-        uses: actions/checkout@v6
-        with:
-          path: pelephysics-pr
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Clone ${{ matrix.code }}, pointing its PelePhysics at this PR
-        run: |
-          git clone --depth 1 --recursive --shallow-submodules --single-branch \
-            https://github.com/Pele-Suite/${{ matrix.code }}.git
-          cd ${{ matrix.code }}/Submodules/PelePhysics
-          # --depth=1: the checkout is shallow, and git will not fetch its
-          # shallow root into this shallow clone otherwise (it skips it with a
-          # warning, leaving FETCH_HEAD unset).
-          git fetch --depth=1 "${GITHUB_WORKSPACE}/pelephysics-pr" HEAD
-          git checkout FETCH_HEAD
-          git submodule update --recursive
-          echo "PelePhysics submodule now at $(git rev-parse --short HEAD)"
+      - *checkout_pr
+      - *clone_code
       - name: Install Ccache and clang-tidy-cache
         # Outside the workspace: AMReX's script downloads into the current directory.
         working-directory: ${{ runner.temp }}

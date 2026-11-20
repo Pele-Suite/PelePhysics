@@ -144,9 +144,11 @@ jobs:
       BUILD_MANIFOLD: ${{matrix.comp != 'sycl'}}
       CCACHE_MAXSIZE: 1G
       # Only development saves the cache (the scheduled runs keep it from
-      # being evicted); PRs restore it. CCACHE_COMPRESSLEVEL is set from this
-      # in Install Ccache.
+      # being evicted); PRs restore it.
       SAVE_CCACHE: ${{github.ref == 'refs/heads/development'}}
+      # Compress hard only when the cache is kept; a PR's new entries are
+      # discarded at the end of the job.
+      CCACHE_COMPRESSLEVEL: ${{github.ref == 'refs/heads/development' && 10 || 1}}
       # ccache for the CMake-built TPLs (SUNDIALS) too: CMake reads these as
       # the default compiler launchers.
       CMAKE_C_COMPILER_LAUNCHER: ccache
@@ -174,10 +176,6 @@ jobs:
           # if the download fails, so check the result.
           ${{github.workspace}}/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
           ccache --version | sed -n 1p
-          # Compress hard only when the cache is kept; a PR's new entries are
-          # discarded at the end of the job.
-          if [ "${SAVE_CCACHE}" = true ]; then level=10; else level=1; fi
-          echo "CCACHE_COMPRESSLEVEL=${level}" >> $GITHUB_ENV
           # Marks the start of the run for Trim Ccache
           touch ${{runner.temp}}/ccache-start
       # Restore only; the cache is saved at the end of the job, and only from
