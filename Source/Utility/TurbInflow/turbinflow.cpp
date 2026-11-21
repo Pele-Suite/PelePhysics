@@ -170,14 +170,24 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
       // p2 = p3 = 0.  A trailer marks the file as uniform in the precursor's
       // Xi coordinate rather than in physical position; add_turb() inverts
       // the map before indexing the file.
+      //
+      // Content this reader does not recognise (a trailer from a newer
+      // generator, or stray tokens) is skipped up to the next keyword it
+      // knows, so a known trailer is found whatever precedes it.  One warning
+      // is printed per unrecognised run.
       std::string token;
+      bool skipping = false;
       while (is >> token) {
         if (token != "MESHMAP_V1" && token != "MESHMAP_V2") {
-          amrex::Print() << "TurbInflow: WARNING ignoring unrecognised "
-                            "trailing content in "
-                         << turb_header << " starting at '" << token << "'\n";
-          break;
+          if (!skipping) {
+            amrex::Print() << "TurbInflow: WARNING skipping unrecognised "
+                              "trailing content in "
+                           << turb_header << " starting at '" << token << "'\n";
+          }
+          skipping = true;
+          continue;
         }
+        skipping = false;
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
           !tp[n].has_map,
           "TurbInflow::init(): duplicate MESHMAP trailer in " + turb_header);
@@ -199,9 +209,11 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
           tp[n].map.m_p3[idim] = p3;
           tp[n].map.m_q[idim] = q;
         }
+        // !fail() rather than good(): a trailer that ends the file without a
+        // final newline sets eofbit on its last value, and is still valid.
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
-          is.good(), "TurbInflow::init(): malformed " + token + " trailer in " +
-                       turb_header);
+          !is.fail(), "TurbInflow::init(): malformed " + token +
+                        " trailer in " + turb_header);
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
           kind[0] == kind[1],
           "TurbInflow::init(): " + token + " trailer in " + turb_header +
@@ -250,8 +262,7 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
         amrex::IntVect(
           AMREX_D_DECL(npts[0] - 1, npts[1] - 1, tp[n].nplane - 1)));
 
-      tp[n].sdata = std::make_unique<amrex::FArrayBox>(
-        sbx, AMREX_SPACEDIM, amrex::The_Async_Arena());
+      tp[n].sdata = make_plane_chunk(sbx, AMREX_SPACEDIM);
 
       // Center the turbulence.  For a physically-uniform file turb_center
       // is in case units and the file is placed around it.  For a
@@ -334,6 +345,22 @@ TurbInflow::init(amrex::Geometry const& /*geom*/)
   }
 }
 
+std::shared_ptr<amrex::FArrayBox>
+TurbInflow::make_plane_chunk(const amrex::Box& bx, const int ncomp)
+{
+  auto fab =
+    std::make_shared<amrex::FArrayBox>(bx, ncomp, amrex::The_Async_Arena());
+  // Runs before the arenas are torn down.  A weak reference, so that the
+  // hook neither keeps the chunk alive nor touches it once its owner has
+  // freed or replaced it.
+  amrex::ExecOnFinalize([w = std::weak_ptr<amrex::FArrayBox>(fab)]() {
+    if (auto f = w.lock()) {
+      f->clear();
+    }
+  });
+  return fab;
+}
+
 TurbFileSampler
 TurbInflow::file_sampler(TurbParm& a_tp, const amrex::Real z)
 {
@@ -341,6 +368,7 @@ TurbInflow::file_sampler(TurbParm& a_tp, const amrex::Real z)
   prepare_planes(a_tp, z, s.cz, s.k0);
 
   s.sd = a_tp.sdata->const_array();
+  s.generation = a_tp.chunk_generation;
   for (int d = 0; d < 2; ++d) {
     s.npboxcells[d] = a_tp.npboxcells[d];
     s.pboxlo[d] = a_tp.pboxlo[d];
@@ -680,23 +708,34 @@ TurbInflow::read_one_turb_plane(TurbParm& a_tp, int iplane, int k)
   ifs.close();
 }
 
+namespace {
+// For a time-plane file with time_periodic, bring plane time z into
+// [t_0, t_{kmax-2}): the last plane is only there to interpolate towards.
+// Any other z is returned unchanged.
+amrex::Real
+wrap_plane_time(const TurbParm& a_tp, const amrex::Real z)
+{
+  if (!a_tp.istimeplanes || !a_tp.time_periodic || a_tp.kmax < 2) {
+    return z;
+  }
+  const amrex::Real t_start = a_tp.planeTimes[0];
+  const amrex::Real period = a_tp.planeTimes[a_tp.kmax - 2] - t_start;
+  if (period <= 0.0) {
+    return z;
+  }
+  const amrex::Real from_start = z - t_start;
+  return t_start + from_start - std::floor(from_start / period) * period;
+}
+
+// Source of TurbParm::chunk_generation: one counter for all files and all
+// init() calls, so that a sampler never matches a chunk it did not come from
+int last_chunk_generation = 0;
+} // namespace
+
 void
-TurbInflow::read_turb_planes(TurbParm& a_tp, amrex::Real z)
+TurbInflow::read_turb_planes(TurbParm& a_tp, const amrex::Real z)
 {
   if (a_tp.istimeplanes) {
-    // If time_periodic is enabled, wrap the time value to be within bounds
-    if (a_tp.time_periodic) {
-      const amrex::Real t_start = a_tp.planeTimes[0];
-      const amrex::Real t_end = a_tp.planeTimes[a_tp.kmax - 2];
-      const amrex::Real period = t_end - t_start;
-      if (period > 0.0) {
-        // Wrap z to be within [t_start, t_end)
-        amrex::Real z_wrapped = z - t_start;
-        z_wrapped = z_wrapped - std::floor(z_wrapped / period) * period;
-        z = z_wrapped + t_start;
-      }
-    }
-
     if (z < a_tp.planeTimes[0] || z >= a_tp.planeTimes[a_tp.kmax - 2]) {
       amrex::Error(
         "TurbInflow::read_turb_planes(): Requested time (" + std::to_string(z) +
@@ -732,6 +771,12 @@ TurbInflow::read_turb_planes(TurbParm& a_tp, amrex::Real z)
                    << z << std::endl;
   }
 
+  // Kernels launched by earlier add_turb() calls may still be reading the
+  // chunk, possibly on other streams (callers loop over boxes inside an
+  // MFIter, which switches streams); let them finish before overwriting it.
+  amrex::Gpu::synchronize();
+  a_tp.chunk_generation = ++last_chunk_generation;
+
   for (int iplane = 0; iplane < a_tp.nplane; ++iplane) {
     int k = a_tp.izlo + iplane;
     if (!a_tp.istimeplanes) {
@@ -740,24 +785,19 @@ TurbInflow::read_turb_planes(TurbParm& a_tp, amrex::Real z)
     }
     read_one_turb_plane(a_tp, iplane, k);
   }
+
+  // The copies above run on the current stream; the chunk may next be read
+  // from another one.
+  amrex::Gpu::streamSynchronize();
 }
 
 void
 TurbInflow::prepare_planes(
   TurbParm& a_tp, amrex::Real z, amrex::GpuArray<amrex::Real, 3>& cz, int& k0)
 {
-  // If time_periodic is enabled and istimeplanes, wrap the time value
-  if (a_tp.istimeplanes && a_tp.time_periodic && a_tp.kmax > 0) {
-    const amrex::Real t_start = a_tp.planeTimes[0];
-    const amrex::Real t_end = a_tp.planeTimes[a_tp.kmax - 2];
-    const amrex::Real period = t_end - t_start;
-    if (period > 0.0) {
-      // Wrap z to be within [t_start, t_end)
-      amrex::Real z_wrapped = z - t_start;
-      z_wrapped = z_wrapped - std::floor(z_wrapped / period) * period;
-      z = z_wrapped + t_start;
-    }
-  }
+  // Wrapped once, here, so that the chunk loaded and the stencil computed
+  // below use the same z
+  z = wrap_plane_time(a_tp, z);
 
   const amrex::Real tplanes_lo = a_tp.szlo;
   const amrex::Real tplanes_hi = a_tp.szhi;
@@ -808,11 +848,18 @@ TurbInflow::fill_turb_plane(
   const amrex::Vector<amrex::Real>& y,
   amrex::FArrayBox& v)
 {
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+    sampler_is_current(a_tp, sampler),
+    "TurbInflow::fill_turb_plane(): sampler is stale, " + a_tp.m_turb_file +
+      " has been reloaded since it was obtained");
+
   const auto& bx = v.box();
   const auto& vd = v.array();
 
   // Freed by a stream callback once the kernel below is done with them, so
-  // no synchronization is needed before they go out of scope
+  // no synchronization is needed before they go out of scope.  The kernel
+  // reads the plane chunk asynchronously: read_turb_planes() synchronizes
+  // before it overwrites the chunk.
   amrex::Gpu::AsyncArray<amrex::Real> x_dev(x.data(), x.size());
   amrex::Gpu::AsyncArray<amrex::Real> y_dev(y.data(), y.size());
   const amrex::Real* xd = x_dev.data();
