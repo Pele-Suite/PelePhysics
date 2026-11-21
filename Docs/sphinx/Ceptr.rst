@@ -21,6 +21,15 @@ To install CEPTR and its dependencies::
 
 This installs the exact versions recorded in ``Support/ceptr/uv.lock``, so that every user generates the same mechanisms. uv also installs a suitable Python version (given in ``Support/ceptr/.python-version``) if none is found on the system.
 
+The plotting packages (matplotlib, networkx and SciPy) are an optional ``plot`` extra: they are only needed for
+``qssa --visualize`` and for the plotting scripts elsewhere in PelePhysics (``plotPMF.py``, ``gen_hit_ic.py``).
+To install them too::
+
+  $ uv sync --locked --extra plot
+
+``uv sync`` removes what it is not asked for, so a later ``uv sync --locked`` uninstalls them again: give
+``--extra plot`` to every sync (or to ``uv run``) when you need them.
+
 .. note:: CEPTR is a standard Python package, so it can also be installed with ``pip install -e .`` from ``Support/ceptr``. pip then picks any versions allowed by ``pyproject.toml``, which may generate mechanisms that differ from the committed ones.
 
 Usage

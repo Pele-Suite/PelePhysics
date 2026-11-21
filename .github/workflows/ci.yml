@@ -101,10 +101,15 @@ jobs:
           version-file: Support/ceptr/pyproject.toml
           # Pull requests reuse the cache from development, without writing their own
           save-cache: ${{github.ref == 'refs/heads/development'}}
+      # The default install first: it must work without the plot extra
       - name: Install dependencies
         run: uv sync --locked
       - name: Run tests
         run: uv run pytest
+      - name: Run the tests that need the plot extra
+        run: |
+          uv sync --locked --extra plot
+          uv run pytest -k visualize
       - name: Convert air mechanism
         run: uv run convert -f ${{github.workspace}}/Mechanisms/air/mechanism.yaml
       - name: Convert LiDryer mechanism

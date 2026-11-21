@@ -208,3 +208,27 @@ def test_parse_lst_file(tmp_path):
         lst.write_text("# comment\n" + text)
         with pytest.raises(ValueError, match=f"{lst}:2: "):
             parse(lst)
+
+
+def test_qssa_visualize(tmp_path):
+    """The QSS graphs of qssa -v are drawn next to the mechanism (plot extra)."""
+    pytest.importorskip("networkx")
+    pytest.importorskip("matplotlib")
+    pytest.importorskip("scipy")
+    import matplotlib
+
+    import ceptr.qssa as cq
+
+    matplotlib.use("Agg")
+    mech_path = mechanism_path("CH4_lean_qss")
+    for name in ("skeletal.yaml", "non_qssa_list.yaml"):
+        (tmp_path / name).write_bytes((mech_path / name).read_bytes())
+    cq.process_qss(
+        str(tmp_path / "skeletal.yaml"),
+        str(tmp_path / "non_qssa_list.yaml"),
+        visualize=True,
+        method=2,
+    )
+    assert (tmp_path / "qssa_directed_graph.png").stat().st_size > 0
+    assert (tmp_path / "qssa_quadratic_graph.png").stat().st_size > 0
+    assert (tmp_path / "qssa.yaml").exists()

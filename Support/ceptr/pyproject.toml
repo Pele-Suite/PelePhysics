@@ -19,20 +19,25 @@ authors = [
 requires-python = ">=3.13,<3.15"
 dependencies = [
     "cantera>=3.1",
-    "matplotlib>=3.10",
-    "networkx>=3.5",
     "numpy>=2.2",
     "pint>=0.25",
     "pyyaml>=6.0.2",
-    # Used by networkx's kamada_kawai_layout (qssa -v), and by the turbulent
-    # inflow script the docs run in this environment
-    "scipy>=1.15",
     # sympy and symengine shape the generated QSS Jacobians: they are pinned
     # so that pip installs give the same mechanisms as uv.lock
     "sympy==1.14.0",
     "symengine==0.15.0",
     # Formats the generated C++: pinned so that the mechanisms do not change
     "clang-format==20.1.5",
+]
+
+[project.optional-dependencies]
+# qssa -v, and the plotting scripts the docs run in this environment
+# (plotPMF.py, gen_hit_ic.py)
+plot = [
+    "matplotlib>=3.10",
+    "networkx>=3.5",
+    # Used by networkx's kamada_kawai_layout, and by gen_hit_ic.py
+    "scipy>=1.15",
 ]
 
 [project.scripts]

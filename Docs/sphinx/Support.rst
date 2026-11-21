@@ -69,7 +69,7 @@ Generating an initial condition file is as easy as: ::
 
    This script utilizes standard python libraries such as SciPy and Matplotlib. If you'd like to ensure that you are using appropriate
    versions of the dependencies, follow the :ref:`CEPTR instructions <sec_ceptr_software>` for setting up ``uv`` to manage
-   dependencies, then run the script using ``uv run --project ../ceptr python gen_hit_ic.py -N 16``.
+   dependencies, then run the script using ``uv run --project ../ceptr --extra plot python gen_hit_ic.py -N 16``.
 
 Generating Inflow Files
 -----------------------

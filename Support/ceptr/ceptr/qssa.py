@@ -1,6 +1,7 @@
 """Generate QSSA chemistry file."""
 
 import argparse
+import importlib.util
 import pathlib
 import time
 
@@ -144,6 +145,14 @@ def main():
         action="store_true",
     )
     args = parser.parse_args()
+
+    if args.visualize and not all(
+        importlib.util.find_spec(pkg) for pkg in ("matplotlib", "networkx", "scipy")
+    ):
+        parser.error(
+            "--visualize needs the plot extra: run 'uv sync --locked --extra plot'"
+            " (or pip install 'ceptr[plot]')"
+        )
 
     if args.fname:
         process_qss(args.fname, args.nqssa, args.visualize, args.method)

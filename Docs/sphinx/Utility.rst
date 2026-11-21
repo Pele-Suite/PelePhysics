@@ -59,7 +59,7 @@ Note that when running Cantera, you may need to adjust the domain size to be app
 
 An additional script is provided to allow plotting of the PMF solutions. This script is used as follows (if no variable index is specified, temperature is plotted by default): ::
 
-  uv run --project ../../../Support/ceptr python plotPMF.py <pmf-file> <variable-index>
+  uv run --project ../../../Support/ceptr --extra plot python plotPMF.py <pmf-file> <variable-index>
 
 .. _sec_turbinflow:
 

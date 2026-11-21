@@ -53,14 +53,18 @@ source = { editable = "." }
 dependencies = [
     { name = "cantera" },
     { name = "clang-format" },
-    { name = "matplotlib" },
-    { name = "networkx" },
     { name = "numpy" },
     { name = "pint" },
     { name = "pyyaml" },
-    { name = "scipy" },
     { name = "symengine" },
     { name = "sympy" },
+]
+
+[package.optional-dependencies]
+plot = [
+    { name = "matplotlib" },
+    { name = "networkx" },
+    { name = "scipy" },
 ]
 
 [package.dev-dependencies]
@@ -74,15 +78,16 @@ dev = [
 requires-dist = [
     { name = "cantera", specifier = ">=3.1" },
     { name = "clang-format", specifier = "==20.1.5" },
-    { name = "matplotlib", specifier = ">=3.10" },
-    { name = "networkx", specifier = ">=3.5" },
+    { name = "matplotlib", marker = "extra == 'plot'", specifier = ">=3.10" },
+    { name = "networkx", marker = "extra == 'plot'", specifier = ">=3.5" },
     { name = "numpy", specifier = ">=2.2" },
     { name = "pint", specifier = ">=0.25" },
     { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "scipy", specifier = ">=1.15" },
+    { name = "scipy", marker = "extra == 'plot'", specifier = ">=1.15" },
     { name = "symengine", specifier = "==0.15.0" },
     { name = "sympy", specifier = "==1.14.0" },
 ]
+provides-extras = ["plot"]
 
 [package.metadata.requires-dev]
 dev = [
