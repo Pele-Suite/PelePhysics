@@ -18,10 +18,16 @@ sudo apt-get install -y \
     libcusolver-dev-${CUDA_VERSION}         \
     libcusparse-dev-${CUDA_VERSION}         \
     libcublas-dev-${CUDA_VERSION}           \
-    libcurand-dev-${CUDA_VERSION}           \
-    libcusparse-dev-${CUDA_VERSION}         \
     libnvjitlink-${CUDA_VERSION}
 
-export PATH=/usr/local/nvidia/bin:/usr/local/cuda-12.6/bin:${PATH}
+CUDA_HOME=/usr/local/cuda-${CUDA_VERSION/-/.}
+export PATH=${CUDA_HOME}/bin:${PATH}
 which nvcc
 nvcc --version
+
+# Make the toolkit available to the CI job's later steps
+if [ -n "${GITHUB_ENV:-}" ]; then
+  echo "CUDA_HOME=${CUDA_HOME}" >> "${GITHUB_ENV}"
+  echo "LD_LIBRARY_PATH=${CUDA_HOME}/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+  echo "${CUDA_HOME}/bin" >> "${GITHUB_PATH}"
+fi
