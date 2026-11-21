@@ -132,6 +132,10 @@ For non-reduced chemistries, CEPTR can take a file with a list of ``mechanism.ya
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
   $ poetry run convert -l ${PELE_PHYSICS_HOME}/Mechanisms/list_mech
 
+The list files take one mechanism per line; blank lines and lines starting with ``#`` are skipped. A mechanism with PLOG
+reactions needs its pressure in Pa, given on its line as ``mechanism.yaml --plog=101325.0``; for the lines without it,
+``--plog_pressure`` gives the pressure for the whole list.
+
 For reduced chemistries, CEPTR can take a file with a list of ``qssa.yaml`` and ``qssa_input.toml`` to convert::
 
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
