@@ -296,10 +296,21 @@ Currently, the list of diagnostic contains:
 * ``DiagPDF`` : extract the PDF of a given variable and write it to an ASCII file.
 * ``DiagConditional`` : extract statistics (average and standard deviation, integral or sum) of a
   set of variables conditioned on the value of given variable and write it to an ASCII file.
+* ``DiagIsosurface`` : extract an iso-surface (3D, triangles) or iso-line (2D, segments) of a given variable across
+  the AMR hierarchy, interpolating a set of variables onto it. The surface area (3D) or length (2D) is appended
+  to an ASCII file and the surface can be written in XDMF (ParaView, VisIt) or MEF (PeleAnalysis) format.
+  Ported from the ``isosurface`` tool of `PeleAnalysis <https://github.com/Pele-Suite/PeleAnalysis>`_.
 
-When using `DiagPDF` or `DiagConditional`, it is possible to narrow down the diagnostic to a region of interest
-by specifying a set of filters, defining a range of interest for a variable. Note also that for these two diagnostics,
-fine-covered regions are masked. An arbitrary number of diagnostics can be named in a list with the ``diagnostics``
+When using `DiagPDF`, `DiagConditional` or `DiagIsosurface`, it is possible to narrow down the diagnostic to a region of interest
+by specifying a set of filters, defining a range of interest for a variable. Note also that for these diagnostics,
+fine-covered regions are masked (for `DiagIsosurface`, filters remove the parts of the surface lying in cells
+outside the range of interest). With embedded boundaries, cells covered by the EB (zero volume fraction) are masked
+as well, and the volume weights are the fluid volume of the cells (volume fraction times cell volume), so that the
+placeholder values held in covered cells do not contribute. Without a user-defined ``range``, the bins span the
+min/max of the variable over the cells that are kept. ``DiagFramePlane`` interpolates the state as it is,
+including covered cells. With ``conditional_type = Sum``, the variables and the conditioning variable are summed
+over the cells of each bin without volume weighting, while ``Average`` and ``Integral`` are volume weighted.
+An arbitrary number of diagnostics can be named in a list with the ``diagnostics``
 keyword, then each diagnostic name in the list becomes a keyword allowing the type and specific options for
 that diagnostic to be specified.
 The following provide examples for each diagnostic in PeleLMeX (in PeleC, all diagnostics would be prefixed with
@@ -309,7 +320,7 @@ The following provide examples for each diagnostic in PeleLMeX (in PeleC, all di
 
     #--------------------------DIAGNOSTICS------------------------
 
-    peleLM.diagnostics = xnormP condT pdfTest
+    peleLM.diagnostics = xnormP condT pdfTest isoT
 
     peleLM.xnormP.type = DiagFramePlane                             # Diagnostic type
     peleLM.xnormP.file = xNorm5mm                                   # Output file prefix
@@ -343,10 +354,44 @@ The following provide examples for each diagnostic in PeleLMeX (in PeleC, all di
     peleLM.pdfTest.innerFlame.field_name = temp                     # Filter field
     peleLM.pdfTest.innerFlame.value_inrange = 450.0 1500.0          # Filter definition : value_greater, value_less, value_inrange
     peleLM.pdfTest.nBins = 50                                       # Number of bins for the PDF
-    peleLM.pdfTest.normalized = 1                                   # [OPT, DEF=1] PDF is normalized (i.e. integral is unity) ?
+    peleLM.pdfTest.normalized = 1                                   # [OPT, DEF=1] PDF is normalized (i.e. integral is unity) ? If not, its integral is the total volume (or cell count)
     peleLM.pdfTest.volume_weighted = 1                              # [OPT, DEF=1] Computation of the PDF is volume weighted ?
-    peleLM.pdfTest.range = 0.0 2.0                                  # [OPT, DEF=data min/max] Specify the range of the PDF
+    peleLM.pdfTest.range = 0.0 2.0                                  # [OPT, DEF=min/max over the kept cells] Specify the range of the PDF
     peleLM.pdfTest.field_name = x_velocity                          # Variable of interest
+
+    peleLM.isoT.type = DiagIsosurface                               # Diagnostic type
+    peleLM.isoT.file = isoT1500                                     # Output file prefix
+    peleLM.isoT.int  = 5                                            # Frequency (as step #) for performing the diagnostic
+    peleLM.isoT.field_name = temp                                   # Variable defining the iso-surface
+    peleLM.isoT.value = 1500.0                                      # Iso-value
+    peleLM.isoT.field_names = HeatRelease Y(OH)                     # [OPT, DEF=None] Variables interpolated onto the surface (field_name is always included)
+    peleLM.isoT.format = XDMF                                       # [OPT, DEF=XDMF] Surface output format: XDMF, MEF or None
+    peleLM.isoT.write_measure = 1                                   # [OPT, DEF=1] Append step, time, area (3D) or length (2D) and element count to <file>_measure.dat
+    peleLM.isoT.filters = lowZ                                      # [OPT, DEF=None] List of filters
+    peleLM.isoT.lowZ.field_name = z                                 # Filter field
+    peleLM.isoT.lowZ.value_less = 0.01                              # Filter definition : value_greater, value_less, value_inrange
+
+``DiagIsosurface`` uses marching cubes (3D) or marching squares (2D) on the dual grid, i.e. the cubes have
+cell centers as corners, with nodes placed by linear interpolation along the cube edges. A few details are worth
+knowing when using the output:
+
+* Each level contributes the cubes whose corners are not covered by a finer level. This leaves a gap of
+  :math:`(\Delta x_c - \Delta x_f)/2` on each side of a coarse-fine interface (a quarter of a coarse cell for a
+  refinement ratio of 2), where the surface is not represented. If the state passed to the diagnostic has no
+  ghost cells, the gap widens by :math:`\Delta x_f` on each side.
+  The reported area/length is therefore slightly underestimated wherever the surface crosses a coarse-fine
+  interface; the deficit shrinks with the coarse cell size.
+* Along non-periodic boundaries the surface stops at the outermost cell centers. Across periodic boundaries the
+  surface is continuous and may extend up to half a cell beyond the domain, so that every part of the domain
+  is accounted for exactly once.
+* With embedded boundaries, cubes touching a covered cell are dropped, as their corners hold placeholder values.
+  The surface therefore stops up to one cell before the wall. Cut cells are used like regular cells, with their
+  values at the cell center, which can shift the surface by up to half a cell in the cut-cell layer. This matches
+  the ``isosurface`` tool of PeleAnalysis.
+* Node coordinates are cell-center coordinates of the AMReX grid (computational coordinates under a mesh mapping).
+* With ``format = XDMF``, each call writes a ``<file><step>.xmf`` descriptor and a ``<file><step>.bin`` binary
+  file holding the connectivity, node coordinates and interpolated variables. With ``format = MEF``, a single
+  ``<file><step>.mef`` file is written, in the format used by the PeleAnalysis MEF utilities.
 
 
 Filter
