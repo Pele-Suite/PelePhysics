@@ -4,6 +4,7 @@
 #include "DiagBase.H"
 #include <AMReX_VisMF.H>
 
+// Provides MPI_Comm in builds without MPI
 using namespace amrex::mpidatatypes;
 
 class DiagFramePlane : public DiagBase::Register<DiagFramePlane>
@@ -81,7 +82,6 @@ public:
 private:
   // Variables output
   amrex::Vector<std::string> m_fieldNames;
-  amrex::Gpu::DeviceVector<int> m_fieldIndices_d;
   int m_nfiles_plane;
   bool m_dump_flat_3D_plotfile;
 
