@@ -188,58 +188,46 @@ class SpeciesInfo:
         """
         rows = []
 
-        # Loop over stopping terms first
-        for stp in self.sc_qss_chain_stop:
-            scqssnum = self.dict_qss_species[stp]
+        def add_row(symb, level):
+            scqssnum = self.dict_qss_species[symb]
             rows.append(
                 {
                     "name": f"sc_qss[{scqssnum}]",
                     "number": scqssnum,
-                    "symbol": stp,
-                    "level": 0,
+                    "symbol": symb,
+                    "level": level,
+                    "sc_dep": self.dict_qssdepend_sc[symb],
+                    "scqss_dep": self.dict_qssdepend_scqss[symb],
                 }
             )
 
-        # The qss terms that have been filled
-        qss_filled = {row["name"] for row in rows}
+        # The terms that end a dependency chain come first
+        for stp in self.sc_qss_chain_stop:
+            add_row(stp, 0)
+        filled = {row["name"] for row in rows}
 
-        # Loop until all qss terms have been filled
+        # Then, level by level, the terms that only depend on lower levels
         level = 1
-        while len(qss_filled) < len(self.qssa_species_list):
-            # Find the sc_qss that only depend upon terms filled at a lower level
-            for symb in self.qssa_species_list:
-                scqssnum = self.dict_qss_species[symb]
-                if f"sc_qss[{scqssnum}]" in qss_filled:
-                    continue
-                if all(
-                    str(qss_depend) in qss_filled
-                    for qss_depend in self.dict_qssdepend_scqss[symb]
-                ):
-                    rows.append(
-                        {
-                            "name": f"sc_qss[{scqssnum}]",
-                            "number": scqssnum,
-                            "symbol": symb,
-                            "level": level,
-                        }
-                    )
-
-            if len(rows) == len(qss_filled):
-                unfilled = [
-                    symb
-                    for symb in self.qssa_species_list
-                    if f"sc_qss[{self.dict_qss_species[symb]}]" not in qss_filled
-                ]
+        while len(filled) < len(self.qssa_species_list):
+            unfilled = [
+                symb
+                for symb in self.qssa_species_list
+                if f"sc_qss[{self.dict_qss_species[symb]}]" not in filled
+            ]
+            ready = [
+                symb
+                for symb in unfilled
+                if all(str(dep) in filled for dep in self.dict_qssdepend_scqss[symb])
+            ]
+            if not ready:
                 raise ValueError(
                     "The QSS species cannot be ordered by their dependencies"
                     f" (a dependency cycle?): {', '.join(unfilled)}"
                 )
-            qss_filled = {row["name"] for row in rows}
+            for symb in ready:
+                add_row(symb, level)
+            filled = {row["name"] for row in rows}
             level += 1
-
-        for row in rows:
-            row["sc_dep"] = self.dict_qssdepend_sc[row["symbol"]]
-            row["scqss_dep"] = self.dict_qssdepend_scqss[row["symbol"]]
 
         self.scqss_rows = rows
 
@@ -256,7 +244,7 @@ class SpeciesInfo:
                     "scqss_rely": [
                         scqss["name"]
                         for scqss in self.scqss_rows
-                        if name in str(scqss["sc_dep"])
+                        if name in map(str, scqss["sc_dep"])
                     ],
                 }
             )
@@ -284,3 +272,15 @@ class SpeciesInfo:
         self.high_temp = min(
             mechanism.species(s).thermo.max_temp for s in self.nonqssa_species_list
         )
+
+
+def print_rows(rows):
+    """Print the name, symbol and dependency counts of species rows."""
+    for row in rows:
+        fields = [f"{row['name']:>12}", f"{row['symbol']:<16}"]
+        if "level" in row:
+            fields.append(f"level {row['level']}")
+        for key in ("sc_dep", "scqss_dep", "scqss_rely"):
+            if key in row:
+                fields.append(f"{key} {len(row[key])}")
+        print("  ".join(fields))

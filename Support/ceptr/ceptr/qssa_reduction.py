@@ -170,8 +170,13 @@ def identify_qssa_coupling(mechanism, qssa_species):
 
 def visualize_qssa(mechanism, reaction_info, qssa_species):
     """Visualize quadratic coupling and QSSA dependencies."""
-    # matplotlib and networkx come with the optional plot extra
-    import ceptr.qssa_graphs as cqg
+    try:
+        import ceptr.qssa_graphs as cqg
+    except ImportError as err:
+        raise ImportError(
+            "Visualizing needs the plot extra: run 'uv sync --locked --extra plot'"
+            " (or pip install 'ceptr[plot]')"
+        ) from err
 
     links = cqg.directed_graph(mechanism, qssa_species)
     cqg.plot_directed_graph(mechanism, links)

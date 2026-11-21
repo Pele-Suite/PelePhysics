@@ -23,18 +23,6 @@ import ceptr.transport as ctr
 import ceptr.writer as cw
 
 
-def print_rows(rows):
-    """Print the name, symbol and dependency counts of species rows."""
-    for row in rows:
-        fields = [f"{row['name']:>12}", f"{row['symbol']:<16}"]
-        if "level" in row:
-            fields.append(f"level {row['level']}")
-        for key in ("sc_dep", "scqss_dep", "scqss_rely"):
-            if key in row:
-                fields.append(f"{key} {len(row[key])}")
-        print("  ".join(fields))
-
-
 class Converter:
     """Convert Cantera mechanism to C++ files for Pele."""
 
@@ -420,8 +408,8 @@ class Converter:
                 self.species_info.make_scqss_rows()
                 self.species_info.make_sc_rows()
 
-                print_rows(self.species_info.scqss_rows)
-                print_rows(self.species_info.sc_rows)
+                csi.print_rows(self.species_info.scqss_rows)
+                csi.print_rows(self.species_info.sc_rows)
 
                 # prod rate related
                 cp.production_rate(
@@ -441,7 +429,7 @@ class Converter:
                 # if self.species_info.n_qssa_species > 0:
                 self.species_info.identify_wdot_dependencies(self.syms)
                 self.species_info.make_wdot_rows()
-                print_rows(self.species_info.wdot_rows)
+                csi.print_rows(self.species_info.wdot_rows)
 
                 # Evaluate the dscqss_dscqss values for later
                 self.syms.compute_dscqss_dscqss(species_info=self.species_info)

@@ -106,10 +106,8 @@ jobs:
         run: uv sync --locked
       - name: Run tests
         run: uv run pytest
-      - name: Run the tests that need the plot extra
-        run: |
-          uv sync --locked --extra plot
-          uv run pytest -k visualize
+      - name: Run tests with the plot extra
+        run: uv run --locked --extra plot pytest
       - name: Convert air mechanism
         run: uv run convert -f ${{github.workspace}}/Mechanisms/air/mechanism.yaml
       - name: Convert LiDryer mechanism
