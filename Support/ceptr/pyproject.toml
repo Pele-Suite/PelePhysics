@@ -22,7 +22,6 @@ dependencies = [
     "matplotlib>=3.10",
     "networkx>=3.5",
     "numpy>=2.2",
-    "pandas>=2.3",
     "pint>=0.25",
     "pyyaml>=6.0.2",
     # Used by networkx's kamada_kawai_layout (qssa -v), and by the turbulent
