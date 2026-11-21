@@ -224,6 +224,16 @@ class SpeciesInfo:
                         }
                     )
 
+            if len(rows) == len(qss_filled):
+                unfilled = [
+                    symb
+                    for symb in self.qssa_species_list
+                    if f"sc_qss[{self.dict_qss_species[symb]}]" not in qss_filled
+                ]
+                raise ValueError(
+                    "The QSS species cannot be ordered by their dependencies"
+                    f" (a dependency cycle?): {', '.join(unfilled)}"
+                )
             qss_filled = {row["name"] for row in rows}
             level += 1
 
