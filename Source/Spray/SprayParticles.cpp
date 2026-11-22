@@ -398,12 +398,14 @@ SprayParticleContainer::updateParticles(
               // Update breakup variables and determine if breakup occurs
               if (fdat->do_breakup == 1) {
                 Utan_total += updateBreakupTAB(
-                  Reyn_d, sub_dt, cBoilT.data(), gpv, *fdat, p);
+                  Reyn_d, fdat->dtmod * sub_dt, cBoilT.data(), gpv, *fdat, p);
               }
               if (cur_iter == num_iter - 1) {
-                if (fdat->do_breakup == 1 && make_new_drops) {
+                if (fdat->do_breakup == 1) {
                   // Determine if parcel must be split into multiple parcels
-                  splitDropletTAB(pid, p, max_ppp, N_SB, rf_d, Utan_total);
+                  if (make_new_drops) {
+                    splitDropletTAB(pid, p, max_ppp, N_SB, rf_d, Utan_total);
+                  }
                 } else {
                   // Update breakup for KH-RT model
                   updateBreakupKHRT(
