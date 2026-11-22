@@ -347,11 +347,18 @@ SootModel::computeSootSourceTerm(
       // Constant for free molecular collisions
       const Real colConst =
         convT * sc.colFactPi23 * sc.colFact16 * pele::physics::Constants::Avna;
+      // Clipping the incoming state is not a soot source: start the source
+      // from the clipped moments where clipping changed them
+      sd->clipMoments(momentsPtr);
+      for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
+        if (moments[mom] != mom0[mom] / sd->unitConv[mom]) {
+          mom0[mom] = moments[mom] * sd->unitConv[mom];
+        }
+      }
+      Real RT = pele::physics::Constants::RU * T;
       // Collision frequency between two dimer in the free
       // molecular regime with van der Waals enhancement
       // Units: cm^3/mol-s
-      sd->clipMoments(momentsPtr);
-      Real RT = pele::physics::Constants::RU * T;
       const Real betaNucl = convT * betaNF;
       int nsub = nsub_init;
       Real mindt = dt / Real(nsubMAX);
