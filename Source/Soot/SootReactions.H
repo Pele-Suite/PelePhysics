@@ -52,7 +52,8 @@ struct SootReaction
     amrex::Real& k_sg,
     amrex::Real& k_ox,
     amrex::Real& k_o2,
-    amrex::Real omega_src[]) const
+    amrex::Real omega_src[],
+    const bool surface) const
   {
     // Number of surface reactions
     const int nsr = NUM_SOOT_REACT;
@@ -61,8 +62,11 @@ struct SootReaction
     amrex::GpuArray<amrex::Real, NUM_SOOT_REACT> w_fwd = {0.0};
     amrex::GpuArray<amrex::Real, NUM_SOOT_REACT> w_bkwd = {0.0};
     const amrex::Real invT = 1. / T;
+    // Without the surface reactions only the last (dimerization) reaction
+    // contributes
+    const int i0 = surface ? 0 : nsr - 1;
     // Loop over reactions
-    for (int i = 0; i < nsr; ++i) {
+    for (int i = i0; i < nsr; ++i) {
       k_fwd[i] = A_f[i] * std::pow(T, n_f[i]) * std::exp(-ER_f[i] * invT);
       k_bkwd[i] = A_b[i] * std::pow(T, n_b[i]) * std::exp(-ER_b[i] * invT);
       amrex::Real fwdM = 1.;
@@ -80,28 +84,32 @@ struct SootReaction
       }
       w_bkwd[i] = k_bkwd[i] * bkwdM;
     }
-    // Note: This will depend on the surface reactions, currently hardcoded
-    amrex::Real fSootStar =
-      computeRadSiteConc(xi_n, k_fwd.data(), k_bkwd.data());
-    computeSurfRates(w_fwd.data(), w_bkwd.data(), fSootStar, k_sg, k_ox, k_o2);
-    // Determine the concentration of hydrogenated and radical soot surface
-    // sites Quasi-steady state for surface radical sites on soot
-    amrex::GpuArray<amrex::Real, SootIndx::numSootSpecs> C_Soot = {0.0};
-    C_Soot[SootIndx::indxSootS] = fSootStar * SootDensityC * moments[2];
-    C_Soot[SootIndx::indxSootH] = (1. - fSootStar) * SootDensityC * moments[2];
-    // Note: The last two reaction (6 and 7) are special
-    // they are not treated the same in this loop
-    // Currently assumes soot is involved in every reaction on both sides
-    for (int i = 0; i < nsr - 2; ++i) {
-      int sootIndx = sIndx_f[i];
-      w_fwd[i] *= C_Soot[sootIndx];
-      sootIndx = sIndx_b[i];
-      w_bkwd[i] *= C_Soot[sootIndx];
+    if (surface) {
+      // Note: This will depend on the surface reactions, currently hardcoded
+      amrex::Real fSootStar =
+        computeRadSiteConc(xi_n, k_fwd.data(), k_bkwd.data());
+      computeSurfRates(
+        w_fwd.data(), w_bkwd.data(), fSootStar, k_sg, k_ox, k_o2);
+      // Determine the concentration of hydrogenated and radical soot surface
+      // sites Quasi-steady state for surface radical sites on soot
+      amrex::GpuArray<amrex::Real, SootIndx::numSootSpecs> C_Soot = {0.0};
+      C_Soot[SootIndx::indxSootS] = fSootStar * SootDensityC * moments[2];
+      C_Soot[SootIndx::indxSootH] =
+        (1. - fSootStar) * SootDensityC * moments[2];
+      // Note: The last two reaction (6 and 7) are special
+      // they are not treated the same in this loop
+      // Currently assumes soot is involved in every reaction on both sides
+      for (int i = 0; i < nsr - 2; ++i) {
+        int sootIndx = sIndx_f[i];
+        w_fwd[i] *= C_Soot[sootIndx];
+        sootIndx = sIndx_b[i];
+        w_bkwd[i] *= C_Soot[sootIndx];
+      }
+      // Note: This is specific to the hardcoded 6th reaction, not universal
+      w_fwd[5] *= surf;
     }
-    // Note: This is specific to the hardcoded 6th reaction, not universal
-    w_fwd[5] *= surf;
     // Loop over gas species and solve for omegas
-    for (int i = 0; i < nsr; ++i) {
+    for (int i = i0; i < nsr; ++i) {
       // Creation/destruction rates for the i-th reaction
       amrex::Real rate = w_fwd[i] - w_bkwd[i];
       // Loop over reactant species and subtract nu'_(i,r)*rate

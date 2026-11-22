@@ -61,6 +61,14 @@ struct SootData
     }
   }
 
+  // Whether there is enough soot (volume fraction above 1e-12) for the
+  // surface reactions; moments in mol of C
+  AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE bool
+  surfaceActive(const amrex::Real moments[]) const
+  {
+    return moments[1] * sc.V0 * pele::physics::Constants::Avna > 1.E-12;
+  }
+
   // Initialize moment values to very small
   AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void
   initialSmallMomVals(amrex::Real moments[]) const
@@ -134,9 +142,13 @@ struct SootData
     amrex::Real k_sg = 0.;
     amrex::Real k_ox = 0.;
     amrex::Real k_o2 = 0.;
+    // Without enough soot the surface reactions are left out of both the
+    // moment and the gas sources
+    const bool surface = surfaceActive(moments);
     // Compute the species reaction source terms into omega_src
-    sr->chemicalSrc(T, surf, xi_n, moments, k_sg, k_ox, k_o2, omega_src);
-    if (moments[1] * sc.V0 * pele::physics::Constants::Avna > 1.E-12) {
+    sr->chemicalSrc(
+      T, surf, xi_n, moments, k_sg, k_ox, k_o2, omega_src, surface);
+    if (surface) {
       // Add the surface growth source to mom_src
       surfaceGrowthMomSrc(k_sg, mom_fv, mom_src);
       oxidFragMomSrc(k_ox, k_o2, mom_fv, mom_src);
