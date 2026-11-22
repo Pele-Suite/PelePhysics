@@ -142,6 +142,9 @@ SootModel::readSootParams()
   m_numSubcycles = 5;
 #endif
   pp.query("num_subcycles", m_numSubcycles);
+  if (m_numSubcycles < 1 || m_maxSubcycles < 1) {
+    Abort("soot.num_subcycles and soot.max_subcycles must be at least 1");
+  }
   if (m_numSubcycles > m_maxSubcycles) {
     Abort("soot.num_subcycles must not exceed soot.max_subcycles");
   }
