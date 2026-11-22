@@ -85,7 +85,7 @@ SprayParticleContainer::computeDerivedVars(
         Real face_area = AMREX_D_TERM(1., *dx[0], *dx[0]);
 #ifdef AMREX_USE_EB
         if (!flags_array(ijkc).isRegular()) {
-          curvol /= volfrac_fab(ijkc);
+          curvol *= volfrac_fab(ijkc);
           face_area = bar_fab(ijkc);
         }
 #endif
@@ -114,7 +114,7 @@ SprayParticleContainer::computeDerivedVars(
             for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
               Gpu::Atomic::Add(
                 &vararr(ijkc, total_spec_indx + spf),
-                p.rdata(SprayComps::pstateY + spf) * pmass);
+                num_ppp * p.rdata(SprayComps::pstateY + spf) * pmass);
             }
           }
         } else {
