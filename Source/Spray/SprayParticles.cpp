@@ -125,10 +125,10 @@ SprayParticleContainer::estTimestep(int level) const
             return std::numeric_limits<Real>::max();
           });
       }
-      ReduceTuple hv = reduce_data.value();
-      Real ldt_cpu = amrex::get<0>(hv);
-      dt = amrex::min<amrex::Real>(dt, ldt_cpu);
     }
+    ReduceTuple hv = reduce_data.value();
+    Real ldt_cpu = amrex::get<0>(hv);
+    dt = amrex::min<amrex::Real>(dt, ldt_cpu);
   }
   // Check if the velocity of particles being injected is greater than existing
   // particle velocities
