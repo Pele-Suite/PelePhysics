@@ -171,9 +171,9 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
             spray_jet->get_override_injection_plane_loc();
         }
 
-        spray_jet->transform_to_new_cs(
-          part_vel); // Transforming the particle velocity to user-specified
-                     // coordinate system
+        // Rotating the particle velocity to the user-specified coordinate
+        // system
+        spray_jet->transform_to_new_cs(part_vel, false);
         AMREX_D_TERM(p.rdata(SprayComps::pstateVel) = (part_vel[0] + pmov1);
                      , // Setting the particle velocities
                      p.rdata(SprayComps::pstateVel + 1) = (part_vel[1] + pmov1);
