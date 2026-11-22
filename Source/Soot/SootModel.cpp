@@ -523,9 +523,11 @@ SootModel::estSootDt(const Box& vbox, Array4<const Real> const& Qstate) const
       Real k_sg = 0.0;
       Real k_ox = 0.0;
       Real k_o2 = 0.0;
-      // Compute the species reaction source terms into omega_src
+      // Compute the species reaction source terms into omega_src, with the
+      // same soot threshold for the surface reactions as the source term
       sr->chemicalSrc(
-        T, surf, xi_n.data(), momentsPtr, k_sg, k_ox, k_o2, omega_src.data());
+        T, surf, xi_n.data(), momentsPtr, k_sg, k_ox, k_o2, omega_src.data(),
+        sd->surfaceActive(momentsPtr));
       Real mindt = 1.E100;
       for (int sp = 0; sp < NUM_SOOT_GS; ++sp) {
         if (xi_n[sp] > Xcutoff) {
