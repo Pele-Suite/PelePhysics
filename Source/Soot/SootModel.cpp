@@ -508,6 +508,7 @@ SootModel::estSootDt(const Box& vbox, Array4<const Real> const& Qstate) const
         omega_src[sp] = 0.0;
       }
       sd->convertToMol(momentsPtr);
+      sd->clipMoments(momentsPtr);
       sd->computeFracMomVect(momentsPtr, mom_fvPtr);
       Real surf = sc.S0 * sd->fracMom(0.0, 1.0, mom_fvPtr);
       Real k_sg = 0.0;
