@@ -308,31 +308,32 @@ public:
     return val1 + (val2 - val1) * invt;
   }
 
-  // Rotate vec into the user coordinate system, and translate it if it is a
-  // position (not a velocity)
-  void transform_to_new_cs(
-    amrex::Real vec[AMREX_SPACEDIM], const bool is_position = true)
+  // Rotate vec (e.g. a velocity) into the user coordinate system
+  void rotate_to_new_cs(amrex::Real vec[AMREX_SPACEDIM]) const
   {
-    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> trans = {0.};
-    if (is_position) {
-      trans = m_translation;
-    }
+    const amrex::Real x = vec[0];
+    const amrex::Real y = vec[1];
 #if AMREX_SPACEDIM == 2
-    const amrex::Real x = vec[0];
-    const amrex::Real y = vec[1];
-    vec[0] = trans[0] + (m_trans_matrix[0] * x + m_trans_matrix[1] * y);
-    vec[1] = trans[1] + (m_trans_matrix[2] * x + m_trans_matrix[3] * y);
+    vec[0] = m_trans_matrix[0] * x + m_trans_matrix[1] * y;
+    vec[1] = m_trans_matrix[2] * x + m_trans_matrix[3] * y;
 #else
-    const amrex::Real x = vec[0];
-    const amrex::Real y = vec[1];
     const amrex::Real z = vec[2];
-    vec[0] = trans[0] + (m_trans_matrix[0] * x + m_trans_matrix[1] * y +
-                         m_trans_matrix[2] * z);
-    vec[1] = trans[1] + (m_trans_matrix[3] * x + m_trans_matrix[4] * y +
-                         m_trans_matrix[5] * z);
-    vec[2] = trans[2] + (m_trans_matrix[6] * x + m_trans_matrix[7] * y +
-                         m_trans_matrix[8] * z);
+    vec[0] =
+      m_trans_matrix[0] * x + m_trans_matrix[1] * y + m_trans_matrix[2] * z;
+    vec[1] =
+      m_trans_matrix[3] * x + m_trans_matrix[4] * y + m_trans_matrix[5] * z;
+    vec[2] =
+      m_trans_matrix[6] * x + m_trans_matrix[7] * y + m_trans_matrix[8] * z;
 #endif
+  }
+
+  // Rotate and translate the position vec into the user coordinate system
+  void transform_to_new_cs(amrex::Real vec[AMREX_SPACEDIM]) const
+  {
+    rotate_to_new_cs(vec);
+    for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+      vec[dir] += m_translation[dir];
+    }
   }
 
   amrex::Real interpolateMdot(const amrex::Real time) const

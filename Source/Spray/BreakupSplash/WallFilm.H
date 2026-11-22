@@ -54,13 +54,13 @@ calculateFilmSource(
   amrex::GpuArray<amrex::Real, NUM_SPECIES> rhoD_ri;
   amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> L_n{};
   amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> mn_dot = {};
-  amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> Y_film{};    // Liquid mass fracs
-  amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> oldY_film{}; // Prev. mass fracs
+  amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> Y_film{}; // Liquid mass fracs
   amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> X_vn{};
   for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
     Y_film[spf] = p.rdata(SprayComps::pstateY + spf);
-    oldY_film[spf] = Y_film[spf];
   }
+  // Film mass fractions at the start of the call
+  const amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> oldY_film = Y_film;
   amrex::Real T_film = p.rdata(SprayComps::pstateT);
   const amrex::Real rho_film = fdat.liqprops.rho_mix(Y_film, T_film, cBoilT);
   const amrex::Real Tcrit = fdat.liqprops.critT_mix(Y_film);

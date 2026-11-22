@@ -126,9 +126,7 @@ SprayParticleContainer::estTimestep(int level) const
           });
       }
     }
-    ReduceTuple hv = reduce_data.value();
-    Real ldt_cpu = amrex::get<0>(hv);
-    dt = amrex::min<amrex::Real>(dt, ldt_cpu);
+    dt = amrex::get<0>(reduce_data.value());
   }
   // Check if the velocity of particles being injected is greater than existing
   // particle velocities
@@ -344,6 +342,8 @@ SprayParticleContainer::updateParticles(
           IntVect ijk = lx.floor(); // Upper cell center
           RealVect lxc = (p.pos() - plo) * dxi;
           IntVect ijkc = lxc.floor(); // Cell with particle
+          // check_bounds resets these, but they are read without it when
+          // the box is not at a boundary
           IntVect bflags(IntVect::TheZeroVector());
           if (at_bounds) {
             // Check if particle has left the domain or is boundary adjacent
@@ -399,20 +399,16 @@ SprayParticleContainer::updateParticles(
               if (fdat->do_breakup == 1) {
                 Utan_total += updateBreakupTAB(
                   Reyn_d, fdat->dtmod * sub_dt, cBoilT.data(), gpv, *fdat, p);
-              }
-              if (cur_iter == num_iter - 1) {
-                if (fdat->do_breakup == 1) {
+                if (cur_iter == num_iter - 1 && make_new_drops) {
                   // Determine if parcel must be split into multiple parcels
-                  if (make_new_drops) {
-                    splitDropletTAB(pid, p, max_ppp, N_SB, rf_d, Utan_total);
-                  }
-                } else {
-                  // Update breakup for KH-RT model
-                  updateBreakupKHRT(
-                    pid, p, Reyn_d, fdat->dtmod * flow_dt, cBoilT.data(),
-                    avg_inject_mass, B0, B1, C3, gpv, *fdat, N_SB, rf_d,
-                    make_new_drops);
+                  splitDropletTAB(pid, p, max_ppp, N_SB, rf_d, Utan_total);
                 }
+              } else if (cur_iter == num_iter - 1) {
+                // Update breakup for KH-RT model
+                updateBreakupKHRT(
+                  pid, p, Reyn_d, fdat->dtmod * flow_dt, cBoilT.data(),
+                  avg_inject_mass, B0, B1, C3, gpv, *fdat, N_SB, rf_d,
+                  make_new_drops);
               }
             }
 #ifdef AMREX_USE_EB

@@ -338,8 +338,6 @@ calculateSpraySource(
   amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> mn_dot{};
   amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM>
     Y_part{}; // Liquid mass fractions
-  amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM>
-    oldY_part{}; // Liquid mass fractions at the start of the call
   amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> X_vn{};
   const amrex::Real num_ppp = p.rdata(SprayComps::pstateNumDens);
   amrex::RealVect vel_part(AMREX_D_DECL(
@@ -360,8 +358,9 @@ calculateSpraySource(
   // Storing Y_{d,n}
   for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
     Y_part[spf] = p.rdata(SprayComps::pstateY + spf);
-    oldY_part[spf] = Y_part[spf];
   }
+  // Liquid mass fractions at the start of the call
+  const amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> oldY_part = Y_part;
   // Calculating \rho_{d}
   amrex::Real rho_part = fdat.liqprops.rho_mix(Y_part, T_part, cBoilT);
 

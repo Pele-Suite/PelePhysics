@@ -34,41 +34,6 @@ tile_at_bndry(
   return at_bndry;
 }
 
-// This is the same as the check_bounds function but pos and phi have been
-// normalized by plo and dx
-AMREX_GPU_DEVICE AMREX_INLINE bool
-check_bounds_norm(
-  const amrex::RealVect pos,
-  const amrex::RealVect phi,
-  const amrex::IntVect bndry_lo,
-  const amrex::IntVect bndry_hi,
-  amrex::IntVect& bflags)
-{
-  for (int hilo = 0; hilo < 2; ++hilo) {
-    int fact = (hilo == 0) ? 1 : -1;
-    for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-      amrex::Real dom_loc = (hilo == 0) ? 0. : phi[dir];
-      int bflag = (hilo == 0) ? bndry_lo[dir] : bndry_hi[dir];
-      if (bflag != 0) { // Not periodic
-        amrex::Real diff =
-          static_cast<amrex::Real>(fact) * (pos[dir] - dom_loc);
-        if (diff < 0.) {
-          // Outside domain
-          if (bflag == 1) { // Outside reflective BC
-            bflags[dir] = -fact;
-          } else { // Outside non-reflective BC
-            return true;
-          }
-          // Adjacent to non-periodic boundary
-        } else if (diff < 0.5) {
-          bflags[dir] = -2 * fact;
-        }
-      }
-    }
-  }
-  return false;
-}
-
 /**
 Determines if particle must be reflected off BC or EB
 @param[in] pos Position of the particle after advecting, normalized by dx
