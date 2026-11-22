@@ -29,7 +29,9 @@ soot_largeparticledata(
   const int /*level*/)
 {
   SootConst sc;
-  AMREX_ALWAYS_ASSERT(g_nuclVol > 0.);
+  AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+    g_nuclVol > 0.,
+    "soot_largeparticledata needs a defined SootModel (SootModel::define)");
   // The first mode is a delta function at the nucleated particle size
   const Real V_nucl = g_nuclVol * sc.V0 / std::pow(sc.len_conv, 3);
   const Real S_nucl = g_nuclSurf * sc.S0 / std::pow(sc.len_conv, 2);
