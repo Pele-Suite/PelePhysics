@@ -286,10 +286,12 @@ struct SootData
     const amrex::Real betaCond = getBetaCond(convT, momFV);
     // Using the following quadratic equation:
     // betaNucl*[DIMER]^2 + betaCond*[DIMER] - dimerRate = 0
-    // compute the [DIMER] using the quadratic formula
-    // x = -b + sqrt(b^2 - 4ac)/(2a)
+    // compute the [DIMER] using the positive root of the quadratic, in the
+    // form x = 2c / (b + sqrt(b^2 + 4ac)) that does not cancel when
+    // b^2 >> 4ac
     const amrex::Real delta = betaCond * betaCond + 4. * betaNucl * dimerRate;
-    return (std::sqrt(delta) - betaCond) / (2. * betaNucl);
+    const amrex::Real denom = betaCond + std::sqrt(delta);
+    return (denom > 0.) ? 2. * dimerRate / denom : 0.;
   }
 
   // Clip moment values
