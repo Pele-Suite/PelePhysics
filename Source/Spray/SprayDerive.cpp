@@ -84,7 +84,7 @@ SprayParticleContainer::computeDerivedVars(
         Real curvol = cell_vol;
         Real face_area = AMREX_D_TERM(1., *dx[0], *dx[0]);
 #ifdef AMREX_USE_EB
-        if (!flags_array(ijkc).isRegular()) {
+        if (flags_array(ijkc).isSingleValued()) {
           curvol *= volfrac_fab(ijkc);
           face_area = bar_fab(ijkc);
         }
