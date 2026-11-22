@@ -5,7 +5,7 @@
 #include "SootModel.H"
 
 // Nucleated particle volume and surface (in V0 and S0) for
-// soot_largeparticledata; set by SootModel::define()
+// soot_largeparticledata; set when the SootModel is defined
 void setSootDeriveNuclSize(amrex::Real nuclVol, amrex::Real nuclSurf);
 
 void soot_largeparticledata(

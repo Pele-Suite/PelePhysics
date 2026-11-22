@@ -61,38 +61,18 @@ checkMassBalance(
   return mb;
 }
 
-amrex::Real
+// Total gas and soot mass of the box
+std::pair<amrex::Real, amrex::Real>
 totalMass(const amrex::Box& bx, amrex::Array4<const amrex::Real> const& q)
 {
   const SootConst sc;
-  amrex::Real m = 0.;
+  amrex::Real gas = 0.;
+  amrex::Real soot = 0.;
   amrex::LoopOnCpu(bx, [&](int i, int j, int k) {
-    m += q(i, j, k, qRho) + q(i, j, k, qSoot + 1) * sc.SootDensity;
+    gas += q(i, j, k, qRho);
+    soot += q(i, j, k, qSoot + 1) * sc.SootDensity;
   });
-  return m;
-}
-
-amrex::Real
-totalSootMass(const amrex::Box& bx, amrex::Array4<const amrex::Real> const& q)
-{
-  const SootConst sc;
-  amrex::Real m = 0.;
-  amrex::LoopOnCpu(bx, [&](int i, int j, int k) {
-    m += q(i, j, k, qSoot + 1) * sc.SootDensity;
-  });
-  return m;
-}
-
-int
-speciesIndex(const amrex::Vector<std::string>& names, const std::string& name)
-{
-  for (int n = 0; n < static_cast<int>(names.size()); ++n) {
-    if (names[n] == name) {
-      return n;
-    }
-  }
-  amrex::Abort("SootEval: species " + name + " not in the mechanism");
-  return -1;
+  return {gas, soot};
 }
 
 } // namespace
@@ -124,16 +104,14 @@ main(int argc, char* argv[])
     soot.define();
 
     // Post-flame rich mixture with soot precursors (mole fractions)
-    amrex::Vector<std::string> names;
-    pele::physics::eos::speciesNames<pele::physics::EosType>(names);
     amrex::Real X[NUM_SPECIES] = {0.};
-    const std::vector<std::pair<std::string, amrex::Real>> mix = {
-      {"N2", 0.60},  {"H2O", 0.12},  {"CO", 0.10}, {"H2", 0.08},
-      {"CO2", 0.03}, {"C2H2", 0.05}, {"H", 5.e-3}, {"OH", 1.e-3},
-      {"O2", 1.e-3}, {"A1", 1.e-4},  {"A2", 1.e-4}};
+    const std::vector<std::pair<int, amrex::Real>> mix = {
+      {N2_ID, 0.60},  {H2O_ID, 0.12},  {CO_ID, 0.10}, {H2_ID, 0.08},
+      {CO2_ID, 0.03}, {C2H2_ID, 0.05}, {H_ID, 5.e-3}, {OH_ID, 1.e-3},
+      {O2_ID, 1.e-3}, {A1_ID, 1.e-4},  {A2_ID, 1.e-4}};
     amrex::Real xsum = 0.;
-    for (const auto& [name, x] : mix) {
-      X[speciesIndex(names, name)] = x;
+    for (const auto& [id, x] : mix) {
+      X[id] = x;
       xsum += x;
     }
     for (amrex::Real& x : X) {
@@ -205,8 +183,8 @@ main(int argc, char* argv[])
     check(err_add <= tol * ref_add, "the source adds into its destination");
 
     // 1 and 3. Mass balance of each call, and over the reactor run
-    const amrex::Real m0 = totalMass(bx, qfab.const_array());
-    const amrex::Real soot0 = totalSootMass(bx, qfab.const_array());
+    const auto [gas0, soot0] = totalMass(bx, qfab.const_array());
+    const amrex::Real m0 = gas0 + soot0;
     amrex::Real worst_soot = 0.;
     amrex::Real worst_spec = 0.;
     for (int step = 0; step < nsteps; ++step) {
@@ -230,8 +208,8 @@ main(int argc, char* argv[])
         }
       });
     }
-    const amrex::Real m1 = totalMass(bx, qfab.const_array());
-    const amrex::Real soot1 = totalSootMass(bx, qfab.const_array());
+    const auto [gas1, soot1] = totalMass(bx, qfab.const_array());
+    const amrex::Real m1 = gas1 + soot1;
     amrex::Print() << "Per call: max |rho src + soot mass src| / max |soot "
                       "mass src| = "
                    << worst_soot << "\n"

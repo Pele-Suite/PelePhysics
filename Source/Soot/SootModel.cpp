@@ -417,14 +417,9 @@ SootModel::computeSootSourceTerm(
         sd->clipMoments(momentsPtr);
       }
       sd->convertFromMol(momentsPtr);
-      Real vol_src = 0.0; // Volume moment source of this call
       for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
         const int peleIndx = sootIndx + mom;
-        const Real msrc = (moments[mom] - mom0[mom]) / dt;
-        soot_state(i, j, k, peleIndx) += msrc;
-        if (mom == 1) {
-          vol_src = msrc;
-        }
+        soot_state(i, j, k, peleIndx) += (moments[mom] - mom0[mom]) / dt;
       }
       Real rho_src = 0.0;
       Real eng_src = 0.0;
@@ -443,6 +438,7 @@ SootModel::computeSootSourceTerm(
       if (conserveMass) {
         // Difference between mass lost from fluid and mass gained to soot
         // (the volume moment is the soot volume fraction)
+        const Real vol_src = (moments[1] - mom0[1]) / dt;
         Real del_rho_dot = rho_src + vol_src * sc.SootDensity;
         // Add that mass to H2
         soot_state(i, j, k, absorbIndxP) -= del_rho_dot * sc.mass_src_conv;
