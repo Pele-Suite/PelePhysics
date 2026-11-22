@@ -519,7 +519,8 @@ SprayParticleContainer::uniformSprayInit(
     p.id() = ParticleType::NextID();
     p.cpu() = amrex::ParallelDescriptor::MyProc();
     for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-      p.pos(dir) = (amrex::Real(indx[dir]) + 0.5) * dx_part[dir];
+      p.pos(dir) =
+        Geom(level).ProbLo(dir) + (amrex::Real(indx[dir]) + 0.5) * dx_part[dir];
     }
     for (int n = 0; n < NSR_SPR; ++n) {
       p.rdata(n) = part_vals[n];
