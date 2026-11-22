@@ -59,6 +59,7 @@ calculateFilmSource(
   amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> X_vn{};
   for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
     Y_film[spf] = p.rdata(SprayComps::pstateY + spf);
+    oldY_film[spf] = Y_film[spf];
   }
   amrex::Real T_film = p.rdata(SprayComps::pstateT);
   const amrex::Real rho_film = fdat.liqprops.rho_mix(Y_film, T_film, cBoilT);
@@ -167,7 +168,6 @@ calculateFilmSource(
           Y_film[spf] = amrex::min<amrex::Real>(
             1., amrex::max<amrex::Real>(
                   (Y_film[spf] * film_mass + mn_dot[spf] * dt) / new_mass, 0.));
-          oldY_film[spf] = p.rdata(SprayComps::pstateY + spf);
           if (Y_film[spf] < 1.E-12) {
             Y_film[spf] = 0.;
           }
@@ -182,13 +182,8 @@ calculateFilmSource(
             Y_film[spf] = 0.;
           }
         }
-      } else {
-        oldY_film[0] = p.rdata(SprayComps::pstateY);
       }
     } else {
-      for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
-        oldY_film[spf] = p.rdata(SprayComps::pstateY + spf);
-      }
       film_height = 0.;
       new_mass = 0.;
       p.id() = -1;
