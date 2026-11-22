@@ -33,6 +33,8 @@ SootModel::define()
   // This should be called after readSootParams()
   AMREX_ASSERT(m_readSootParams);
   m_sootData = new SootData{};
+  // -1 marks a soot gas species not (yet) found in the mechanism
+  m_sootData->refIndx.fill(-1);
   m_sootReact = new SootReaction{};
   d_sootData =
     static_cast<SootData*>(amrex::The_Arena()->alloc(sizeof(SootData)));
