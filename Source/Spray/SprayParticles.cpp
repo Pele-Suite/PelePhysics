@@ -122,7 +122,7 @@ SprayParticleContainer::estTimestep(int level) const
               Real dt_part = (max_mag_vdx > 0.) ? (cfl / max_mag_vdx) : 1.E50;
               return dt_part;
             }
-            return -1.;
+            return std::numeric_limits<Real>::max();
           });
       }
       ReduceTuple hv = reduce_data.value();
