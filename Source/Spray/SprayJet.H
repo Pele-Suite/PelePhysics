@@ -317,23 +317,22 @@ public:
     if (is_position) {
       trans = m_translation;
     }
-    amrex::Real x, y, z;
-    if (AMREX_SPACEDIM == 2) {
-      x = vec[0];
-      y = vec[1];
-      vec[0] = trans[0] + (m_trans_matrix[0] * x + m_trans_matrix[1] * y);
-      vec[1] = trans[1] + (m_trans_matrix[2] * x + m_trans_matrix[3] * y);
-    } else if (AMREX_SPACEDIM == 3) {
-      x = vec[0];
-      y = vec[1];
-      z = vec[2];
-      vec[0] = trans[0] + (m_trans_matrix[0] * x + m_trans_matrix[1] * y +
-                           m_trans_matrix[2] * z);
-      vec[1] = trans[1] + (m_trans_matrix[3] * x + m_trans_matrix[4] * y +
-                           m_trans_matrix[5] * z);
-      vec[2] = trans[2] + (m_trans_matrix[6] * x + m_trans_matrix[7] * y +
-                           m_trans_matrix[8] * z);
-    }
+#if AMREX_SPACEDIM == 2
+    const amrex::Real x = vec[0];
+    const amrex::Real y = vec[1];
+    vec[0] = trans[0] + (m_trans_matrix[0] * x + m_trans_matrix[1] * y);
+    vec[1] = trans[1] + (m_trans_matrix[2] * x + m_trans_matrix[3] * y);
+#else
+    const amrex::Real x = vec[0];
+    const amrex::Real y = vec[1];
+    const amrex::Real z = vec[2];
+    vec[0] = trans[0] + (m_trans_matrix[0] * x + m_trans_matrix[1] * y +
+                         m_trans_matrix[2] * z);
+    vec[1] = trans[1] + (m_trans_matrix[3] * x + m_trans_matrix[4] * y +
+                         m_trans_matrix[5] * z);
+    vec[2] = trans[2] + (m_trans_matrix[6] * x + m_trans_matrix[7] * y +
+                         m_trans_matrix[8] * z);
+#endif
   }
 
   amrex::Real interpolateMdot(const amrex::Real time) const
