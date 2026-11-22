@@ -141,6 +141,9 @@ SootModel::readSootParams()
   m_numSubcycles = 5;
 #endif
   pp.query("num_subcycles", m_numSubcycles);
+  if (m_numSubcycles > m_maxSubcycles) {
+    Abort("soot.num_subcycles must not exceed soot.max_subcycles");
+  }
   // Determines if mass is conserved by adding lost mass to H2
   pp.query("conserve_mass", m_conserveMass);
   m_readSootParams = true;
