@@ -620,7 +620,8 @@ calculateSpraySource(
       } else {
         pmass = 0.;
         p.id() = -1;
-        nsub = isub;
+        // Leave the loop; the sources are still averaged over all nsub
+        // substeps of the step, zero after the droplet vanishes
         isub = nsub + 1;
       }
     }
