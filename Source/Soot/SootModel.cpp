@@ -7,6 +7,7 @@
 
 // Soot include statements
 #include "SootModel.H"
+#include "SootModel_derive.H"
 
 using namespace amrex;
 
@@ -162,6 +163,7 @@ SootModel::defineMemberData(const Real dimerVol)
   Real nuclSurf = std::pow(nuclVol, 2. / 3.);
   m_sootData->nuclVol = nuclVol;
   m_sootData->nuclSurf = nuclSurf;
+  setSootDeriveNuclSize(nuclVol, nuclSurf);
   // Compute V_nucl and V_dimer to fractional powers
   for (int i = 0; i < 9; ++i) {
     Real exponent = 2. * (Real)i - 3.;

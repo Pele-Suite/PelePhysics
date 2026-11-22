@@ -4,6 +4,10 @@
 #include <AMReX_FArrayBox.H>
 #include "SootModel.H"
 
+// Nucleated particle volume and surface (in V0 and S0) for
+// soot_largeparticledata; set by SootModel::define()
+void setSootDeriveNuclSize(amrex::Real nuclVol, amrex::Real nuclSurf);
+
 void soot_largeparticledata(
   const amrex::Box& bx,
   amrex::FArrayBox& slfab,
