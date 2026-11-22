@@ -419,8 +419,9 @@ SootModel::computeSootSourceTerm(
         p_src -= omegai * RT / mw_fluid[sp];
       }
       if (conserveMass) {
-        // Difference between mass lost from fluid and mass gained to soot
-        Real diff_vol = soot_state(i, j, k, sootIndx + 1) * sd->unitConv[1];
+        // Difference between mass lost from fluid and mass gained to soot.
+        // The volume source of this call, not soot_state, which this adds to
+        Real diff_vol = (moments[1] - mom0[1]) / dt * sd->unitConv[1];
         Real del_rho_dot = rho_src + diff_vol * sc.SootDensity;
         // Add that mass to H2
         soot_state(i, j, k, absorbIndxP) -= del_rho_dot * sc.mass_src_conv;
