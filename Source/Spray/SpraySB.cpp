@@ -144,7 +144,7 @@ SprayParticleContainer::CreateSBDroplets(
         RealVect tanBeta = tanPsi.crossProduct(normal);
         tanBeta /= tanBeta.vectorLength();
 #else
-        RealVect tanBeta(normal[1], normal[0]);
+        RealVect tanBeta(-normal[1], normal[0]);
 #endif
         for (int new_parts = 0; new_parts < N_d; ++new_parts) {
           Real rand = amrex::Random();
