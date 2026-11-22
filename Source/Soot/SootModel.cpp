@@ -71,7 +71,7 @@ SootModel::define()
 
   if (!corrPAH) {
     Abort(
-      m_PAHname + " not recognized as PAH inception species. Must be " +
+      m_inceptPAH + " not recognized as PAH inception species. Must be " +
       PAH_names[0] + ", " + PAH_names[1] + ", or " + PAH_names[2]);
   }
   Vector<std::string> spec_names(NUM_SPECIES);
