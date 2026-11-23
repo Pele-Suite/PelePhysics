@@ -311,20 +311,16 @@ public:
   // Rotate vec (e.g. a velocity) into the user coordinate system
   void rotate_to_new_cs(amrex::Real vec[AMREX_SPACEDIM]) const
   {
-    const amrex::Real x = vec[0];
-    const amrex::Real y = vec[1];
-#if AMREX_SPACEDIM == 2
-    vec[0] = m_trans_matrix[0] * x + m_trans_matrix[1] * y;
-    vec[1] = m_trans_matrix[2] * x + m_trans_matrix[3] * y;
-#else
-    const amrex::Real z = vec[2];
-    vec[0] =
-      m_trans_matrix[0] * x + m_trans_matrix[1] * y + m_trans_matrix[2] * z;
-    vec[1] =
-      m_trans_matrix[3] * x + m_trans_matrix[4] * y + m_trans_matrix[5] * z;
-    vec[2] =
-      m_trans_matrix[6] * x + m_trans_matrix[7] * y + m_trans_matrix[8] * z;
-#endif
+    amrex::Real old[AMREX_SPACEDIM];
+    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+      old[i] = vec[i];
+    }
+    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+      vec[i] = 0.;
+      for (int j = 0; j < AMREX_SPACEDIM; ++j) {
+        vec[i] += m_trans_matrix[i * AMREX_SPACEDIM + j] * old[j];
+      }
+    }
   }
 
   // Rotate and translate the position vec into the user coordinate system
