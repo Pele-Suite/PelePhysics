@@ -7,6 +7,7 @@
 
 // Soot include statements
 #include "SootModel.H"
+#include "SootModel_derive.H"
 
 using namespace amrex;
 
@@ -33,6 +34,8 @@ SootModel::define()
   // This should be called after readSootParams()
   AMREX_ASSERT(m_readSootParams);
   m_sootData = new SootData{};
+  // -1 marks a soot gas species not (yet) found in the mechanism
+  m_sootData->refIndx.fill(-1);
   m_sootReact = new SootReaction{};
   d_sootData =
     static_cast<SootData*>(amrex::The_Arena()->alloc(sizeof(SootData)));
@@ -69,7 +72,7 @@ SootModel::define()
 
   if (!corrPAH) {
     Abort(
-      m_PAHname + " not recognized as PAH inception species. Must be " +
+      m_inceptPAH + " not recognized as PAH inception species. Must be " +
       PAH_names[0] + ", " + PAH_names[1] + ", or " + PAH_names[2]);
   }
   Vector<std::string> spec_names(NUM_SPECIES);
@@ -139,6 +142,12 @@ SootModel::readSootParams()
   m_numSubcycles = 5;
 #endif
   pp.query("num_subcycles", m_numSubcycles);
+  if (m_numSubcycles < 1 || m_maxSubcycles < 1) {
+    Abort("soot.num_subcycles and soot.max_subcycles must be at least 1");
+  }
+  if (m_numSubcycles > m_maxSubcycles) {
+    Abort("soot.num_subcycles must not exceed soot.max_subcycles");
+  }
   // Determines if mass is conserved by adding lost mass to H2
   pp.query("conserve_mass", m_conserveMass);
   m_readSootParams = true;
@@ -157,6 +166,7 @@ SootModel::defineMemberData(const Real dimerVol)
   Real nuclSurf = std::pow(nuclVol, 2. / 3.);
   m_sootData->nuclVol = nuclVol;
   m_sootData->nuclSurf = nuclSurf;
+  setSootDeriveNuclVol(nuclVol);
   // Compute V_nucl and V_dimer to fractional powers
   for (int i = 0; i < 9; ++i) {
     Real exponent = 2. * (Real)i - 3.;
@@ -322,7 +332,6 @@ SootModel::computeSootSourceTerm(
       for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
         const int peleIndx = qSootIndx + mom;
         moments[mom] = Qstate(i, j, k, peleIndx);
-        mom0[mom] = moments[mom];
         mom_src[mom] = 0.0;
       }
       for (int sp = 0; sp < NUM_SOOT_GS; ++sp) {
@@ -340,11 +349,16 @@ SootModel::computeSootSourceTerm(
       // Constant for free molecular collisions
       const Real colConst =
         convT * sc.colFactPi23 * sc.colFact16 * pele::physics::Constants::Avna;
+      // Clipping the incoming state is not a soot source: measure the source
+      // from the clipped moments (mol of C)
+      sd->clipMoments(momentsPtr);
+      for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
+        mom0[mom] = moments[mom];
+      }
+      Real RT = pele::physics::Constants::RU * T;
       // Collision frequency between two dimer in the free
       // molecular regime with van der Waals enhancement
       // Units: cm^3/mol-s
-      sd->clipMoments(momentsPtr);
-      Real RT = pele::physics::Constants::RU * T;
       const Real betaNucl = convT * betaNF;
       int nsub = nsub_init;
       Real mindt = dt / Real(nsubMAX);
@@ -399,10 +413,10 @@ SootModel::computeSootSourceTerm(
         }
         sd->clipMoments(momentsPtr);
       }
-      sd->convertFromMol(momentsPtr);
+      // Moment sources over the step, converted from mol of C
       for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
-        const int peleIndx = sootIndx + mom;
-        soot_state(i, j, k, peleIndx) += (moments[mom] - mom0[mom]) / dt;
+        mom_src[mom] = (moments[mom] - mom0[mom]) * sd->unitConv[mom] / dt;
+        soot_state(i, j, k, sootIndx + mom) += mom_src[mom];
       }
       Real rho_src = 0.0;
       Real eng_src = 0.0;
@@ -420,8 +434,8 @@ SootModel::computeSootSourceTerm(
       }
       if (conserveMass) {
         // Difference between mass lost from fluid and mass gained to soot
-        Real diff_vol = soot_state(i, j, k, sootIndx + 1) * sd->unitConv[1];
-        Real del_rho_dot = rho_src + diff_vol * sc.SootDensity;
+        // (the volume moment is the soot volume fraction)
+        Real del_rho_dot = rho_src + mom_src[1] * sc.SootDensity;
         // Add that mass to H2
         soot_state(i, j, k, absorbIndxP) -= del_rho_dot * sc.mass_src_conv;
         rho_src -= del_rho_dot;
@@ -498,14 +512,17 @@ SootModel::estSootDt(const Box& vbox, Array4<const Real> const& Qstate) const
         omega_src[sp] = 0.0;
       }
       sd->convertToMol(momentsPtr);
+      sd->clipMoments(momentsPtr);
       sd->computeFracMomVect(momentsPtr, mom_fvPtr);
       Real surf = sc.S0 * sd->fracMom(0.0, 1.0, mom_fvPtr);
       Real k_sg = 0.0;
       Real k_ox = 0.0;
       Real k_o2 = 0.0;
-      // Compute the species reaction source terms into omega_src
+      // Compute the species reaction source terms into omega_src, with the
+      // same soot threshold for the surface reactions as the source term
       sr->chemicalSrc(
-        T, surf, xi_n.data(), momentsPtr, k_sg, k_ox, k_o2, omega_src.data());
+        T, surf, xi_n.data(), momentsPtr, k_sg, k_ox, k_o2, omega_src.data(),
+        sd->surfaceActive(momentsPtr));
       Real mindt = 1.E100;
       for (int sp = 0; sp < NUM_SOOT_GS; ++sp) {
         if (xi_n[sp] > Xcutoff) {
