@@ -1,27 +1,23 @@
 #!/usr/bin/env bash
 
+# For the HIP jobs, which run in AMD's rocm/dev-ubuntu image: it already has
+# the ROCm repository and rocm-dev, so only the libraries are installed here.
+# The ROCm version is the image tag in ci.yml.
+
 set -eu -o pipefail
 
-sudo mkdir --parents --mode=0755 /etc/apt/keyrings
-curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
-# Replace any existing rocm.list: the rocm/dev-ubuntu images list the same
-# repository without signed-by, and apt rejects one repository with two keys
-echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.3.3 noble main" | sudo tee /etc/apt/sources.list.d/rocm.list
-echo -e 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600' | sudo tee /etc/apt/preferences.d/rocm-pin-600
-echo 'export PATH=/opt/rocm/llvm/bin:/opt/rocm/bin:/opt/rocm/profiler/bin:/opt/rocm/opencl/bin:$PATH' | sudo tee -a /etc/profile.d/rocm.sh
-sudo apt-get update
-sudo apt-get install -y rocm-dev rocrand-dev rocprim-dev hiprand-dev rocsparse-dev
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  rocrand-dev rocprim-dev hiprand-dev rocsparse-dev
+apt-get clean
 
-source /etc/profile.d/rocm.sh
-which hipcc
-which clang
-which clang++
-which flang
+# The image does not put ROCm on PATH: add it for the CI job's later steps
+# (each GITHUB_PATH entry is prepended, so llvm/bin goes last to come first)
+export PATH=/opt/rocm/llvm/bin:/opt/rocm/bin:${PATH}
+if [ -n "${GITHUB_PATH:-}" ]; then
+  printf '%s\n' /opt/rocm/bin /opt/rocm/llvm/bin >> "${GITHUB_PATH}"
+fi
+
+which hipcc clang clang++
 hipcc --version
 hipconfig --full
-
-# Make the toolchain available to the CI job's later steps (each GITHUB_PATH
-# entry is prepended, so add them in reverse to keep rocm.sh's order)
-if [ -n "${GITHUB_PATH:-}" ]; then
-  printf '%s\n' /opt/rocm/opencl/bin /opt/rocm/profiler/bin /opt/rocm/bin /opt/rocm/llvm/bin >> "${GITHUB_PATH}"
-fi

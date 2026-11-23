@@ -129,7 +129,7 @@ jobs:
             amrex_build_args: 'USE_HIP=TRUE AMD_ARCH=gfx90a LIBRARY_LOCATIONS=/opt/rocm/lib'
             amrex_build_flags: '--with-hip=yes'
             dependency_cmds: '.github/workflows/dependencies/dependencies_hip.sh'
-            container: rocm/dev-ubuntu-24.04:6.3.3
+            container: rocm/dev-ubuntu-24.04:7.2.4
           - comp: sycl
             amrex_build_args: 'USE_SYCL=TRUE'
             amrex_build_flags: '--with-sycl=yes'
