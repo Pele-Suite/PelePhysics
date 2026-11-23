@@ -1,0 +1,42 @@
+# Spray test suite (see main.cpp). CGS units, as in PeleC.
+particles.v = 0
+particles.mass_transfer = 1
+particles.mom_transfer = 1
+particles.fixed_parts = 0
+particles.cfl = 0.5
+
+# n-heptane liquid (properties as in PeleC's Spray-Evaporation regtest, with a
+# temperature dependent density, a thermal conductivity for the wall film and
+# a viscosity and surface tension for breakup and splashing)
+particles.fuel_species = NC7H16
+particles.fuel_ref_temp = 300.
+particles.NC7H16_crit_temp = 540.     # K
+particles.NC7H16_boil_temp = 371.6    # K
+particles.NC7H16_latent = 3.63E9      # erg/g at the reference temperature
+particles.NC7H16_cp = 2.2483E7        # erg/(g K)
+particles.NC7H16_rho = 0.93 -8.3E-4 0. 0. # g/cm^3, cubic in T
+particles.NC7H16_lambda = 1.2E4       # erg/(s cm K)
+particles.NC7H16_mu = 4.E-3           # g/(cm s)
+particles.fuel_sigma = 20.            # dyn/cm
+# Antoine equation (bar), last coefficient converts to dyn/cm^2
+particles.NC7H16_psat = 4.02832 1268.636 -56.199 1.E6
+
+# Read so that the tests can switch them on (main.cpp turns them off)
+particles.use_splash_model = 1
+particles.wall_temp = 300.
+particles.contact_angle = 30.
+particles.use_breakup_model = TAB
+particles.max_parcel_size = 10.
+
+# Jet for the injection test
+spraytest.jet_names = jet1
+spray.jet1.jet_cent = 0.25 0.6
+spray.jet1.jet_norm = 0. 1.
+spray.jet1.jet_dia = 0.05
+spray.jet1.spread_angle = 30.
+spray.jet1.T = 300.
+spray.jet1.jet_vel = 5000.
+spray.jet1.mass_flow_rate = 2.E-3
+spray.jet1.dist_type = Normal
+spray.jet1.mean_dia = 2.E-3
+spray.jet1.std_dev = 2.E-4

@@ -4,6 +4,8 @@
 #include <AMReX_PlotFileUtil.H>
 #include <POneSingle.H>
 
+#include "POneCheck.H"
+
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 initGasField(
   int i,
@@ -29,7 +31,8 @@ initGasField(
   amrex::Real z = plo[2] + (k + 0.5) * dx[2];
   z /= coef;
 #else
-  amrex::Real z = 0.0;
+  // A cross-section of the 3D flame near its peak temperature
+  amrex::Real z = 0.3;
 #endif
 
   amrex::Real r = std::sqrt((x - xc) * (x - xc) + (y - yc) * (y - yc));
@@ -272,7 +275,9 @@ int
 main(int argc, char* argv[])
 {
   amrex::Initialize(argc, argv);
+  int status = 0;
   {
+    pele::testing::Checker check;
     amrex::ParmParse pp;
     PeleRad::AMRParam amrpp(pp);
     PeleRad::MLMGParam mlmgpp(pp);
@@ -331,6 +336,8 @@ main(int argc, char* argv[])
         });
     }
 
+    pele::testing::check_solution(check, solution, &rad_src, temperature, "");
+
     // plot results
     if (write) {
       // std::cout << "write the results ... \n";
@@ -354,7 +361,8 @@ main(int argc, char* argv[])
          "Soot_fv", "Temperature"},
         geom, 0.0, 0);
     }
+    status = check.summary("POneSingleAF");
   }
   amrex::Finalize();
-  return (0);
+  return status;
 }

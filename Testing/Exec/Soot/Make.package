@@ -1,0 +1,10 @@
+CEXE_headers += SootTest.H
+CEXE_sources += main.cpp
+CEXE_sources += SootTest.cpp
+CEXE_sources += test_moments.cpp
+CEXE_sources += test_reactions.cpp
+CEXE_sources += test_source.cpp
+CEXE_sources += test_options.cpp
+CEXE_sources += test_timestep.cpp
+CEXE_sources += test_derive.cpp
+CEXE_sources += test_reactor.cpp

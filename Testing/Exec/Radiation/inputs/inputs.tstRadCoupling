@@ -1,0 +1,46 @@
+# PeleRad::Radiation (PeleLMRad.H) settings, as PeleLMeX's pelerad.*.
+# Every MLMGParam key is given: before #731 the others are uninitialised.
+# bottom_reltol: the optically thin slab is nearly a pure diffusion
+# problem, and a looser bottom solve stalls MLMG above reltol.
+
+# eq: periodic domain
+eq.kppath = kpDB
+eq.lo_bc = Periodic Periodic Periodic
+eq.hi_bc = Periodic Periodic Periodic
+eq.verbose = 0
+eq.bottom_verbose = 0
+eq.use_hypre = 0
+eq.max_iter = 100
+eq.max_fmg_iter = 0
+eq.max_bottom_iter = 20
+eq.max_coarsening_level = 10
+eq.reltol = 1.0e-10
+eq.abstol = 0.0
+eq.bottom_reltol = 1.0e-12
+eq.bottom_abstol = 0.0
+eq.linop_maxorder = 2
+eq.agglomeration = 1
+eq.consolidation = 0
+eq.composite_solve = 1
+eq.fine_level_solve_only = 0
+
+# slab: cold black walls in x, periodic in y
+slab.kppath = kpDB
+slab.lo_bc = Robin Periodic Periodic
+slab.hi_bc = Robin Periodic Periodic
+slab.verbose = 0
+slab.bottom_verbose = 0
+slab.use_hypre = 0
+slab.max_iter = 100
+slab.max_fmg_iter = 0
+slab.max_bottom_iter = 20
+slab.max_coarsening_level = 10
+slab.reltol = 1.0e-10
+slab.abstol = 0.0
+slab.bottom_reltol = 1.0e-12
+slab.bottom_abstol = 0.0
+slab.linop_maxorder = 2
+slab.agglomeration = 1
+slab.consolidation = 0
+slab.composite_solve = 1
+slab.fine_level_solve_only = 0

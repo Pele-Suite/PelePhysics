@@ -350,13 +350,141 @@ jobs:
           path: ~/.cache/ccache
           key: ${{steps.ccache.outputs.cache-primary-key}}
 
+  # Soot, spray and radiation need an AMReX library with particles and linear
+  # solvers, which the other unit tests do not, so they have their own.
+  Soot-Spray-Radiation:
+    needs: Detect-Changes
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        comp: [gnu, llvm, cuda, hip, sycl]
+        include:
+          - comp: gnu
+            amrex_build_args: 'COMP=gnu'
+            amrex_build_flags: '--comp=gnu'
+          - comp: llvm
+            amrex_build_args: 'COMP=llvm'
+            amrex_build_flags: '--comp=llvm'
+          - comp: cuda
+            amrex_build_args: 'COMP=gnu USE_CUDA=TRUE'
+            amrex_build_flags: '--comp=gnu --with-cuda=yes'
+            dependency_cmds: '.github/workflows/dependencies/dependencies_cuda.sh'
+          - comp: hip
+            amrex_build_args: 'USE_HIP=TRUE AMD_ARCH=gfx90a LIBRARY_LOCATIONS=/opt/rocm/lib'
+            amrex_build_flags: '--with-hip=yes'
+            dependency_cmds: '.github/workflows/dependencies/dependencies_hip.sh'
+          - comp: sycl
+            amrex_build_args: 'USE_SYCL=TRUE'
+            amrex_build_flags: '--with-sycl=yes'
+            dependency_cmds: '.github/workflows/dependencies/dependencies_dpcpp.sh'
+    env:
+      PELE_PHYSICS_HOME: ${{github.workspace}}
+      MAKE_ARGS: TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
+      EXE: ./Pele2d.${{matrix.comp}}.TPROF.ex
+      # As in Transport-EOS-Reactions: the GPU backends are only compiled,
+      # and the scheduled runs only refresh the ccache.
+      RUN_TESTS: ${{(matrix.comp == 'gnu' || matrix.comp == 'llvm') && github.event_name != 'schedule'}}
+      # The GPU backends compile the soot model with 6 moments only
+      SOOT_MOMENTS: ${{(matrix.comp == 'gnu' || matrix.comp == 'llvm') && '3 6' || '6'}}
+      CCACHE_MAXSIZE: 1G
+      SAVE_CCACHE: ${{github.ref == 'refs/heads/development'}}
+      CCACHE_COMPRESSLEVEL: ${{github.ref == 'refs/heads/development' && 10 || 1}}
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_CUDA_COMPILER_LAUNCHER: ccache
+      CMAKE_HIP_COMPILER_LAUNCHER: ccache
+    steps:
+      - name: Clone PelePhysics
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Install Ccache
+        working-directory: ${{runner.temp}}
+        run: |
+          ${{github.workspace}}/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
+          ccache --version | sed -n 1p
+          touch ${{runner.temp}}/ccache-start
+      - name: Set Up Ccache
+        id: ccache
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-${{github.sha}}-${{github.run_id}}-${{github.run_attempt}}
+          restore-keys: |
+               ccache-${{github.workflow}}-${{github.job}}-${{matrix.comp}}-git-
+      - name: Compiler Dependencies
+        if: matrix.dependency_cmds
+        run: ${{matrix.dependency_cmds}}
+      - name: SUNDIALS and AMReX
+        working-directory: Testing/Exec/Soot
+        run: |
+          echo "::add-matcher::${{github.workspace}}/.github/problem-matchers/gcc.json"
+          ccache -z
+          make TPL ${{matrix.amrex_build_args}}
+          cd ${PELE_PHYSICS_HOME}/Submodules/amrex
+          ./configure --dim=2 --with-mpi=no --enable-particle=yes --with-fortran=no --enable-linear-solver=yes --enable-linear-solver-incflo=no --enable-linear-solver-em=no --enable-fortran-api=no --prefix=./ --enable-tiny-profile=yes ${{matrix.amrex_build_flags}}
+          make -j $(nproc) ${{matrix.amrex_build_args}} USE_CCACHE=TRUE USE_SUNDIALS=TRUE SUNDIALS_HOME=${PELE_PHYSICS_HOME}/ThirdParty/INSTALL/*/
+          make install
+      - name: Test Soot
+        working-directory: Testing/Exec/Soot
+        run: |
+          for NMOM in ${SOOT_MOMENTS}; do
+            printf "\n-------- ${NMOM} moments --------\n"
+            make -j $(nproc) NUM_SOOT_MOMENTS=${NMOM} ${MAKE_ARGS}
+            if [ ${RUN_TESTS} = true ]; then ${EXE} inputs; fi
+            make realclean
+          done
+      - name: Test Spray
+        working-directory: Testing/Exec/Spray
+        run: |
+          make -j $(nproc) ${MAKE_ARGS}
+          if [ ${RUN_TESTS} = true ]; then ${EXE} inputs; fi
+          make realclean
+      - name: Test Radiation
+        working-directory: Testing/Exec/Radiation
+        run: |
+          # The EB tests and POneMulti are 3D only
+          for TEST in RadProps RadCoupling POneSingle POneSingleAF POneMultiAF; do
+            printf "\n-------- ${TEST} --------\n"
+            # The AMReX library above is built with SUNDIALS
+            make -j $(nproc) TEST=${TEST} USE_SUNDIALS=TRUE ${MAKE_ARGS}
+            if [ ${RUN_TESTS} = true ]; then
+              # Each test has its own executable, tst<TEST>2d.<...>.ex
+              RAD_EXE=${EXE/Pele/tst${TEST}}
+              ${RAD_EXE} inputs/inputs.tst${TEST}
+              if [ ${TEST} = POneMultiAF ]; then
+                ${RAD_EXE} inputs/inputs.tst${TEST}LevbyLev
+              fi
+            fi
+          done
+          make realclean
+      - name: Ccache Report
+        if: always()
+        run: |
+          ccache -s
+          du -hs ${HOME}/.cache/ccache
+      - name: Trim Ccache
+        if: env.SAVE_CCACHE == 'true'
+        run: |
+          start=$(stat -c %Y ${{runner.temp}}/ccache-start)
+          ccache --evict-older-than $(( $(date +%s) - start + 60 ))s
+          du -hs ${HOME}/.cache/ccache
+      - name: Save Ccache
+        if: env.SAVE_CCACHE == 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/ccache
+          key: ${{steps.ccache.outputs.cache-primary-key}}
+
   # The one check for branch protection to require. A job skipped by
   # its own `if:` (docs-only changes, scheduled runs) does not expand its
   # matrix, so its per-entry checks never report and a PR requiring them
   # waits forever; skipped jobs pass here. It also fails when Detect-Changes
   # fails, which would otherwise skip every build.
   CI-Status:
-    needs: [Detect-Changes, Formatting, Codespell, CEPTR, Transport-EOS-Reactions]
+    needs: [Detect-Changes, Formatting, Codespell, CEPTR, Transport-EOS-Reactions, Soot-Spray-Radiation]
     if: always()
     runs-on: ubuntu-latest
     steps:
