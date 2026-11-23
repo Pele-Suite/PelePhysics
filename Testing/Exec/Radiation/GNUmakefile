@@ -31,6 +31,10 @@ include $(AMREX_HOME)/Tools/GNUMake/Make.defs
 Bpack := ./Make.package $(PELE_PHYSICS_HOME)/Source/Radiation/Make.package
 Blocs := . $(PELE_PHYSICS_HOME)/Source/Radiation $(PELE_PHYSICS_HOME)/Testing/Exec
 ifeq ($(USE_AMREX_LIB), TRUE)
+  # The library already has the AMReX sources Make.defs adds (the SUNDIALS
+  # interface with USE_SUNDIALS=TRUE); building them again defines them twice
+  # in the CUDA device link
+  CEXE_sources :=
   AMREX_LIBRARY_HOME ?= $(AMREX_HOME)
   LIBDIR := $(AMREX_LIBRARY_HOME)/lib
   INCDIR := $(AMREX_LIBRARY_HOME)/include
