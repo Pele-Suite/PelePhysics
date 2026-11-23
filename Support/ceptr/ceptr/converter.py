@@ -78,15 +78,11 @@ class Converter:
                 "WARNING: The compiled mechanism will only be valid for the given "
                 "constant pressure. It is not applicable for compressible solvers.\n\n"
             )
-            # The pressure necessary for the plog evaluation is either provided via
-            # the command line argument or during runtime
-            if plog_pressure is None:  # runtime option
-                plog_pressure = float(
-                    input(
-                        "Please specify the pressure, at which you want to evaluate"
-                        f" the rates in Pascal (1 atm = {cc.Patm_pa} Pa, 1 bar = 1e5"
-                        " Pa):\n"
-                    )
+            # The pressure for the PLOG evaluation, from the command line
+            if plog_pressure is None:
+                raise ValueError(
+                    "The mechanism has PLOG reactions: give the pressure with"
+                    " -p/--plog_pressure, or with --plog= in a list file."
                 )
             print(
                 f"plog_pressure set to {plog_pressure} Pa /"
@@ -734,7 +730,8 @@ class Converter:
         n_hom_reactions = self.mechanism.n_reactions
         site_density = n_het_b_elem = n_het_species = n_het_reactions = 0
 
-        all_species_list = self.species_info.nonqssa_species_list
+        # A copy: the surface species must not join the gas-phase list
+        all_species_list = list(self.species_info.nonqssa_species_list)
 
         cw.writer(fstream)
         cw.writer(fstream, "#include <AMReX_Gpu.H>")

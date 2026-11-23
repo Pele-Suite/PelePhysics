@@ -110,7 +110,7 @@ def ajac(
             cw.writer(
                 fstream,
                 f"amrex::Real refC = {cc.Patm_pa:g} /"
-                f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:g} / T;",
+                f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:.15g} / T;",
             )
             cw.writer(fstream, "amrex::Real refCinv = 1.0 / refC;")
 
@@ -350,7 +350,7 @@ def ajac_symbolic(
         cw.writer(
             fstream,
             f"const amrex::Real refC = {cc.Patm_pa:g} /"
-            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:g} *"
+            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:.15g} *"
             " invT;",
         )
         cw.writer(fstream, "const amrex::Real refCinv = 1 / refC;")

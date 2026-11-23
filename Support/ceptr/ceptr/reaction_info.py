@@ -6,6 +6,11 @@ import ceptr.constants as cc
 import ceptr.writer as cw
 
 
+def has_plog_reactions(reactions):
+    """Return whether any of the reactions has a PLOG rate, with or without M."""
+    return any(r.rate.type == "pressure-dependent-Arrhenius" for r in reactions)
+
+
 class ReactionInfo:
     """Information on reactions."""
 
@@ -27,10 +32,10 @@ class ReactionInfo:
         self.n_qssa_reactions = 0
         self.qfqr_co_idx_map = []
 
-        self.has_plog_reactions = False
-
         if interface is not None:
             self.rs_unsorted += interface.reactions()
+
+        self.has_plog_reactions = has_plog_reactions(self.rs_unsorted)
 
         self.has_reactions = len(self.rs_unsorted) > 0
 
@@ -88,9 +93,6 @@ def sort_reactions(mechanism, interface):
                 continue
 
             if r.third_body is None:
-                # Check for PLOG reactions on the fly
-                if r.reaction_type == "pressure-dependent-Arrhenius":
-                    reaction_info.has_plog_reactions = True
                 reaction_info.idxmap[k] = i
                 reaction_info.rs.append(r)
                 i += 1

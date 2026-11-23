@@ -1460,7 +1460,7 @@ def qssa_coeff_functions(fstream, mechanism, species_info, reaction_info, syms):
         cw.writer(
             fstream,
             f"const amrex::Real refC = {cc.Patm_pa:g} /"
-            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:g} *"
+            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:.15g} *"
             " invT;",
         )
         # coeff1 = cc.Patm_pa

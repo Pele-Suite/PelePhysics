@@ -158,7 +158,7 @@ def production_rate(
         cw.writer(
             fstream,
             f"amrex::Real refC = {cc.Patm_pa:g} /"
-            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:g} *"
+            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:.15g} *"
             " invT;",
         )
         cw.writer(fstream, "amrex::Real refCinv = 1 / refC;")
@@ -481,7 +481,7 @@ def production_rate(
         cw.writer(
             fstream,
             f"const amrex::Real refC = {cc.Patm_pa:g} /"
-            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:g} *"
+            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:.15g} *"
             " invT;",
         )
         cw.writer(fstream, "const amrex::Real refCinv = 1 / refC;")
@@ -1104,7 +1104,7 @@ def production_rate_light(fstream, mechanism, species_info, reaction_info):
         cw.writer(
             fstream,
             f"const amrex::Real refC = {cc.Patm_pa:g} /"
-            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:g} *"
+            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:.15g} *"
             " invT;",
         )
         cw.writer(fstream, "const amrex::Real refCinv = 1 / refC;")
