@@ -10,6 +10,7 @@ import pytest
 import symengine
 
 import ceptr.converter as converter
+import ceptr.reaction_info as cri
 import ceptr.utilities as cu
 from ceptr import __version__
 from ceptr.ceptr import parse_lst_file, parse_qss_lst_file
@@ -154,6 +155,32 @@ def test_kc_unit_conversions():
         conv, conv_smp = cu.fkc_conv_inv(None, None, reaction, syms)
         assert math.isclose(cpp(conv), refc**-dim)
         assert math.isclose(float(symengine.sympify(conv_smp).subs(subs)), refc**-dim)
+
+
+PLOG_YAML = """
+phases:
+- name: gas
+  thermo: ideal-gas
+  elements: [H, O, Ar]
+  species: [{gri30.yaml/species: [H, O, OH, AR]}]
+  kinetics: gas
+  reactions: all
+reactions:
+- equation: %s
+  type: pressure-dependent-Arrhenius
+  rate-constants:
+  - {P: 0.01 atm, A: 1.0e12, b: 0, Ea: 0}
+  - {P: 1 atm, A: 1.0e13, b: 0, Ea: 0}
+"""
+
+
+@pytest.mark.parametrize("equation", ["H + O <=> OH", "H + O + AR <=> OH + AR"])
+def test_plog_detection(equation):
+    """PLOG reactions are found with and without a third body."""
+    mechanism = ct.Solution(yaml=PLOG_YAML % equation)
+    assert cri.has_plog_reactions(mechanism.reactions())
+    assert cri.ReactionInfo(mechanism, None).has_plog_reactions
+    assert not cri.has_plog_reactions(ct.Solution("h2o2.yaml").reactions())
 
 
 def test_parse_lst_file(tmp_path):

@@ -10,6 +10,7 @@ import cantera as ct
 
 import ceptr.constants as cc
 import ceptr.converter as converter
+import ceptr.reaction_info as cri
 
 
 def parse_lst_lines(lst, n_fields=1, default_pressure=None):
@@ -61,13 +62,6 @@ def parse_qss_lst_file(lst, default_pressure=None):
     return mechnames, qss_format_inputs, plog_pressures
 
 
-def has_plog_reactions(mechanism):
-    """Return whether the mechanism has PLOG reactions."""
-    return any(
-        r.reaction_type == "pressure-dependent-Arrhenius" for r in mechanism.reactions()
-    )
-
-
 def ask_plog_pressure():
     """Ask for the pressure at which to evaluate the PLOG reactions."""
     try:
@@ -114,7 +108,11 @@ def convert(
         ct.Solution(fname) if mechanism_is_homogeneous else interface.adjacent[gas_name]
     )
 
-    if plog_pressure is None and ask_plog and has_plog_reactions(mechanism):
+    if (
+        plog_pressure is None
+        and ask_plog
+        and cri.has_plog_reactions(mechanism.reactions())
+    ):
         plog_pressure = ask_plog_pressure()
 
     conv = converter.Converter(
