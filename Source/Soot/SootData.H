@@ -288,10 +288,11 @@ struct SootData
     // betaNucl*[DIMER]^2 + betaCond*[DIMER] - dimerRate = 0
     // compute the [DIMER] using the positive root of the quadratic, in the
     // form x = 2c / (b + sqrt(b^2 + 4ac)) that does not cancel when
-    // b^2 >> 4ac
+    // b^2 >> 4ac. denom is zero only when both coefficients are; a NaN state
+    // must still give NaN
     const amrex::Real delta = betaCond * betaCond + 4. * betaNucl * dimerRate;
     const amrex::Real denom = betaCond + std::sqrt(delta);
-    return (denom > 0.) ? 2. * dimerRate / denom : 0.;
+    return (denom == 0.) ? 0. : 2. * dimerRate / denom;
   }
 
   // Clip moment values
