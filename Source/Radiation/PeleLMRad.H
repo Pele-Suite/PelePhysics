@@ -53,6 +53,45 @@ private:
   amrex::Vector<amrex::EBFArrayBoxFactory const*> ebfactVec_;
 #endif
 
+  // Size the level data to the levels that have grids (the level vectors
+  // from AmrMesh have max_level + 1 entries); a regrid that removes a level
+  // frees its data.
+  int resizeLevels()
+  {
+    int const nlev = numLevelsWithGrids(grids_);
+    for (auto* mfs :
+         {&solution_, &rhs_, &acoef_, &bcoef_, &robin_a_, &robin_b_, &robin_f_,
+          &absc_}) {
+      mfs->resize(nlev);
+    }
+    return nlev;
+  }
+
+  // Define and initialise one level's data; all of it is set before the first
+  // solve, since plot_init_state writes it.
+  void defineLevel(int ilev, amrex::FabFactory<amrex::FArrayBox> const& fact)
+  {
+    auto const& ba = grids_[ilev];
+    auto const& dm = dmap_[ilev];
+    amrex::IntVect const ng{1};
+    amrex::MFInfo const info;
+    solution_[ilev].define(ba, dm, 1, ng, info, fact);
+    rhs_[ilev].define(ba, dm, 1, 0, info, fact);
+    acoef_[ilev].define(ba, dm, 1, 0, info, fact);
+    bcoef_[ilev].define(ba, dm, 1, ng, info, fact);
+    robin_a_[ilev].define(ba, dm, 1, ng, info, fact);
+    robin_b_[ilev].define(ba, dm, 1, ng, info, fact);
+    robin_f_[ilev].define(ba, dm, 1, ng, info, fact);
+    absc_[ilev].define(ba, dm, 1, 0, info, fact);
+
+    for (auto* mf :
+         {&solution_[ilev], &rhs_[ilev], &acoef_[ilev], &robin_a_[ilev],
+          &robin_b_[ilev], &robin_f_[ilev], &absc_[ilev]}) {
+      mf->setVal(0.0, 0, 1, mf->nGrowVect());
+    }
+    bcoef_[ilev].setVal(1.0, 0, 1, ng);
+  }
+
 public:
   AMREX_GPU_HOST
   Radiation(
@@ -119,11 +158,13 @@ public:
                    << "kp path: " << data_path << "\n";
   }
 
+  // Xco2, Xh2o, Xco: mole fractions; T in K; P in Pa; fv: soot volume
+  // fraction.
   void updateSpecProp(
     amrex::MFIter const& mfi,
-    amrex::Array4<const amrex::Real> const& Yco2,
-    amrex::Array4<const amrex::Real> const& Yh2o,
-    amrex::Array4<const amrex::Real> const& Yco,
+    amrex::Array4<const amrex::Real> const& Xco2,
+    amrex::Array4<const amrex::Real> const& Xh2o,
+    amrex::Array4<const amrex::Real> const& Xco,
     amrex::Array4<const amrex::Real> const& T,
     amrex::Array4<const amrex::Real> const& P
 #ifdef PELELM_USE_SOOT
@@ -139,8 +180,11 @@ public:
     auto const& kph2o = radprop.kph2o();
     auto const& kpco = radprop.kpco();
 
-    amrex::Box const& bx = mfi.validbox();
-    amrex::Box const& gbx = amrex::grow(bx, 1);
+    // The caller may tile: work on this tile only. growntilebox(1) grows the
+    // tile only across its valid box faces, so the boundary cells below read
+    // kappa from cells of the same tile.
+    amrex::Box const bx = mfi.tilebox();
+    amrex::Box const gbx = mfi.growntilebox(1);
 
     auto const dlo = amrex::lbound(geom_[ilev].Domain());
     auto const dhi = amrex::ubound(geom_[ilev].Domain());
@@ -155,7 +199,7 @@ public:
 
     amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       RadProp::getRadPropGas(
-        i, j, k, Yco2, Yh2o, Yco, T, P, kappa, kpco2, kph2o, kpco);
+        i, j, k, Xco2, Xh2o, Xco, T, P, kappa, kpco2, kph2o, kpco);
     });
 
 #ifdef PELELM_USE_SOOT
@@ -165,114 +209,40 @@ public:
     });
 #endif
 
+    auto const blo = amrex::lbound(bx);
+    auto const bhi = amrex::ubound(bx);
     amrex::ParallelFor(gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-      betafab(i, j, k) = 1.0;
+      // The nearest cell of this tile: the cell itself, or for a ghost cell
+      // the adjacent valid cell (growntilebox grows only across valid-box
+      // faces), which on the domain boundary is the boundary cell.
+      amrex::Real const kappa_m = // in 1/m
+        kappa(
+          amrex::Clamp(i, blo.x, bhi.x), amrex::Clamp(j, blo.y, bhi.y),
+          amrex::Clamp(k, blo.z, bhi.z)) *
+        100;
 
       if (bx.contains(i, j, k)) {
-        amrex::Real ka = amrex::max<amrex::Real>(0.01, kappa(i, j, k) * 100);
+        amrex::Real const ka = amrex::max<amrex::Real>(0.01, kappa_m);
         betafab(i, j, k) = 1.0 / ka;
-
-        rhsfab(i, j, k) = 4.0 * ka * 5.67e-8 * std::pow(T(i, j, k),
-                                                        4.0); // SI
-
-        /*rhsfab(i, j, k) = 4.0 * ka * 5.67e-5
-                          * std::pow(T(i, j, k),
-                              4.0);*/ // cgs
+        rhsfab(i, j, k) = 4.0 * ka * 5.67e-8 * std::pow(T(i, j, k), 4.0); // SI
         alphafab(i, j, k) = ka;
+        return;
       }
 
-      // Robin BC
-      bool robin_cell = false;
-      if (j >= dlo.y && j <= dhi.y && k >= dlo.z && k <= dhi.z) {
-        int jj, kk;
-
-        if (j < bx.loVect3d()[1]) {
-          jj = bx.loVect3d()[1];
-        } else if (j > bx.hiVect3d()[1]) {
-          jj = bx.hiVect3d()[1];
-        } else {
-          jj = j;
-        }
-        if (k < bx.loVect3d()[2]) {
-          kk = bx.loVect3d()[2];
-        } else if (k > bx.hiVect3d()[2]) {
-          kk = bx.hiVect3d()[2];
-        } else {
-          kk = k;
-        }
-
-        if (i > dhi.x) {
-          robin_cell = true;
-          betafab(i, j, k) =
-            1.0 / amrex::max<amrex::Real>(1.0, kappa(dhi.x, jj, kk) * 100);
-        }
-        if (i < dlo.x) {
-          robin_cell = true;
-          betafab(i, j, k) =
-            1.0 / amrex::max<amrex::Real>(1.0, kappa(dlo.x, jj, kk) * 100);
-        }
-      } else if (i >= dlo.x && i <= dhi.x && k >= dlo.z && k <= dhi.z) {
-        int ii, kk;
-
-        if (i < bx.loVect3d()[0]) {
-          ii = bx.loVect3d()[0];
-        } else if (i > bx.hiVect3d()[0]) {
-          ii = bx.hiVect3d()[0];
-        } else {
-          ii = i;
-        }
-        if (k < bx.loVect3d()[2]) {
-          kk = bx.loVect3d()[2];
-        } else if (k > bx.hiVect3d()[2]) {
-          kk = bx.hiVect3d()[2];
-        } else {
-          kk = k;
-        }
-
-        if (j > dhi.y) {
-          robin_cell = true;
-          betafab(i, j, k) =
-            1.0 / amrex::max<amrex::Real>(1.0, kappa(ii, dhi.y, kk) * 100);
-        }
-        if (j < dlo.y) {
-          robin_cell = true;
-          betafab(i, j, k) =
-            1.0 / amrex::max<amrex::Real>(1.0, kappa(ii, dlo.y, kk) * 100);
-        }
-      } else if (i >= dlo.x && i <= dhi.x && j >= dlo.y && j <= dhi.y) {
-        int ii, jj;
-
-        if (i < bx.loVect3d()[0]) {
-          ii = bx.loVect3d()[0];
-        } else if (i > bx.hiVect3d()[0]) {
-          ii = bx.hiVect3d()[0];
-        } else {
-          ii = i;
-        }
-        if (j < bx.loVect3d()[1]) {
-          jj = bx.loVect3d()[1];
-        } else if (j > bx.hiVect3d()[1]) {
-          jj = bx.hiVect3d()[1];
-        } else {
-          jj = j;
-        }
-
-        if (k > dhi.z) {
-          robin_cell = true;
-          betafab(i, j, k) =
-            1.0 / amrex::max<amrex::Real>(1.0, kappa(ii, jj, dhi.z) * 100);
-        }
-        if (k < dlo.z) {
-          robin_cell = true;
-          betafab(i, j, k) =
-            1.0 / amrex::max<amrex::Real>(1.0, kappa(ii, jj, dlo.z) * 100);
-        }
-      }
-
-      if (robin_cell) {
+      // Ghost cells outside the domain in exactly one direction carry the
+      // Marshak (Robin) condition. The others start from the adjacent cell's
+      // value: FillBoundary overwrites those next to other boxes and periodic
+      // images, and coarse/fine ghosts keep it.
+      int const nout = static_cast<int>(i < dlo.x || i > dhi.x) +
+                       static_cast<int>(j < dlo.y || j > dhi.y) +
+                       static_cast<int>(k < dlo.z || k > dhi.z);
+      if (nout == 1) {
+        betafab(i, j, k) = 1.0 / amrex::max<amrex::Real>(1.0, kappa_m);
         robin_a_fab(i, j, k) = -1.0 / betafab(i, j, k);
         robin_b_fab(i, j, k) = -2.0 / 3.0;
         robin_f_fab(i, j, k) = 0.0;
+      } else {
+        betafab(i, j, k) = 1.0 / amrex::max<amrex::Real>(0.01, kappa_m);
       }
     });
   }
@@ -281,34 +251,11 @@ public:
     amrex::Vector<amrex::BoxArray> const& grids,
     amrex::Vector<amrex::DistributionMapping> const& dmap)
   {
-    amrex::IntVect ng = amrex::IntVect{1};
     grids_ = grids;
     dmap_ = dmap;
-
-    auto const nlevels = grids_.size();
-
-    solution_.resize(nlevels);
-    rhs_.resize(nlevels);
-    acoef_.resize(nlevels);
-    bcoef_.resize(nlevels);
-
-    robin_a_.resize(nlevels);
-    robin_b_.resize(nlevels);
-    robin_f_.resize(nlevels);
-    absc_.resize(nlevels);
-
-    for (int ilev = 0; ilev < nlevels; ++ilev) {
-      solution_[ilev].define(grids[ilev], dmap[ilev], 1, ng);
-      rhs_[ilev].define(grids[ilev], dmap[ilev], 1, 0);
-      acoef_[ilev].define(grids[ilev], dmap[ilev], 1, 0);
-      bcoef_[ilev].define(grids[ilev], dmap[ilev], 1, ng);
-      robin_a_[ilev].define(grids[ilev], dmap[ilev], 1, ng);
-      robin_b_[ilev].define(grids[ilev], dmap[ilev], 1, ng);
-      robin_f_[ilev].define(grids[ilev], dmap[ilev], 1, ng);
-      absc_[ilev].define(grids[ilev], dmap[ilev], 1, 0);
-
-      solution_[ilev].setVal(0.0, 0, 1, ng);
-      bcoef_[ilev].setVal(1.0, 0, 1, ng);
+    int const nlev = resizeLevels();
+    for (int ilev = 0; ilev < nlev; ++ilev) {
+      defineLevel(ilev, amrex::FArrayBoxFactory());
     }
   }
 
@@ -319,47 +266,15 @@ public:
     amrex::Vector<std::unique_ptr<amrex::FabFactory<amrex::FArrayBox>>> const&
       factory)
   {
-    amrex::IntVect ng = amrex::IntVect{1};
     grids_ = grids;
     dmap_ = dmap;
-
-    auto const nlevels = grids_.size();
-
-    solution_.resize(nlevels);
-    rhs_.resize(nlevels);
-    acoef_.resize(nlevels);
-    bcoef_.resize(nlevels);
-
-    robin_a_.resize(nlevels);
-    robin_b_.resize(nlevels);
-    robin_f_.resize(nlevels);
-    absc_.resize(nlevels);
-
-    for (int ilev = 0; ilev < nlevels; ++ilev) {
-      ebfactVec_.push_back(
-        &(static_cast<amrex::EBFArrayBoxFactory const&>(*factory[ilev])));
-    }
-
-    for (int ilev = 0; ilev < grids.size(); ++ilev) {
-      solution_[ilev].define(
-        grids[ilev], dmap[ilev], 1, ng, amrex::MFInfo(), *factory[ilev]);
-      rhs_[ilev].define(
-        grids[ilev], dmap[ilev], 1, 0, amrex::MFInfo(), *factory[ilev]);
-      acoef_[ilev].define(
-        grids[ilev], dmap[ilev], 1, 0, amrex::MFInfo(), *factory[ilev]);
-      bcoef_[ilev].define(
-        grids[ilev], dmap[ilev], 1, ng, amrex::MFInfo(), *factory[ilev]);
-      robin_a_[ilev].define(
-        grids[ilev], dmap[ilev], 1, ng, amrex::MFInfo(), *factory[ilev]);
-      robin_b_[ilev].define(
-        grids[ilev], dmap[ilev], 1, ng, amrex::MFInfo(), *factory[ilev]);
-      robin_f_[ilev].define(
-        grids[ilev], dmap[ilev], 1, ng, amrex::MFInfo(), *factory[ilev]);
-      absc_[ilev].define(
-        grids[ilev], dmap[ilev], 1, 0, amrex::MFInfo(), *factory[ilev]);
-
-      solution_[ilev].setVal(0.0, 0, 1, ng);
-      bcoef_[ilev].setVal(1.0, 0, 1, ng);
+    int const nlev = resizeLevels();
+    // Rebuilt on every call: after a regrid the old factories are gone.
+    ebfactVec_.resize(nlev);
+    for (int ilev = 0; ilev < nlev; ++ilev) {
+      ebfactVec_[ilev] =
+        &(static_cast<amrex::EBFArrayBoxFactory const&>(*factory[ilev]));
+      defineLevel(ilev, *factory[ilev]);
     }
   }
 #endif
@@ -368,8 +283,13 @@ public:
   {
     // std::cout << "begin of evaluateRad() \n";
 
-    for (int ilev = 0; ilev < grids_.size(); ++ilev) {
-      bcoef_[ilev].FillBoundary();
+    int const nlev = numLevelsWithGrids(grids_);
+    for (int ilev = 0; ilev < nlev; ++ilev) {
+      bcoef_[ilev].FillBoundary(geom_[ilev].periodicity());
+      // The solution's ghost cells carry the Dirichlet boundary values (zero
+      // incident radiation), but the previous solve overwrote them with
+      // extrapolated values: reset them.
+      solution_[ilev].setBndry(0.0);
     }
     //        if (composite_solve_)
     rte_->solve();
@@ -382,7 +302,7 @@ public:
     amrex::Array4<amrex::Real> const& radfab,
     int ilev)
   {
-    amrex::Box const& bx = mfi.validbox();
+    amrex::Box const bx = mfi.tilebox();
     auto const& rhsfab = rhs_[ilev].array(mfi);
     auto const& solfab = solution_[ilev].array(mfi);
     auto const& acfab = acoef_[ilev].array(mfi);

@@ -77,7 +77,7 @@ public:
   void solve()
   {
     int const solver_level = 0;
-    auto const nlevels = geom_.size();
+    int const nlevels = numLevelsWithGrids(grids_);
     auto const tol_rel = mlmgpp_.reltol_;
     auto const tol_abs = mlmgpp_.abstol_;
 
