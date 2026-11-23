@@ -14,6 +14,9 @@
 #include <AMReX_ParmParse.H>
 #include <AMReX_Print.H>
 
+#include <cmath>
+#include <limits>
+
 #include "mechanism.H"
 #include <PelePhysics.H>
 #include "SootModel.H"
@@ -38,6 +41,7 @@ struct MassBalance
   amrex::Real err_spec = 0.; // max |sum of species sources - rho source|
   amrex::Real soot_src = 0.; // max |soot mass source|
   amrex::Real rho_src = 0.;  // max |rho source|
+  bool finite = true;        // no NaN or inf, which max would drop
 };
 
 MassBalance
@@ -57,6 +61,8 @@ checkMassBalance(
     mb.err_spec = amrex::max(mb.err_spec, std::abs(sspec - srho));
     mb.soot_src = amrex::max(mb.soot_src, std::abs(ssoot));
     mb.rho_src = amrex::max(mb.rho_src, std::abs(srho));
+    mb.finite = mb.finite && std::isfinite(srho) && std::isfinite(ssoot) &&
+                std::isfinite(sspec);
   });
   return mb;
 }
@@ -187,12 +193,21 @@ main(int argc, char* argv[])
     const amrex::Real m0 = gas0 + soot0;
     amrex::Real worst_soot = 0.;
     amrex::Real worst_spec = 0.;
+    bool all_finite = true;
+    // err / src, but the largest Real rather than NaN or inf when src is zero
+    // and err is not, so the max keeps it and the check fails
+    const auto ratio = [](const amrex::Real err, const amrex::Real src) {
+      return (src > 0.)
+               ? err / src
+               : ((err > 0.) ? std::numeric_limits<amrex::Real>::max() : 0.);
+    };
     for (int step = 0; step < nsteps; ++step) {
       sfab.setVal<amrex::RunOn::Host>(0.);
       source(sfab);
       const MassBalance mb = checkMassBalance(bx, sfab.const_array());
-      worst_soot = amrex::max(worst_soot, mb.err_soot / mb.soot_src);
-      worst_spec = amrex::max(worst_spec, mb.err_spec / mb.rho_src);
+      worst_soot = amrex::max(worst_soot, ratio(mb.err_soot, mb.soot_src));
+      worst_spec = amrex::max(worst_spec, ratio(mb.err_spec, mb.rho_src));
+      all_finite = all_finite && mb.finite;
       // Explicit update of the closed reactor (temperature held)
       amrex::LoopOnCpu(bx, [&](int i, int j, int k) {
         const amrex::Real rho = q(i, j, k, qRho);
@@ -220,6 +235,7 @@ main(int argc, char* argv[])
                    << (soot1 - soot0) / m0
                    << ", relative change of gas + soot mass = "
                    << (m1 - m0) / m0 << "\n";
+    check(all_finite, "the sources are finite");
     check(
       worst_soot <= tol, "gas density source balances the soot mass source");
     check(worst_spec <= tol, "species sources sum to the density source");
