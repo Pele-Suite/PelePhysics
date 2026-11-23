@@ -103,6 +103,9 @@ jobs:
     needs: Detect-Changes
     if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     runs-on: ubuntu-24.04
+    # The HIP builds run in AMD's image, which already has rocm-dev; the
+    # others run on the runner itself (an empty image)
+    container: ${{matrix.container}}
     strategy:
       # One backend failing (e.g. a mirror hiccup) should not cancel the
       # others before they report and save their caches.
@@ -126,6 +129,7 @@ jobs:
             amrex_build_args: 'USE_HIP=TRUE AMD_ARCH=gfx90a LIBRARY_LOCATIONS=/opt/rocm/lib'
             amrex_build_flags: '--with-hip=yes'
             dependency_cmds: '.github/workflows/dependencies/dependencies_hip.sh'
+            container: rocm/dev-ubuntu-24.04:6.3.3
           - comp: sycl
             amrex_build_args: 'USE_SYCL=TRUE'
             amrex_build_flags: '--with-sycl=yes'
@@ -156,6 +160,13 @@ jobs:
       CMAKE_CUDA_COMPILER_LAUNCHER: ccache
       CMAKE_HIP_COMPILER_LAUNCHER: ccache
     steps:
+      # What the image lacks for the checkout (git, for the submodules) and
+      # AMReX's ccache script (wget, xz)
+      - name: Container Packages
+        if: matrix.container
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git wget xz-utils
       - uses: actions/setup-python@v6
         with:
           python-version: ${{matrix.python-version}}
