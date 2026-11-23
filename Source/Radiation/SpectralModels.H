@@ -43,6 +43,10 @@ interpk(
   return (1.0 - weight) * k[TindexL] + weight * k[TindexL + 1];
 }
 
+// Planck-mean absorption coefficient of the gas, in 1/cm:
+// kappa = P / 1e5 * sum_i X_i kp_i(T), with X_i the mole fractions of CO2,
+// H2O and CO and P in Pa. Dividing by 1e5 treats the kp tables as
+// 1/(cm bar); their source (bar or atm) is not recorded.
 AMREX_GPU_HOST_DEVICE
 AMREX_FORCE_INLINE
 void
@@ -50,9 +54,9 @@ getRadPropGas(
   int i,
   int j,
   int k,
-  amrex::Array4<const amrex::Real> const& yco2,
-  amrex::Array4<const amrex::Real> const& yh2o,
-  amrex::Array4<const amrex::Real> const& yco,
+  amrex::Array4<const amrex::Real> const& xco2,
+  amrex::Array4<const amrex::Real> const& xh2o,
+  amrex::Array4<const amrex::Real> const& xco,
   amrex::Array4<const amrex::Real> const& temp,
   amrex::Array4<const amrex::Real> const& pressure,
   amrex::Array4<amrex::Real> const& absc,
@@ -61,7 +65,7 @@ getRadPropGas(
   amrex::GpuArray<amrex::Real, 126UL> const& kdataco)
 {
   if (
-    yco2(i, j, k) < 1.0e-5 && yh2o(i, j, k) < 1.0e-5 && yco(i, j, k) < 1.0e-5) {
+    xco2(i, j, k) < 1.0e-5 && xh2o(i, j, k) < 1.0e-5 && xco(i, j, k) < 1.0e-5) {
     absc(i, j, k) = 0.001;
     return;
   }
@@ -74,7 +78,7 @@ getRadPropGas(
   amrex::Real kp_co = interpk(TindexL, weight, kdataco);
 
   absc(i, j, k) =
-    yco2(i, j, k) * kp_co2 + yh2o(i, j, k) * kp_h2o + yco(i, j, k) * kp_co;
+    xco2(i, j, k) * kp_co2 + xh2o(i, j, k) * kp_h2o + xco(i, j, k) * kp_co;
 
   // absc(i, j, k) *= pressure(i, j, k) / 1.0e5 * 100.0; //si, in m-1
   absc(i, j, k) *=

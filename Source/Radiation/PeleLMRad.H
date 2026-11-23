@@ -119,11 +119,13 @@ public:
                    << "kp path: " << data_path << "\n";
   }
 
+  // Xco2, Xh2o, Xco: mole fractions; T in K; P in Pa; fv: soot volume
+  // fraction.
   void updateSpecProp(
     amrex::MFIter const& mfi,
-    amrex::Array4<const amrex::Real> const& Yco2,
-    amrex::Array4<const amrex::Real> const& Yh2o,
-    amrex::Array4<const amrex::Real> const& Yco,
+    amrex::Array4<const amrex::Real> const& Xco2,
+    amrex::Array4<const amrex::Real> const& Xh2o,
+    amrex::Array4<const amrex::Real> const& Xco,
     amrex::Array4<const amrex::Real> const& T,
     amrex::Array4<const amrex::Real> const& P
 #ifdef PELELM_USE_SOOT
@@ -158,7 +160,7 @@ public:
 
     amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       RadProp::getRadPropGas(
-        i, j, k, Yco2, Yh2o, Yco, T, P, kappa, kpco2, kph2o, kpco);
+        i, j, k, Xco2, Xh2o, Xco, T, P, kappa, kpco2, kph2o, kpco);
     });
 
 #ifdef PELELM_USE_SOOT
