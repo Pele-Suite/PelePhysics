@@ -86,7 +86,8 @@ SprayParticleContainer::computeDerivedVars(
 #ifdef AMREX_USE_EB
         if (flags_array(ijkc).isSingleValued()) {
           curvol *= volfrac_fab(ijkc);
-          face_area = bar_fab(ijkc);
+          // The boundary area is normalized by the regular face area
+          face_area *= bar_fab(ijkc);
         }
 #endif
         Real film_hght = p.rdata(SprayComps::pstateFilmHght);
