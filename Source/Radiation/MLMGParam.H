@@ -75,12 +75,14 @@ public:
     amrex::Print() << "Define radiation BC:"
                    << "\n";
 
-    auto const toBC = [&bctype](std::string const& name) {
+    std::string const prefix =
+      pp_.getPrefix().empty() ? "" : pp_.getPrefix() + ".";
+    auto const toBC = [&bctype, &prefix](std::string const& name) {
       auto const it = bctype.find(name);
       if (it == bctype.end()) {
         amrex::Abort(
-          "PeleRad: unknown pelerad.lo_bc/hi_bc type " + name +
-          ", must be Dirichlet, Periodic, Neumann or Robin");
+          "PeleRad: unknown " + prefix + "lo_bc/" + prefix + "hi_bc type " +
+          name + ", must be Dirichlet, Periodic, Neumann or Robin");
       }
       return it->second;
     };
