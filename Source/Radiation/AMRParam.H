@@ -1,11 +1,24 @@
 #ifndef AMR_PARAM_H
 #define AMR_PARAM_H
 
+#include <AMReX_BoxArray.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_Vector.H>
 #include <string>
 
 namespace PeleRad {
+
+// Number of AMR levels that have grids. Level vectors from AmrMesh have
+// max_level + 1 entries, and those above finest_level are empty.
+inline int
+numLevelsWithGrids(amrex::Vector<amrex::BoxArray> const& grids)
+{
+  int nlev = 0;
+  while (nlev < static_cast<int>(grids.size()) && !grids[nlev].empty()) {
+    ++nlev;
+  }
+  return nlev;
+}
 
 struct AMRParam
 {
