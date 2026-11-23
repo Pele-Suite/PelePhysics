@@ -370,7 +370,7 @@ jobs:
   # waits forever; skipped jobs pass here. It also fails when Detect-Changes
   # fails, which would otherwise skip every build.
   CI-Status:
-    needs: [Detect-Changes, Formatting, Codespell, CEPTR, Transport-EOS-Reactions]
+    needs: [Detect-Changes, Formatting, Codespell, CEPTR-Lint, CEPTR, Transport-EOS-Reactions]
     if: always()
     runs-on: ubuntu-latest
     steps:
