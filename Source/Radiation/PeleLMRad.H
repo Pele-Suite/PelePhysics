@@ -349,9 +349,12 @@ public:
     robin_f_.resize(nlevels);
     absc_.resize(nlevels);
 
+    // Rebuilt on every call: after a regrid the old factories are gone. Levels
+    // without grids have no factory and are not used by the solver.
+    ebfactVec_.assign(nlevels, nullptr);
     for (int ilev = 0; ilev < numLevels(); ++ilev) {
-      ebfactVec_.push_back(
-        &(static_cast<amrex::EBFArrayBoxFactory const&>(*factory[ilev])));
+      ebfactVec_[ilev] =
+        &(static_cast<amrex::EBFArrayBoxFactory const&>(*factory[ilev]));
     }
 
     for (int ilev = 0; ilev < numLevels(); ++ilev) {
