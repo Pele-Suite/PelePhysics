@@ -92,42 +92,39 @@ Real
 SprayParticleContainer::estTimestep(int level) const
 {
   BL_PROFILE("ParticleContainer::estTimestep()");
-  Real dt = std::numeric_limits<Real>::max();
   if (level >= this->GetParticles().size() || m_sprayData->fixed_parts) {
     return -1.;
   }
   const Real cfl = SprayParticleContainer::spray_cfl;
   const auto dx = Geom(level).CellSizeArray();
   const auto dxi = Geom(level).InvCellSizeArray();
-  {
-    ReduceOps<ReduceOpMin> reduce_op;
-    ReduceData<Real> reduce_data(reduce_op);
-    using ReduceTuple = typename decltype(reduce_data)::Type;
+  ReduceOps<ReduceOpMin> reduce_op;
+  ReduceData<Real> reduce_data(reduce_op);
+  using ReduceTuple = typename decltype(reduce_data)::Type;
 #ifdef AMREX_USE_OMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
-    {
-      for (MyParConstIter pti(*this, level); pti.isValid(); ++pti) {
-        const AoS& pbox = pti.GetArrayOfStructs();
-        const ParticleType* pstruct = pbox().data();
-        const int n = pbox.numParticles();
-        reduce_op.eval(
-          n, reduce_data, [=] AMREX_GPU_DEVICE(const int i) -> ReduceTuple {
-            const ParticleType& p = pstruct[i];
-            if (p.id() > 0) {
-              const Real max_mag_vdx = amrex::max<amrex::Real>(AMREX_D_DECL(
-                std::abs(p.rdata(SprayComps::pstateVel)) * dxi[0],
-                std::abs(p.rdata(SprayComps::pstateVel + 1)) * dxi[1],
-                std::abs(p.rdata(SprayComps::pstateVel + 2)) * dxi[2]));
-              Real dt_part = (max_mag_vdx > 0.) ? (cfl / max_mag_vdx) : 1.E50;
-              return dt_part;
-            }
-            return std::numeric_limits<Real>::max();
-          });
-      }
+  {
+    for (MyParConstIter pti(*this, level); pti.isValid(); ++pti) {
+      const AoS& pbox = pti.GetArrayOfStructs();
+      const ParticleType* pstruct = pbox().data();
+      const int n = pbox.numParticles();
+      reduce_op.eval(
+        n, reduce_data, [=] AMREX_GPU_DEVICE(const int i) -> ReduceTuple {
+          const ParticleType& p = pstruct[i];
+          if (p.id() > 0) {
+            const Real max_mag_vdx = amrex::max<amrex::Real>(AMREX_D_DECL(
+              std::abs(p.rdata(SprayComps::pstateVel)) * dxi[0],
+              std::abs(p.rdata(SprayComps::pstateVel + 1)) * dxi[1],
+              std::abs(p.rdata(SprayComps::pstateVel + 2)) * dxi[2]));
+            Real dt_part = (max_mag_vdx > 0.) ? (cfl / max_mag_vdx) : 1.E50;
+            return dt_part;
+          }
+          return std::numeric_limits<Real>::max();
+        });
     }
-    dt = amrex::get<0>(reduce_data.value());
   }
+  Real dt = amrex::get<0>(reduce_data.value());
   // Check if the velocity of particles being injected is greater than existing
   // particle velocities
   for (const auto& sj : m_sprayJets) {
@@ -342,23 +339,22 @@ SprayParticleContainer::updateParticles(
           IntVect ijk = lx.floor(); // Upper cell center
           RealVect lxc = (p.pos() - plo) * dxi;
           IntVect ijkc = lxc.floor(); // Cell with particle
-          // check_bounds resets these, but they are read without it when
-          // the box is not at a boundary
+          // Boundary flags; zero in a tile away from the domain boundary
           IntVect bflags(IntVect::TheZeroVector());
-          if (at_bounds) {
-            // Check if particle has left the domain or is boundary adjacent
-            bool left_dom =
-              check_bounds(p.pos(), plo, phi, dx, bndry_lo, bndry_hi, bflags);
-            if (left_dom) {
-              Abort("Particle has incorrectly left the domain");
-            }
-          }
           // Used for ETAB breakup model
           Real Utan_total = 0.;
           Real Reyn_d = 0.;
           // Subcycle loop
           for (int cur_iter = 0; cur_iter < num_iter && p.id() > 0;
                ++cur_iter) {
+            if (at_bounds) {
+              // Flags for the current position: outside a reflective wall or
+              // wall adjacent
+              if (check_bounds(
+                    p.pos(), plo, phi, dx, bndry_lo, bndry_hi, bflags)) {
+                Abort("Particle has incorrectly left the domain");
+              }
+            }
             bool is_film = false;
             // Gather wall film values
             if (p.rdata(SprayComps::pstateFilmHght) > 0.) {
@@ -469,10 +465,6 @@ SprayParticleContainer::updateParticles(
                     flags_array, bcent_fab, bnorm_fab,
 #endif
                     ijkc, N_SB, rf_d, film_h);
-                  // The flags still describe the position before the
-                  // reflection; the next subcycle interpolates with them
-                  check_bounds(
-                    p.pos(), plo, phi, dx, bndry_lo, bndry_hi, bflags);
                 }
               } // if (at_bounds || fe_interp)
               // Update indices

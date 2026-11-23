@@ -359,7 +359,6 @@ calculateSpraySource(
   for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
     Y_part[spf] = p.rdata(SprayComps::pstateY + spf);
   }
-  // Liquid mass fractions at the start of the call
   const amrex::GpuArray<amrex::Real, SPRAY_FUEL_NUM> oldY_part = Y_part;
   // Calculating \rho_{d}
   amrex::Real rho_part = fdat.liqprops.rho_mix(Y_part, T_part, cBoilT);
