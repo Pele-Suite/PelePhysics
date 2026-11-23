@@ -166,7 +166,7 @@ SootModel::defineMemberData(const Real dimerVol)
   Real nuclSurf = std::pow(nuclVol, 2. / 3.);
   m_sootData->nuclVol = nuclVol;
   m_sootData->nuclSurf = nuclSurf;
-  setSootDeriveNuclSize(nuclVol, nuclSurf);
+  setSootDeriveNuclVol(nuclVol);
   // Compute V_nucl and V_dimer to fractional powers
   for (int i = 0; i < 9; ++i) {
     Real exponent = 2. * (Real)i - 3.;
@@ -332,7 +332,6 @@ SootModel::computeSootSourceTerm(
       for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
         const int peleIndx = qSootIndx + mom;
         moments[mom] = Qstate(i, j, k, peleIndx);
-        mom0[mom] = moments[mom];
         mom_src[mom] = 0.0;
       }
       for (int sp = 0; sp < NUM_SOOT_GS; ++sp) {
@@ -350,13 +349,11 @@ SootModel::computeSootSourceTerm(
       // Constant for free molecular collisions
       const Real colConst =
         convT * sc.colFactPi23 * sc.colFact16 * pele::physics::Constants::Avna;
-      // Clipping the incoming state is not a soot source: start the source
-      // from the clipped moments where clipping changed them
+      // Clipping the incoming state is not a soot source: measure the source
+      // from the clipped moments (mol of C)
       sd->clipMoments(momentsPtr);
       for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
-        if (moments[mom] != mom0[mom] / sd->unitConv[mom]) {
-          mom0[mom] = moments[mom] * sd->unitConv[mom];
-        }
+        mom0[mom] = moments[mom];
       }
       Real RT = pele::physics::Constants::RU * T;
       // Collision frequency between two dimer in the free
@@ -416,10 +413,10 @@ SootModel::computeSootSourceTerm(
         }
         sd->clipMoments(momentsPtr);
       }
-      sd->convertFromMol(momentsPtr);
+      // Moment sources over the step, converted from mol of C
       for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
-        const int peleIndx = sootIndx + mom;
-        soot_state(i, j, k, peleIndx) += (moments[mom] - mom0[mom]) / dt;
+        mom_src[mom] = (moments[mom] - mom0[mom]) * sd->unitConv[mom] / dt;
+        soot_state(i, j, k, sootIndx + mom) += mom_src[mom];
       }
       Real rho_src = 0.0;
       Real eng_src = 0.0;
@@ -438,8 +435,7 @@ SootModel::computeSootSourceTerm(
       if (conserveMass) {
         // Difference between mass lost from fluid and mass gained to soot
         // (the volume moment is the soot volume fraction)
-        const Real vol_src = (moments[1] - mom0[1]) / dt;
-        Real del_rho_dot = rho_src + vol_src * sc.SootDensity;
+        Real del_rho_dot = rho_src + mom_src[1] * sc.SootDensity;
         // Add that mass to H2
         soot_state(i, j, k, absorbIndxP) -= del_rho_dot * sc.mass_src_conv;
         rho_src -= del_rho_dot;

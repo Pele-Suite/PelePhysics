@@ -41,7 +41,6 @@ struct MassBalance
   amrex::Real err_spec = 0.; // max |sum of species sources - rho source|
   amrex::Real soot_src = 0.; // max |soot mass source|
   amrex::Real rho_src = 0.;  // max |rho source|
-  bool finite = true;        // no NaN or inf, which max would drop
 };
 
 MassBalance
@@ -61,24 +60,18 @@ checkMassBalance(
     mb.err_spec = amrex::max(mb.err_spec, std::abs(sspec - srho));
     mb.soot_src = amrex::max(mb.soot_src, std::abs(ssoot));
     mb.rho_src = amrex::max(mb.rho_src, std::abs(srho));
-    mb.finite = mb.finite && std::isfinite(srho) && std::isfinite(ssoot) &&
-                std::isfinite(sspec);
   });
   return mb;
 }
 
 // Total gas and soot mass of the box
 std::pair<amrex::Real, amrex::Real>
-totalMass(const amrex::Box& bx, amrex::Array4<const amrex::Real> const& q)
+totalMass(const amrex::FArrayBox& qfab)
 {
   const SootConst sc;
-  amrex::Real gas = 0.;
-  amrex::Real soot = 0.;
-  amrex::LoopOnCpu(bx, [&](int i, int j, int k) {
-    gas += q(i, j, k, qRho);
-    soot += q(i, j, k, qSoot + 1) * sc.SootDensity;
-  });
-  return {gas, soot};
+  return {
+    qfab.sum<amrex::RunOn::Host>(qRho),
+    qfab.sum<amrex::RunOn::Host>(qSoot + 1) * sc.SootDensity};
 }
 
 } // namespace
@@ -189,7 +182,7 @@ main(int argc, char* argv[])
     check(err_add <= tol * ref_add, "the source adds into its destination");
 
     // 1 and 3. Mass balance of each call, and over the reactor run
-    const auto [gas0, soot0] = totalMass(bx, qfab.const_array());
+    const auto [gas0, soot0] = totalMass(qfab);
     const amrex::Real m0 = gas0 + soot0;
     amrex::Real worst_soot = 0.;
     amrex::Real worst_spec = 0.;
@@ -207,7 +200,9 @@ main(int argc, char* argv[])
       const MassBalance mb = checkMassBalance(bx, sfab.const_array());
       worst_soot = amrex::max(worst_soot, ratio(mb.err_soot, mb.soot_src));
       worst_spec = amrex::max(worst_spec, ratio(mb.err_spec, mb.rho_src));
-      all_finite = all_finite && mb.finite;
+      // max drops NaN, so check every component directly
+      all_finite = all_finite && !sfab.contains_nan<amrex::RunOn::Host>() &&
+                   !sfab.contains_inf<amrex::RunOn::Host>();
       // Explicit update of the closed reactor (temperature held)
       amrex::LoopOnCpu(bx, [&](int i, int j, int k) {
         const amrex::Real rho = q(i, j, k, qRho);
@@ -223,7 +218,7 @@ main(int argc, char* argv[])
         }
       });
     }
-    const auto [gas1, soot1] = totalMass(bx, qfab.const_array());
+    const auto [gas1, soot1] = totalMass(qfab);
     const amrex::Real m1 = gas1 + soot1;
     amrex::Print() << "Per call: max |rho src + soot mass src| / max |soot "
                       "mass src| = "

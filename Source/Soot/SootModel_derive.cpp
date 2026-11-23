@@ -6,14 +6,12 @@ using namespace amrex;
 
 namespace {
 Real g_nuclVol = -1.;
-Real g_nuclSurf = -1.;
 } // namespace
 
 void
-setSootDeriveNuclSize(const Real nuclVol, const Real nuclSurf)
+setSootDeriveNuclVol(const Real nuclVol)
 {
   g_nuclVol = nuclVol;
-  g_nuclSurf = nuclSurf;
 }
 
 void
@@ -34,7 +32,8 @@ soot_largeparticledata(
     "soot_largeparticledata needs a defined SootModel (SootModel::define)");
   // The first mode is a delta function at the nucleated particle size
   const Real V_nucl = g_nuclVol * sc.V0 / std::pow(sc.len_conv, 3);
-  const Real S_nucl = g_nuclSurf * sc.S0 / std::pow(sc.len_conv, 2);
+  const Real S_nucl =
+    std::pow(g_nuclVol, 2. / 3.) * sc.S0 / std::pow(sc.len_conv, 2);
   auto const dat = datafab.array();
   auto sl = slfab.array(dcomp);
   amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {

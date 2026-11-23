@@ -284,12 +284,9 @@ struct SootData
   {
     // Collision coefficient for condensation
     const amrex::Real betaCond = getBetaCond(convT, momFV);
-    // Using the following quadratic equation:
-    // betaNucl*[DIMER]^2 + betaCond*[DIMER] - dimerRate = 0
-    // compute the [DIMER] using the positive root of the quadratic, in the
-    // form x = 2c / (b + sqrt(b^2 + 4ac)) that does not cancel when
-    // b^2 >> 4ac. denom is zero only when both coefficients are; a NaN state
-    // must still give NaN
+    // Positive root of betaNucl*[DIMER]^2 + betaCond*[DIMER] - dimerRate = 0,
+    // as 2c / (b + sqrt(b^2 + 4ac)), which does not cancel when b^2 >> 4ac;
+    // denom is zero only when both coefficients are
     const amrex::Real delta = betaCond * betaCond + 4. * betaNucl * dimerRate;
     const amrex::Real denom = betaCond + std::sqrt(delta);
     return (denom == 0.) ? 0. : 2. * dimerRate / denom;
