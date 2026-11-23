@@ -144,11 +144,6 @@ jobs:
       # Manifold models are not built with SYCL.
       BUILD_MANIFOLD: ${{matrix.comp != 'sycl'}}
       CCACHE_MAXSIZE: 1G
-      # Depend mode for SYCL, as AMReX's oneAPI jobs: hash the headers the
-      # compiler lists in its dependency file instead of the preprocessed
-      # source. Only 78% of the SYCL compiles hit the cache (96% for the other
-      # backends). ccache reads an empty value as true, so the others pass false.
-      CCACHE_DEPEND: ${{matrix.ccache_depend || 'false'}}
       # Only development saves the cache (the scheduled runs keep it from
       # being evicted); PRs restore it.
       SAVE_CCACHE: ${{github.ref == 'refs/heads/development'}}
@@ -184,6 +179,14 @@ jobs:
           ccache --version | sed -n 1p
           # Marks the start of the run for Trim Ccache
           touch ${{runner.temp}}/ccache-start
+      # Depend mode for SYCL, as AMReX's oneAPI jobs: hash the headers the
+      # compiler lists in its dependency file instead of the preprocessed
+      # source. Only 78% of the SYCL compiles hit the cache (96% for the other
+      # backends). Set from a step: ccache reads CCACHE_DEPEND as true whenever
+      # it is set and rejects "false", so the other backends must not set it.
+      - name: Ccache Depend Mode
+        if: matrix.ccache_depend
+        run: echo "CCACHE_DEPEND=1" >> "${GITHUB_ENV}"
       # Restore only; the cache is saved at the end of the job, and only from
       # development (SAVE_CCACHE). A PR's own pushes would each store a full
       # copy (~1.5 GB per PR across the matrix) for little gain over
