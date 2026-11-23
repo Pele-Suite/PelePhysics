@@ -388,7 +388,7 @@ public:
     // std::cout << "begin of evaluateRad() \n";
 
     for (int ilev = 0; ilev < numLevels(); ++ilev) {
-      bcoef_[ilev].FillBoundary();
+      bcoef_[ilev].FillBoundary(geom_[ilev].periodicity());
     }
     //        if (composite_solve_)
     rte_->solve();
