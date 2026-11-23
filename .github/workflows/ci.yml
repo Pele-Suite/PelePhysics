@@ -130,6 +130,7 @@ jobs:
             amrex_build_args: 'USE_SYCL=TRUE'
             amrex_build_flags: '--with-sycl=yes'
             dependency_cmds: '.github/workflows/dependencies/dependencies_dpcpp.sh'
+            ccache_depend: 'true'
     env:
       PELE_PHYSICS_HOME: ${{github.workspace}}
       MAKE_ARGS: TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
@@ -143,6 +144,11 @@ jobs:
       # Manifold models are not built with SYCL.
       BUILD_MANIFOLD: ${{matrix.comp != 'sycl'}}
       CCACHE_MAXSIZE: 1G
+      # Depend mode for SYCL, as AMReX's oneAPI jobs: hash the headers the
+      # compiler lists in its dependency file instead of the preprocessed
+      # source. Only 78% of the SYCL compiles hit the cache (96% for the other
+      # backends). ccache reads an empty value as true, so the others pass false.
+      CCACHE_DEPEND: ${{matrix.ccache_depend || 'false'}}
       # Only development saves the cache (the scheduled runs keep it from
       # being evicted); PRs restore it.
       SAVE_CCACHE: ${{github.ref == 'refs/heads/development'}}
