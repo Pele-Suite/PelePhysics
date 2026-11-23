@@ -369,7 +369,6 @@ calculateSpraySource(
   amrex::Real pmass = M_PI / 6. * rho_part * std::pow(dia_part, 3);
   amrex::Real startmass = pmass;
   amrex::Real Reyn;
-  amrex::RealVect part_vel_src;
   while (isub <= nsub) {
     const amrex::Real cp_part = fdat.liqprops.cp_mix(Y_part, T_part, cBoilT);
     // Average molar mass of liquid droplet
@@ -460,15 +459,8 @@ calculateSpraySource(
       0.125 * rho_skin * drag_coef * M_PI * dia_part * dia_part * diff_vel_mag;
     amrex::Real drag_force_p =
       0.75 * rho_skin * drag_coef * diff_vel_mag / (dia_part * rho_part);
-    part_vel_src = drag_force_p * diff_vel + fdat.body_force;
 
     if (fdat.mom_trans) {
-      gpv.fluid_mom_src += num_ppp * drag_force * diff_vel;
-#ifndef PELELM_USE_SPRAY
-      // s_d,mu dot u_d
-      amrex::Real S_dmu_dot_u = diff_vel.dotProduct(vel_part);
-      gpv.fluid_eng_src += num_ppp * drag_force * S_dmu_dot_u;
-#endif
       if (isub == 1) {
         amrex::Real inv_tau_var = drag_force_p;
         nsub = amrex::min<int>(
@@ -478,15 +470,16 @@ calculateSpraySource(
     }
 
     // Solve mass and energy transfer source terms
-    amrex::Real part_temp_src = 0.;
     amrex::Real m_dot = 0.;
+    amrex::Real sumL = 0.;
+    // Convective heat transfer per unit temperature difference
+    amrex::Real conv_coef = 0.;
     if (fdat.mass_trans) {
       amrex::Real Pr_skin = mu_skin * cp_skin / lambda_skin;
 
       amrex::Real powR = amrex::max<amrex::Real>(
         std::pow(amrex::min<amrex::Real>(400., Reyn), 0.077), 1.);
       amrex::Real Nu_num = 0.;
-      amrex::Real sumL = 0.;
       amrex::Real Nu_0 = 1. + powR * std::cbrt(1. + Reyn * Pr_skin);
       //  If gas phase is not saturated
       if (sumXVap > 0.) {
@@ -559,13 +552,14 @@ calculateSpraySource(
         Nu_num = Nu_0;
       }
 
-      amrex::Real conv_src = M_PI * lambda_skin * dia_part * delT * Nu_num;
-      gpv.fluid_eng_src += num_ppp * conv_src;
-      part_temp_src = (sumL + conv_src) * inv_pmass / cp_part;
+      // No convective heating of a droplet hotter than the gas
+      if (delT > 0.) {
+        conv_coef = M_PI * lambda_skin * dia_part * Nu_num;
+      }
       if (isub == 1 && delT > C_eps) {
         // Limit dt so change in mass does not exceed 10%
         amrex::Real inv_tau_d = -m_dot / (0.2 * pmass);
-        amrex::Real inv_tau_T = conv_src * inv_pmass / (cp_part * delT);
+        amrex::Real inv_tau_T = conv_coef * inv_pmass / cp_part;
         nsub = amrex::min<int>(
           amrex::max<int>(
             nsub, amrex::max<int>(
@@ -581,17 +575,32 @@ calculateSpraySource(
     }
     const amrex::Real part_dt = fdat.dtmod * dt;
     if (!fdat.fixed_parts) {
-      // Update particle velocity
-      AMREX_D_TERM(
-        vel_part[0] += part_dt * part_vel_src[0];
-        , vel_part[1] += part_dt * part_vel_src[1];
-        , vel_part[2] += part_dt * part_vel_src[2];);
+      // Update the particle velocity, implicit in the drag: a substep can be
+      // many particle relaxation times when nsub is capped
+      vel_part = (vel_part +
+                  part_dt * (drag_force_p * gpv.vel_fluid + fdat.body_force)) /
+                 (1. + part_dt * drag_force_p);
+    }
+    if (fdat.mom_trans) {
+      // The drag at the updated velocity, which the particle received
+      diff_vel = gpv.vel_fluid - vel_part;
+      gpv.fluid_mom_src += num_ppp * drag_force * diff_vel;
+#ifndef PELELM_USE_SPRAY
+      // s_d,mu dot u_d
+      amrex::Real S_dmu_dot_u = diff_vel.dotProduct(vel_part);
+      gpv.fluid_eng_src += num_ppp * drag_force * S_dmu_dot_u;
+#endif
     }
     if (fdat.mass_trans) {
-      amrex::Real newT = T_part + part_dt * part_temp_src;
+      // Implicit in the convective heat transfer, as for the drag
+      const amrex::Real mcp = pmass * cp_part;
+      amrex::Real newT =
+        (T_part + part_dt * (conv_coef * gpv.T_fluid + sumL) / mcp) /
+        (1. + part_dt * conv_coef / mcp);
       amrex::Real new_mass = pmass + m_dot * part_dt;
       // If droplet is still reasonable size
       if (new_mass > min_mass) {
+        gpv.fluid_eng_src += num_ppp * conv_coef * (gpv.T_fluid - newT);
         T_part = newT;
 #if SPRAY_FUEL_NUM > 1
         amrex::Real sumY = 0.;
@@ -616,6 +625,13 @@ calculateSpraySource(
         pmass = new_mass;
         dia_part = std::cbrt(6. * pmass / (M_PI * rho_part));
       } else {
+        // The rest of the droplet evaporates in this substep: the gas
+        // supplies its latent heat
+        amrex::Real L_part = 0.;
+        for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
+          L_part += Y_part[spf] * L_n[spf];
+        }
+        gpv.fluid_eng_src += num_ppp * pmass * L_part / part_dt;
         pmass = 0.;
         p.id() = -1;
         // The sources are still averaged over all nsub substeps

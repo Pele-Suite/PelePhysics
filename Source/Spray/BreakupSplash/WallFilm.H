@@ -112,9 +112,10 @@ calculateFilmSource(
   // TODO: This is very rudimentary and should be improved to account for gas
   // phase velocity
   const amrex::Real h_heat = lambda_skin / film_height;
-  const amrex::Real q_conv = film_area * h_heat * (gpv.T_fluid - T_film);
-  const amrex::Real q_cond =
-    -film_area * lambda_film * 2. * (T_film - fdat.wall_T) / film_height;
+  // Convection from the gas and conduction from the wall, per unit film
+  // temperature difference
+  const amrex::Real conv_coef = film_area * h_heat;
+  const amrex::Real cond_coef = film_area * lambda_film * 2. / film_height;
   amrex::Real sumL = 0.;
   amrex::Real m_dot = 0.;
   // Mass transfer only if the gas phase is not saturated
@@ -185,11 +186,28 @@ calculateFilmSource(
     }
     film_mass = new_mass;
   }
-  // Heat transfer, with the latent heat of any mass transfer
-  const amrex::Real part_temp_src =
-    (q_conv + q_cond + sumL) / (start_mass * cp_film);
-  gpv.fluid_eng_src += q_conv;
-  T_film += dt * part_temp_src;
+  if (film_mass > 0.) {
+    // Heat transfer, with the latent heat of any mass transfer, implicit in
+    // the film temperature: a thin film relaxes to the wall temperature in
+    // far less than a flow step
+    const amrex::Real mcp = start_mass * cp_film;
+    T_film =
+      (T_film +
+       dt * (conv_coef * gpv.T_fluid + cond_coef * fdat.wall_T + sumL) / mcp) /
+      (1. + dt * (conv_coef + cond_coef) / mcp);
+    gpv.fluid_eng_src += conv_coef * (gpv.T_fluid - T_film);
+    // The film height at the new temperature and composition, so that the
+    // next step sees the film mass this one leaves
+    film_height =
+      film_mass / (fdat.liqprops.rho_mix(Y_film, T_film, cBoilT) * film_area);
+  } else {
+    // The rest of the film evaporates: the gas supplies its latent heat
+    amrex::Real L_film = 0.;
+    for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
+      L_film += oldY_film[spf] * L_n[spf];
+    }
+    gpv.fluid_eng_src += start_mass * L_film / dt;
+  }
 
   p.rdata(SprayComps::pstateT) = T_film;
   amrex::Real mdot_total = (film_mass - start_mass) / dt;
