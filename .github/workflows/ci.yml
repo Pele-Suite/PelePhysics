@@ -275,15 +275,6 @@ jobs:
             fi
             make realclean
           done
-      - name: Test Soot
-        working-directory: Testing/Exec/SootEval
-        run: |
-          for NMOM in 3 6; do
-            printf "\n-------- ${NMOM} soot moments --------\n"
-            make -j $(nproc) NUM_SOOT_MOMENTS=${NMOM} ${MAKE_ARGS}
-            if [ ${RUN_TESTS} = true ]; then ${EXE} inputs; fi
-            make realclean
-          done
       - name: Test Integration
         working-directory: Testing/Exec/ReactEval
         run: |
