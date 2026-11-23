@@ -159,13 +159,13 @@ jobs:
       CMAKE_CUDA_COMPILER_LAUNCHER: ccache
       CMAKE_HIP_COMPILER_LAUNCHER: ccache
     steps:
-      # What the image lacks for the checkout (git, for the submodules) and
-      # AMReX's ccache script (wget, xz)
+      # What the image lacks and the runner has: git (for the submodules),
+      # wget and xz (AMReX's ccache script) and cmake (the SUNDIALS build)
       - name: Container Packages
         if: matrix.container
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git wget xz-utils
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git wget xz-utils cmake
       - uses: actions/setup-python@v6
         with:
           python-version: ${{matrix.python-version}}
