@@ -170,8 +170,19 @@ public:
     });
 #endif
 
+    auto const blo = amrex::lbound(bx);
+    auto const bhi = amrex::ubound(bx);
     amrex::ParallelFor(gbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-      betafab(i, j, k) = 1.0;
+      // Ghost cells: FillBoundary fills those next to other boxes (and
+      // periodic images), the Robin branch below those on the domain boundary.
+      // Coarse/fine ghosts get neither, so start from the adjacent cell.
+      {
+        int const ic = amrex::min(amrex::max(i, blo.x), bhi.x);
+        int const jc = amrex::min(amrex::max(j, blo.y), bhi.y);
+        int const kc = amrex::min(amrex::max(k, blo.z), bhi.z);
+        betafab(i, j, k) =
+          1.0 / amrex::max<amrex::Real>(0.01, kappa(ic, jc, kc) * 100);
+      }
 
       if (bx.contains(i, j, k)) {
         amrex::Real ka = amrex::max<amrex::Real>(0.01, kappa(i, j, k) * 100);
