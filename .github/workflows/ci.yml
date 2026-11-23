@@ -134,6 +134,7 @@ jobs:
             amrex_build_args: 'USE_SYCL=TRUE'
             amrex_build_flags: '--with-sycl=yes'
             dependency_cmds: '.github/workflows/dependencies/dependencies_dpcpp.sh'
+            ccache_depend: 'true'
     env:
       MAKE_ARGS: TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
       EXE: ./Pele2d.${{matrix.comp}}.TPROF.ex
@@ -193,6 +194,14 @@ jobs:
           ccache --version | sed -n 1p
           # Marks the start of the run for Trim Ccache
           touch "${RUNNER_TEMP}/ccache-start"
+      # Depend mode for SYCL, as AMReX's oneAPI jobs: hash the headers the
+      # compiler lists in its dependency file instead of the preprocessed
+      # source. Only 78% of the SYCL compiles hit the cache (96% for the other
+      # backends). Set from a step: ccache reads CCACHE_DEPEND as true whenever
+      # it is set and rejects "false", so the other backends must not set it.
+      - name: Ccache Depend Mode
+        if: matrix.ccache_depend
+        run: echo "CCACHE_DEPEND=1" >> "${GITHUB_ENV}"
       # Restore only; the cache is saved at the end of the job, and only from
       # development (SAVE_CCACHE). A PR's own pushes would each store a full
       # copy (~1.5 GB per PR across the matrix) for little gain over
