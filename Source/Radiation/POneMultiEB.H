@@ -74,8 +74,6 @@ public:
 
   void solve()
   {
-    auto const nlevels = geom_.size();
-
     auto const linop_maxorder = mlmgpp_.linop_maxorder_;
 
     auto const& lobc = mlmgpp_.lobc_;
@@ -86,6 +84,9 @@ public:
     //            amrex::GetVecOfConstPtrs(factory_));
 
     amrex::MLEBABecLap mlabec(geom_, grids_, dmap_, info_, factory_);
+    // geom_ may hold levels with no grids yet (finest_level < max_level);
+    // the operator keeps only the levels that have grids.
+    int const nlevels = mlabec.NAMRLevels();
 
     mlabec.setDomainBC(lobc, hibc);
     mlabec.setScalars(ascalar_, bscalar_);

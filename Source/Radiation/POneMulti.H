@@ -72,14 +72,15 @@ public:
 
   void solve()
   {
-    auto const nlevels = geom_.size();
-
     auto const linop_maxorder = mlmgpp_.linop_maxorder_;
 
     auto const& lobc = mlmgpp_.lobc_;
     auto const& hibc = mlmgpp_.hibc_;
 
     amrex::MLABecLaplacian mlabec(geom_, grids_, dmap_, info_);
+    // geom_ may hold levels with no grids yet (finest_level < max_level);
+    // the operator keeps only the levels that have grids.
+    int const nlevels = mlabec.NAMRLevels();
 
     mlabec.setDomainBC(lobc, hibc);
     mlabec.setScalars(ascalar_, bscalar_);

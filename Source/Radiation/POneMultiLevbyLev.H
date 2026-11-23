@@ -77,7 +77,12 @@ public:
   void solve()
   {
     int const solver_level = 0;
-    auto const nlevels = geom_.size();
+    // Only the levels that have grids (finest_level may be < max_level).
+    int nlevels = 0;
+    while (nlevels < static_cast<int>(grids_.size()) &&
+           !grids_[nlevels].empty()) {
+      ++nlevels;
+    }
     auto const tol_rel = mlmgpp_.reltol_;
     auto const tol_abs = mlmgpp_.abstol_;
 

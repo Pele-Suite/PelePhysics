@@ -280,6 +280,17 @@ public:
     });
   }
 
+  // Number of levels with grids. The level vectors come from AmrMesh and are
+  // sized max_level + 1, so the levels above finest_level are empty.
+  int numLevels() const
+  {
+    int nlev = 0;
+    while (nlev < static_cast<int>(grids_.size()) && !grids_[nlev].empty()) {
+      ++nlev;
+    }
+    return nlev;
+  }
+
   void initVars(
     amrex::Vector<amrex::BoxArray> const& grids,
     amrex::Vector<amrex::DistributionMapping> const& dmap)
@@ -300,7 +311,7 @@ public:
     robin_f_.resize(nlevels);
     absc_.resize(nlevels);
 
-    for (int ilev = 0; ilev < nlevels; ++ilev) {
+    for (int ilev = 0; ilev < numLevels(); ++ilev) {
       solution_[ilev].define(grids[ilev], dmap[ilev], 1, ng);
       rhs_[ilev].define(grids[ilev], dmap[ilev], 1, 0);
       acoef_[ilev].define(grids[ilev], dmap[ilev], 1, 0);
@@ -338,12 +349,12 @@ public:
     robin_f_.resize(nlevels);
     absc_.resize(nlevels);
 
-    for (int ilev = 0; ilev < nlevels; ++ilev) {
+    for (int ilev = 0; ilev < numLevels(); ++ilev) {
       ebfactVec_.push_back(
         &(static_cast<amrex::EBFArrayBoxFactory const&>(*factory[ilev])));
     }
 
-    for (int ilev = 0; ilev < grids.size(); ++ilev) {
+    for (int ilev = 0; ilev < numLevels(); ++ilev) {
       solution_[ilev].define(
         grids[ilev], dmap[ilev], 1, ng, amrex::MFInfo(), *factory[ilev]);
       rhs_[ilev].define(
@@ -371,7 +382,7 @@ public:
   {
     // std::cout << "begin of evaluateRad() \n";
 
-    for (int ilev = 0; ilev < grids_.size(); ++ilev) {
+    for (int ilev = 0; ilev < numLevels(); ++ilev) {
       bcoef_[ilev].FillBoundary();
     }
     //        if (composite_solve_)
