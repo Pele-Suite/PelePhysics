@@ -108,7 +108,17 @@ calculateFilmSource(
     Y_skin.data(), rhoD_ri.data(), nullptr, mu_skin, xi_skin, lambda_skin,
     trans_parm);
   lambda_skin *= SprayUnits::lambda_conv;
-  // If gas phase is not saturated
+  // Estimate convective heat transfer using O'Rourke and Amsden 1996 assuming
+  // y+ < y+c; heat transfer happens in saturated gas too
+  // TODO: This is very rudimentary and should be improved to account for gas
+  // phase velocity
+  const amrex::Real h_heat = lambda_skin / film_height;
+  const amrex::Real q_conv = film_area * h_heat * (gpv.T_fluid - T_film);
+  const amrex::Real q_cond =
+    -film_area * lambda_film * 2. * (T_film - fdat.wall_T) / film_height;
+  amrex::Real sumL = 0.;
+  amrex::Real m_dot = 0.;
+  // Mass transfer only if the gas phase is not saturated
   if (sumXVap > 0.) {
     // Convert mass diffusion coefficient from mixture average to binary for
     // fuel only, not concerned with other species
@@ -120,22 +130,12 @@ calculateFilmSource(
       amrex::Real X_norm = X_vi / sumXVap;
       rhoD_ri[pcspec] *= X_norm;
     }
-    // Estimate convective heat transfer using O'Rourke and Amsden 1996 assuming
-    // y+ < y+c
-    // TODO: This is very rudimentary and should be improved to account for gas
-    // phase velocity
-    amrex::Real h_heat = lambda_skin / film_height;
-    amrex::Real q_conv = film_area * h_heat * (gpv.T_fluid - T_film);
-    amrex::Real q_cond =
-      -film_area * lambda_film * 2. * (T_film - fdat.wall_T) / film_height;
     // Use Chilton-Colburn analogy to find the convective mass transfer
     // coefficient; like droplet evaporation, this uses mixture averaged
     // values for lambda, cp, and B_M but uses normalized species mass
     // diffusivity
     amrex::Real h_mass = film_area * h_heat * std::cbrt(lambda_skin / cp_skin) *
                          std::log1p(B_M) / lambda_skin;
-    amrex::Real sumL = 0.;
-    amrex::Real m_dot = 0.;
     for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
       // Species index
       const int fdspec = fdat.dep_indx[spf];
@@ -153,10 +153,6 @@ calculateFilmSource(
         sumL += mn_dot[spf] * L_n[spf];
       }
     }
-    amrex::Real part_temp_src =
-      (q_conv + q_cond + sumL) / (film_mass * cp_film);
-    gpv.fluid_eng_src += q_conv;
-    T_film += dt * part_temp_src;
     amrex::Real new_mass = film_mass + dt * m_dot;
     // Assumes mass is only lost in the wall normal direction and the diameter
     // remains constant; this is not physically correct
@@ -190,6 +186,11 @@ calculateFilmSource(
     }
     film_mass = new_mass;
   }
+  // Heat transfer, with the latent heat of any mass transfer
+  const amrex::Real part_temp_src =
+    (q_conv + q_cond + sumL) / (start_mass * cp_film);
+  gpv.fluid_eng_src += q_conv;
+  T_film += dt * part_temp_src;
 
   p.rdata(SprayComps::pstateT) = T_film;
   amrex::Real mdot_total = (film_mass - start_mass) / dt;
