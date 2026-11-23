@@ -469,6 +469,10 @@ SprayParticleContainer::updateParticles(
                     flags_array, bcent_fab, bnorm_fab,
 #endif
                     ijkc, N_SB, rf_d, film_h);
+                  // The flags still describe the position before the
+                  // reflection; the next subcycle interpolates with them
+                  check_bounds(
+                    p.pos(), plo, phi, dx, bndry_lo, bndry_hi, bflags);
                 }
               } // if (at_bounds || fe_interp)
               // Update indices
