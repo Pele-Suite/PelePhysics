@@ -75,9 +75,19 @@ public:
     amrex::Print() << "Define radiation BC:"
                    << "\n";
 
+    auto const toBC = [&bctype](std::string const& name) {
+      auto const it = bctype.find(name);
+      if (it == bctype.end()) {
+        amrex::Abort(
+          "PeleRad: unknown pelerad.lo_bc/hi_bc type " + name +
+          ", must be Dirichlet, Periodic, Neumann or Robin");
+      }
+      return it->second;
+    };
+
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-      lobc_[idim] = bctype[lo_bc_char_[idim]];
-      hibc_[idim] = bctype[hi_bc_char_[idim]];
+      lobc_[idim] = toBC(lo_bc_char_[idim]);
+      hibc_[idim] = toBC(hi_bc_char_[idim]);
 
       amrex::Print() << "lobc[" << idim << "]=" << lobc_[idim] << ", ";
       amrex::Print() << "hibc[" << idim << "]=" << hibc_[idim] << "\n";
