@@ -1,0 +1,3 @@
+CEXE_sources += main.cpp common.cpp properties.cpp drag.cpp film.cpp
+CEXE_sources += boundaries.cpp container.cpp breakup.cpp injection.cpp
+CEXE_headers += SprayTest.H
