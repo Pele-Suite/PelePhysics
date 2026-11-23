@@ -10,51 +10,31 @@ struct MLMGParam
 public:
   amrex::ParmParse pp_;
 
-  int verbose_;
-  int bottom_verbose_;
-  int max_iter_;
-  int max_fmg_iter_;
-  int max_bottom_iter_;
-  amrex::Real reltol_;
-  amrex::Real abstol_;
-  amrex::Real bottom_reltol_;
-  amrex::Real bottom_abstol_;
-  int linop_maxorder_;
-  int max_coarsening_level_;
-  int agg_grid_size_;
-  int con_grid_size_;
-  int agglomeration_;
-  int consolidation_;
-  int composite_solve_;
-  int fine_level_solve_only_;
-  bool use_hypre_;
+  int verbose_ = 0;
+  int bottom_verbose_ = 0;
+  int max_iter_ = 50;
+  int max_fmg_iter_ = 0;
+  int max_bottom_iter_ = 20;
+  amrex::Real reltol_ = 1.e-4;
+  amrex::Real abstol_ = 1.e-4;
+  amrex::Real bottom_reltol_ = 1.e-6;
+  amrex::Real bottom_abstol_ = 1.e-6;
+  int linop_maxorder_ = 3;
+  int max_coarsening_level_ = 20;
+  int agg_grid_size_ = -1;
+  int con_grid_size_ = -1;
+  int agglomeration_ = 0;
+  int consolidation_ = 1;
+  int composite_solve_ = 1;
+  int fine_level_solve_only_ = 0;
+  bool use_hypre_ = false;
   amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> lobc_;
   amrex::Array<amrex::LinOpBCType, AMREX_SPACEDIM> hibc_;
-  int ebbc_type_;
+  int ebbc_type_ = 2;
   std::string kppath_;
 
   AMREX_GPU_HOST
-  MLMGParam()
-    : verbose_(0),
-      bottom_verbose_(0),
-      max_iter_(50),
-      max_bottom_iter_(20),
-      reltol_(1.e-4),
-      abstol_(1.e-4),
-      bottom_reltol_(1.e-6),
-      bottom_abstol_(1.e-6),
-      linop_maxorder_(3),
-      max_coarsening_level_(20),
-      agg_grid_size_(-1),
-      con_grid_size_(-1),
-      agglomeration_(0),
-      consolidation_(1),
-      composite_solve_(1),
-      fine_level_solve_only_(0),
-      use_hypre_(false),
-      ebbc_type_(2)
-  {
-  }
+  MLMGParam() = default;
 
   AMREX_GPU_HOST
   MLMGParam(const amrex::ParmParse pp) : pp_(std::move(pp))
