@@ -139,8 +139,11 @@ public:
     auto const& kph2o = radprop.kph2o();
     auto const& kpco = radprop.kpco();
 
-    amrex::Box const& bx = mfi.validbox();
-    amrex::Box const& gbx = amrex::grow(bx, 1);
+    // The caller may tile: work on this tile only. growntilebox(1) grows the
+    // tile only across its valid box faces, so the boundary cells below read
+    // kappa from cells of the same tile.
+    amrex::Box const bx = mfi.tilebox();
+    amrex::Box const gbx = mfi.growntilebox(1);
 
     auto const dlo = amrex::lbound(geom_[ilev].Domain());
     auto const dhi = amrex::ubound(geom_[ilev].Domain());
@@ -382,7 +385,7 @@ public:
     amrex::Array4<amrex::Real> const& radfab,
     int ilev)
   {
-    amrex::Box const& bx = mfi.validbox();
+    amrex::Box const bx = mfi.tilebox();
     auto const& rhsfab = rhs_[ilev].array(mfi);
     auto const& solfab = solution_[ilev].array(mfi);
     auto const& acfab = acoef_[ilev].array(mfi);
