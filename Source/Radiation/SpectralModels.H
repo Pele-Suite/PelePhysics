@@ -16,7 +16,9 @@ interpT(amrex::Real const& T, int& TindexL, amrex::Real& weight)
     weight = 0.0;
     return;
   }
-  if (T > 2800) {
+  // The tables run from 300 K to 2800 K in 20 K steps (126 entries); at
+  // T = 2800 K exactly the general branch would read k[126].
+  if (T >= 2800) {
     TindexL = 124;
     weight = 1.0;
     return;
