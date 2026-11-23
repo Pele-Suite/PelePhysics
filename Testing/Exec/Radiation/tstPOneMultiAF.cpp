@@ -5,6 +5,8 @@
 #include <POneMulti.H>
 #include <POneMultiLevbyLev.H>
 
+#include "POneCheck.H"
+
 AMREX_GPU_DEVICE AMREX_FORCE_INLINE void
 initGasField(
   int i,
@@ -30,7 +32,8 @@ initGasField(
   amrex::Real z = plo[2] + (k + 0.5) * dx[2];
   z /= coef;
 #else
-  amrex::Real z = 0.0;
+  // A cross-section of the 3D flame near its peak temperature
+  amrex::Real z = 0.3;
 #endif
 
   amrex::Real r = std::sqrt((x - xc) * (x - xc) + (y - yc) * (y - yc));
@@ -318,7 +321,9 @@ int
 main(int argc, char* argv[])
 {
   amrex::Initialize(argc, argv);
+  int status = 0;
   {
+    pele::testing::Checker check;
     amrex::ParmParse pp;
     PeleRad::AMRParam amrpp(pp);
     PeleRad::MLMGParam mlmgpp(pp);
@@ -368,6 +373,12 @@ main(int argc, char* argv[])
       rte.solve();
     }
 
+    for (int ilev = 0; ilev < nlevels; ++ilev) {
+      pele::testing::check_solution(
+        check, solution[ilev], nullptr, temperature[ilev],
+        "level " + std::to_string(ilev) + ": ");
+    }
+
     // plot results
     if (write) {
       amrex::Vector<amrex::MultiFab> plotmf(nlevels);
@@ -395,7 +406,8 @@ main(int argc, char* argv[])
         geom, 0.0, amrex::Vector<int>(nlevels, 0),
         amrex::Vector<amrex::IntVect>(nlevels, amrex::IntVect{ref_ratio}));
     }
+    status = check.summary("POneMultiAF");
   }
   amrex::Finalize();
-  return (0);
+  return status;
 }
