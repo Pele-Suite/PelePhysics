@@ -304,6 +304,19 @@ public:
     return nlev;
   }
 
+  // Free the data of levels a regrid removed (and any EB data they hold).
+  void clearUnusedLevels()
+  {
+    for (int ilev = numLevels(); ilev < static_cast<int>(grids_.size());
+         ++ilev) {
+      for (auto* mfs :
+           {&solution_, &rhs_, &acoef_, &bcoef_, &robin_a_, &robin_b_,
+            &robin_f_, &absc_}) {
+        (*mfs)[ilev].clear();
+      }
+    }
+  }
+
   void initVars(
     amrex::Vector<amrex::BoxArray> const& grids,
     amrex::Vector<amrex::DistributionMapping> const& dmap)
@@ -344,6 +357,7 @@ public:
       robin_f_[ilev].setVal(0.0, 0, 1, ng);
       absc_[ilev].setVal(0.0);
     }
+    clearUnusedLevels();
   }
 
 #ifdef AMREX_USE_EB
@@ -405,6 +419,7 @@ public:
       robin_f_[ilev].setVal(0.0, 0, 1, ng);
       absc_[ilev].setVal(0.0);
     }
+    clearUnusedLevels();
   }
 #endif
 
