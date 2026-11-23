@@ -103,6 +103,9 @@ jobs:
     needs: Detect-Changes
     if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     runs-on: ubuntu-24.04
+    # The HIP builds run in AMD's image, which already has rocm-dev; the
+    # others run on the runner itself (an empty image)
+    container: ${{matrix.container}}
     strategy:
       # One backend failing (e.g. a mirror hiccup) should not cancel the
       # others before they report and save their caches.
@@ -126,12 +129,12 @@ jobs:
             amrex_build_args: 'USE_HIP=TRUE AMD_ARCH=gfx90a LIBRARY_LOCATIONS=/opt/rocm/lib'
             amrex_build_flags: '--with-hip=yes'
             dependency_cmds: '.github/workflows/dependencies/dependencies_hip.sh'
+            container: rocm/dev-ubuntu-24.04:7.2.4
           - comp: sycl
             amrex_build_args: 'USE_SYCL=TRUE'
             amrex_build_flags: '--with-sycl=yes'
             dependency_cmds: '.github/workflows/dependencies/dependencies_dpcpp.sh'
     env:
-      PELE_PHYSICS_HOME: ${{github.workspace}}
       MAKE_ARGS: TINY_PROFILE=TRUE USE_CCACHE=TRUE USE_AMREX_LIB=TRUE ${{matrix.amrex_build_args}}
       EXE: ./Pele2d.${{matrix.comp}}.TPROF.ex
       # The GPU backends are only compiled: there is no device to run on.
@@ -156,6 +159,13 @@ jobs:
       CMAKE_CUDA_COMPILER_LAUNCHER: ccache
       CMAKE_HIP_COMPILER_LAUNCHER: ccache
     steps:
+      # What the image lacks and the runner has: git (for the submodules),
+      # wget and xz (AMReX's ccache script) and cmake (the SUNDIALS build)
+      - name: Container Packages
+        if: matrix.container
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git wget xz-utils cmake
       - uses: actions/setup-python@v6
         with:
           python-version: ${{matrix.python-version}}
@@ -168,16 +178,21 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
+      # In a container job, ${{github.workspace}} and ${{runner.temp}} are the
+      # runner's paths, not the container's: the shell steps use
+      # GITHUB_WORKSPACE and RUNNER_TEMP, which are right in both.
+      - name: Set PELE_PHYSICS_HOME
+        run: echo "PELE_PHYSICS_HOME=${GITHUB_WORKSPACE}" >> "${GITHUB_ENV}"
       - name: Install Ccache
-        # Outside the checkout: AMReX's script downloads into the current directory.
-        working-directory: ${{runner.temp}}
         run: |
+          # Outside the checkout: AMReX's script downloads into the current directory.
+          cd "${RUNNER_TEMP}"
           # AMReX's install script (the same ccache as PeleC). It exits 0 even
           # if the download fails, so check the result.
-          ${{github.workspace}}/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
+          ${GITHUB_WORKSPACE}/Submodules/amrex/.github/workflows/dependencies/dependencies_ccache.sh > /dev/null
           ccache --version | sed -n 1p
           # Marks the start of the run for Trim Ccache
-          touch ${{runner.temp}}/ccache-start
+          touch "${RUNNER_TEMP}/ccache-start"
       # Restore only; the cache is saved at the end of the job, and only from
       # development (SAVE_CCACHE). A PR's own pushes would each store a full
       # copy (~1.5 GB per PR across the matrix) for little gain over
@@ -340,7 +355,7 @@ jobs:
         run: |
           # A plain assignment, so a missing marker fails the step (bash -e)
           # rather than silently trimming nothing.
-          start=$(stat -c %Y ${{runner.temp}}/ccache-start)
+          start=$(stat -c %Y "${RUNNER_TEMP}/ccache-start")
           ccache --evict-older-than $(( $(date +%s) - start + 60 ))s
           du -hs ${HOME}/.cache/ccache
       - name: Save Ccache
