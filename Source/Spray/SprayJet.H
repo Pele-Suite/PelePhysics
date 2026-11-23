@@ -203,12 +203,6 @@ public:
   void set_end_time(amrex::Real end_time) { m_endTime = end_time; }
   void set_num_ppp(amrex::Real num_ppp) { m_numPPP = num_ppp; }
 
-  void reset_sum()
-  {
-    m_sumInjMass = -1;
-    m_sumInjTime = -1;
-  }
-
   /**
      Function for creating new particle parameters based on jet location. Note
      all angles must be in radians.

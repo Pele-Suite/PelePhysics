@@ -306,8 +306,9 @@ SprayParticleContainer::sprayInjection(
   amrex::Real dt = sim_dt;
   amrex::Real mdot = spray_jet->mass_flow_rate(time);
   amrex::Real inject_mass = mdot * sim_dt;
-  // See if there is uninjected mass from previous time steps
-  if (spray_jet->m_sumInjMass > 0.) {
+  // Mass carried from previous time steps: mass not yet injected, or
+  // (negative) mass injected beyond the target
+  if (spray_jet->m_sumInjTime >= 0.) {
     dt += spray_jet->m_sumInjTime;
     inject_mass += spray_jet->m_sumInjMass;
   }
@@ -430,7 +431,10 @@ SprayParticleContainer::sprayInjection(
       amrex::Gpu::hostToDevice, src_tile.begin(), src_tile.end(),
       dst_tile.GetArrayOfStructs().begin() + old_size);
   }
-  spray_jet->reset_sum();
+  // Carry the mass injected beyond the target to the next injection, so the
+  // injected mass follows the mass flow rate over time
+  spray_jet->m_sumInjMass = inject_mass - cur_mass;
+  spray_jet->m_sumInjTime = 0.;
 }
 
 amrex::IntVect
