@@ -1,5 +1,5 @@
-#ifndef PONESINGLE_H
-#define PONESINGLE_H
+#ifndef PONESINGLEEB_H
+#define PONESINGLEEB_H
 
 #include <AMRParam.H>
 #include <AMReX_EB2.H>
