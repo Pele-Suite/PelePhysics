@@ -8,9 +8,18 @@
 // 3. Closed homogeneous reactor: advancing a box of hot, sooting gas states
 //    with the source for nsteps steps conserves gas plus soot mass while soot
 //    forms.
+// 4. Energy: without the pressure term the energy source is the sum of the
+//    species sources times their enthalpies.
+// 5. The moments stay realizable (positive, second mode no smaller than a
+//    nucleus) through the reactor run.
+// 6. Clipping the incoming moments is not a source, cells below
+//    soot.temp_cutoff get no source, the time step estimate is finite for
+//    zero or negative moments, the dimer concentration does not cancel where
+//    condensation dominates, and the large-particle derive.
 
 #include <AMReX.H>
 #include <AMReX_FArrayBox.H>
+#include <AMReX_Geometry.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_Print.H>
 
@@ -20,6 +29,7 @@
 #include "mechanism.H"
 #include <PelePhysics.H>
 #include "SootModel.H"
+#include "SootModel_derive.H"
 
 namespace {
 
@@ -237,6 +247,172 @@ main(int argc, char* argv[])
     check((soot1 - soot0) / m0 > 1.e-6, "soot forms in the reactor");
     check(
       std::abs(m1 - m0) <= tol * m0, "the reactor conserves gas + soot mass");
+
+    // 4. Energy source from the species sources and their enthalpies
+    sfab.setVal<amrex::RunOn::Host>(0.);
+    soot.computeSootSourceTerm(
+      bx, qfab.const_array(), mufab.const_array(), sfab.array(), 0., dt, false);
+    amrex::Gpu::streamSynchronize();
+    amrex::Real err_eng = 0.;
+    amrex::Real ref_eng = 0.;
+    amrex::LoopOnCpu(bx, [&](int i, int j, int k) {
+      amrex::Real h[NUM_SPECIES];
+      eos.T2Hi(q(i, j, k, qTemp), h);
+      amrex::Real sum = 0.;
+      amrex::Real sum_abs = 0.;
+      for (int sp = 0; sp < NUM_SPECIES; ++sp) {
+        sum += s(i, j, k, sSpec + sp) * h[sp];
+        sum_abs += std::abs(s(i, j, k, sSpec + sp) * h[sp]);
+      }
+      err_eng = amrex::max(err_eng, std::abs(s(i, j, k, sEng) - sum));
+      ref_eng = amrex::max(ref_eng, sum_abs);
+    });
+    amrex::Print() << "Energy source: max |S_E - sum h_k S_k| = " << err_eng
+                   << " (max sum |h_k S_k| = " << ref_eng << ")\n";
+    check(
+      std::isfinite(err_eng) && err_eng <= tol * ref_eng,
+      "the energy source is the species sources times their enthalpies");
+
+    // 5. Realizable moments at the end of the reactor run (mol of C)
+    const SootData* sd = soot.getSootData();
+    bool realizable = true;
+    amrex::LoopOnCpu(bx, [&](int i, int j, int k) {
+      amrex::Real m[NUM_SOOT_MOMENTS + 1];
+      for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
+        m[mom] = q(i, j, k, qSoot + mom) / sd->unitConv[mom];
+        realizable = realizable && std::isfinite(m[mom]) && m[mom] > 0.;
+      }
+      const amrex::Real slack = 1. - 1.e-12;
+      realizable = realizable && m[1] >= slack * sd->nuclVol * m[0] &&
+                   m[2] >= slack * sd->nuclSurf * m[0];
+    });
+    check(realizable, "the moments stay realizable in the reactor");
+
+    // 6. On a two-cell box at 1800 K: cell 0 holds zero
+    //    moments (below the clipping floor), cell 1 the same state with the
+    //    moments already clipped
+    const SootData* sd_d = soot.getSootData_d();
+    const SootConst sc;
+    const amrex::Box bx2(
+      amrex::IntVect(AMREX_D_DECL(0, 0, 0)),
+      amrex::IntVect(AMREX_D_DECL(1, 0, 0)));
+    amrex::FArrayBox q2fab(bx2, nQ, amrex::The_Managed_Arena());
+    amrex::FArrayBox mu2fab(bx2, 1, amrex::The_Managed_Arena());
+    amrex::FArrayBox s2fab(bx2, nS, amrex::The_Managed_Arena());
+    auto const& q2 = q2fab.array();
+    auto const& s2 = s2fab.array();
+    q2fab.setVal<amrex::RunOn::Host>(0.);
+    mu2fab.setVal<amrex::RunOn::Host>(5.e-4);
+    const amrex::Real T2 = 1800.;
+    amrex::Real rho2;
+    eos.PYT2R(P, Y, T2, rho2);
+    amrex::LoopOnCpu(bx2, [&](int i, int j, int k) {
+      q2(i, j, k, qRho) = rho2;
+      q2(i, j, k, qTemp) = T2;
+      for (int sp = 0; sp < NUM_SPECIES; ++sp) {
+        q2(i, j, k, qSpec + sp) = Y[sp];
+      }
+    });
+    amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int /*n*/) noexcept {
+      amrex::Real m[NUM_SOOT_MOMENTS + 1] = {0.};
+      sd_d->clipMoments(m);
+      sd_d->convertFromMol(m);
+      for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
+        q2(1, 0, 0, qSoot + mom) = m[mom];
+      }
+    });
+    amrex::Gpu::streamSynchronize();
+    s2fab.setVal<amrex::RunOn::Host>(0.);
+    soot.computeSootSourceTerm(
+      bx2, q2fab.const_array(), mu2fab.const_array(), s2fab.array(), 0., dt);
+    amrex::Gpu::streamSynchronize();
+    amrex::Real err_clip = 0.;
+    amrex::Real ref_clip = 0.;
+    for (int c = 0; c < nS; ++c) {
+      err_clip =
+        amrex::max(err_clip, std::abs(s2(0, 0, 0, c) - s2(1, 0, 0, c)));
+      ref_clip = amrex::max(ref_clip, std::abs(s2(1, 0, 0, c)));
+    }
+    amrex::Print() << "Zero vs clipped incoming moments: max |S0 - S1| = "
+                   << err_clip << " (max |S1| = " << ref_clip << ")\n";
+    check(
+      err_clip <= tol * ref_clip,
+      "clipping the incoming moments is not a soot source");
+
+    // Below soot.temp_cutoff (290 K in the inputs) there is no source
+    q2(0, 0, 0, qTemp) = 280.;
+    s2fab.setVal<amrex::RunOn::Host>(0.);
+    soot.computeSootSourceTerm(
+      bx2, q2fab.const_array(), mu2fab.const_array(), s2fab.array(), 0., dt);
+    amrex::Gpu::streamSynchronize();
+    bool cold_zero = true;
+    for (int c = 0; c < nS; ++c) {
+      cold_zero = cold_zero && s2(0, 0, 0, c) == 0.;
+    }
+    check(cold_zero, "no source below soot.temp_cutoff");
+    q2(0, 0, 0, qTemp) = T2;
+
+    for (int mom = 0; mom < NUM_SOOT_MOMENTS + 1; ++mom) {
+      q2(1, 0, 0, qSoot + mom) = -q2(1, 0, 0, qSoot + mom);
+    }
+    const amrex::Real dt_est = soot.estSootDt(bx2, q2fab.const_array());
+    amrex::Print() << "Time step estimate with zero and negative moments = "
+                   << dt_est << "\n";
+    check(
+      std::isfinite(dt_est) && dt_est > 0.,
+      "the time step estimate with zero or negative moments is finite");
+
+    // Dimer concentration where condensation dominates (b^2 = 1e12 * 4ac):
+    // the residual of betaNucl*x^2 + betaCond*x - dimerRate
+    amrex::Gpu::ManagedVector<amrex::Real> dimer(3);
+    amrex::Real* dimer_p = dimer.data();
+    amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE(int /*n*/) noexcept {
+      amrex::Real m[NUM_SOOT_MOMENTS + 1];
+      amrex::Real fv[NUM_SOOT_MOMENTS + 2];
+      sd_d->initialSmallMomVals(m);
+      sd_d->convertToMol(m);
+      sd_d->clipMoments(m);
+      sd_d->computeFracMomVect(m, fv);
+      const amrex::Real convT = std::sqrt(sc.colFact * T2);
+      const amrex::Real b = sd_d->getBetaCond(convT, fv);
+      const amrex::Real c = 0.25e-12 * b * b;
+      dimer_p[0] = sd_d->dimerization(convT, 1., c, fv);
+      dimer_p[1] = b;
+      dimer_p[2] = c;
+    });
+    amrex::Gpu::streamSynchronize();
+    const amrex::Real xd = dimer[0];
+    const amrex::Real res = xd * xd + dimer[1] * xd - dimer[2];
+    amrex::Print() << "Dimer root residual / dimerRate = " << res / dimer[2]
+                   << "\n";
+    check(
+      xd > 0. && std::abs(res) <= tol * dimer[2],
+      "the dimer concentration where condensation dominates");
+
+    // Large-particle derive: N0 nuclei plus N_L particles of 50 nuclei
+    const amrex::Real V_nucl = sd->nuclVol * sc.V0 / std::pow(sc.len_conv, 3);
+    const amrex::Real S_nucl = sd->nuclSurf * sc.S0 / std::pow(sc.len_conv, 2);
+    const amrex::Real N0 = 1.e8;
+    const amrex::Real N_L = 1.e6;
+    const amrex::Real V_L = 50. * V_nucl;
+    const amrex::Real S_L = std::pow(50., 2. / 3.) * S_nucl;
+    amrex::FArrayBox dfab(
+      bx2, NUM_SOOT_MOMENTS + 1, amrex::The_Managed_Arena());
+    amrex::FArrayBox lfab(bx2, 3, amrex::The_Managed_Arena());
+    dfab.setVal<amrex::RunOn::Host>(0.);
+    dfab.setVal<amrex::RunOn::Host>(N0 + N_L, bx2, 0, 1);
+    dfab.setVal<amrex::RunOn::Host>(N0 * V_nucl + N_L * V_L, bx2, 1, 1);
+    dfab.setVal<amrex::RunOn::Host>(N0 * S_nucl + N_L * S_L, bx2, 2, 1);
+    dfab.setVal<amrex::RunOn::Host>(N0, bx2, NUM_SOOT_MOMENTS, 1);
+    soot_largeparticledata(
+      bx2, lfab, 0, 3, dfab, amrex::Geometry(), 0., nullptr, 0);
+    amrex::Gpu::streamSynchronize();
+    auto const& l = lfab.const_array();
+    check(
+      std::abs(l(0, 0, 0, 0) - N_L) <= tol * N_L &&
+        std::abs(l(0, 0, 0, 1) - V_L) <= tol * V_L &&
+        std::abs(l(0, 0, 0, 2) - S_L) <= tol * S_L,
+      "the large-particle derive subtracts the nucleus size");
 
     soot.cleanup();
   }
