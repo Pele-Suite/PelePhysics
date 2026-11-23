@@ -334,8 +334,15 @@ public:
       robin_f_[ilev].define(grids[ilev], dmap[ilev], 1, ng);
       absc_[ilev].define(grids[ilev], dmap[ilev], 1, 0);
 
+      // Defined before the first solve (plot_init_state writes them).
       solution_[ilev].setVal(0.0, 0, 1, ng);
+      rhs_[ilev].setVal(0.0);
+      acoef_[ilev].setVal(0.0);
       bcoef_[ilev].setVal(1.0, 0, 1, ng);
+      robin_a_[ilev].setVal(0.0, 0, 1, ng);
+      robin_b_[ilev].setVal(0.0, 0, 1, ng);
+      robin_f_[ilev].setVal(0.0, 0, 1, ng);
+      absc_[ilev].setVal(0.0);
     }
   }
 
@@ -388,8 +395,15 @@ public:
       absc_[ilev].define(
         grids[ilev], dmap[ilev], 1, 0, amrex::MFInfo(), *factory[ilev]);
 
+      // Defined before the first solve (plot_init_state writes them).
       solution_[ilev].setVal(0.0, 0, 1, ng);
+      rhs_[ilev].setVal(0.0);
+      acoef_[ilev].setVal(0.0);
       bcoef_[ilev].setVal(1.0, 0, 1, ng);
+      robin_a_[ilev].setVal(0.0, 0, 1, ng);
+      robin_b_[ilev].setVal(0.0, 0, 1, ng);
+      robin_f_[ilev].setVal(0.0, 0, 1, ng);
+      absc_[ilev].setVal(0.0);
     }
   }
 #endif
