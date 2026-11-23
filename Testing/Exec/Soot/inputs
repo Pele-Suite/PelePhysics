@@ -1,0 +1,5 @@
+# Soot unit tests (see main.cpp). The tests set soot.incept_pah,
+# soot.pah_name, soot.conserve_mass, soot.num_subcycles and
+# soot.max_subcycles for each model (SootOptions in SootTest.H).
+soot.v = 0
+soot.temp_cutoff = 290.
