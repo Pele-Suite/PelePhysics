@@ -4,6 +4,7 @@
 #include <AMReX.H>
 #include <AMReX_FArrayBox.H>
 #include <AMReX_Gpu.H>
+#include <AMReX_Math.H>
 
 namespace PeleRad::RadProp {
 AMREX_GPU_HOST_DEVICE
@@ -11,6 +12,12 @@ AMREX_FORCE_INLINE
 void
 interpT(amrex::Real const& T, int& TindexL, amrex::Real& weight)
 {
+  if (amrex::Math::isnan(T)) {
+    // Keep the NaN visible in kp, without a NaN reaching the int cast below.
+    TindexL = 0;
+    weight = T;
+    return;
+  }
   if (T < 300) {
     TindexL = 0;
     weight = 0.0;
