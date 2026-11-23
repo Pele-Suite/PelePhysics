@@ -20,8 +20,8 @@ fillFilmFab(
   amrex::IntVect ijkc = lxc.floor(); // Cell with particle
   amrex::Real film_hght = p.rdata(SprayComps::pstateFilmHght);
   amrex::Real film_dia = p.rdata(SprayComps::pstateDia);
-  amrex::Real film_vol =
-    M_PI * film_hght * (0.75 * film_dia * film_dia + film_hght * film_hght);
+  // The film is a cylinder, as the splash model makes it
+  amrex::Real film_vol = 0.25 * M_PI * film_dia * film_dia * film_hght;
   amrex::Gpu::Atomic::Add(&wf_arr(ijkc, 0), film_vol / face_area);
 }
 

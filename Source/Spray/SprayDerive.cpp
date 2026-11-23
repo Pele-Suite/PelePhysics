@@ -119,9 +119,8 @@ SprayParticleContainer::computeDerivedVars(
             }
           }
         } else {
-          Real rad2 = std::pow(0.5 * dia_part, 2);
-          Real cur_vol =
-            M_PI / 6. * film_hght * (3. * rad2 + film_hght * film_hght);
+          // The film is a cylinder, as the splash model makes it
+          Real cur_vol = 0.25 * M_PI * dia_part * dia_part * film_hght;
           Gpu::Atomic::Add(&vararr(ijkc, wfh_indx), cur_vol / face_area);
           Gpu::Atomic::Add(&vararr(ijkc, wfm_indx), rho_part * cur_vol);
         }
