@@ -400,6 +400,10 @@ public:
 
     for (int ilev = 0; ilev < numLevels(); ++ilev) {
       bcoef_[ilev].FillBoundary(geom_[ilev].periodicity());
+      // The solution's ghost cells carry the Dirichlet boundary values (zero
+      // incident radiation), but the previous solve overwrote them with
+      // extrapolated values: reset them.
+      solution_[ilev].setBndry(0.0);
     }
     //        if (composite_solve_)
     rte_->solve();
