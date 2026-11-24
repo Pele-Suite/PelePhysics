@@ -2,11 +2,8 @@
 // Relative to this file so that a build which lists Diagnostics but not
 // Source/Utility/MeshMap among its include directories still compiles.
 #include "../MeshMap/MeshMapEvaluatorInputs.H"
-#include <AMReX_VisMF.H>
 #include <AMReX_FPC.H>
 #include <AMReX_PlotFileUtil.H>
-#include <regex>
-#include <cstdio>
 
 void
 printLowerDimIntVect(
@@ -38,6 +35,29 @@ printLowerDimBox(std::ostream& a_File, const amrex::Box& a_box, int skipDim)
   a_File << ')';
 }
 
+namespace {
+// Host pointer to the data of a_fab, staged through a_hostfab when the fab
+// lives in device memory
+const amrex::Real*
+hostData(
+  const amrex::FArrayBox& a_fab, std::unique_ptr<amrex::FArrayBox>& a_hostfab)
+{
+#ifdef AMREX_USE_GPU
+  if (a_fab.arena()->isManaged() || a_fab.arena()->isDevice()) {
+    a_hostfab = std::make_unique<amrex::FArrayBox>(
+      a_fab.box(), a_fab.nComp(), amrex::The_Pinned_Arena());
+    amrex::Gpu::dtoh_memcpy(
+      a_hostfab->dataPtr(), a_fab.dataPtr(),
+      a_fab.size() * sizeof(amrex::Real));
+    return a_hostfab->dataPtr();
+  }
+#else
+  amrex::ignore_unused(a_hostfab);
+#endif
+  return a_fab.dataPtr();
+}
+} // namespace
+
 void
 DiagFramePlane::init(const std::string& a_prefix, std::string_view a_diagName)
 {
@@ -47,7 +67,7 @@ DiagFramePlane::init(const std::string& a_prefix, std::string_view a_diagName)
     AMREX_SPACEDIM == 3, "DiagFramePlane::init(): DiagFramePlane is only "
                          "supported for 3 dimensional simulations");
 
-  if (m_filters.empty()) {
+  if (!m_filters.empty()) {
     amrex::Print() << " Filters are not available on DiagFramePlane and will "
                       "be discarded \n";
   }
@@ -55,13 +75,8 @@ DiagFramePlane::init(const std::string& a_prefix, std::string_view a_diagName)
   amrex::ParmParse pp(a_prefix);
 
   // Outputted variables
-  int nOutFields = pp.countval("field_names");
-  AMREX_ASSERT(nOutFields > 0);
-  m_fieldNames.resize(nOutFields);
-  m_fieldIndices_d.resize(nOutFields);
-  for (int f{0}; f < nOutFields; ++f) {
-    pp.get("field_names", m_fieldNames[f], f);
-  }
+  pp.getarr("field_names", m_fieldNames);
+  AMREX_ASSERT(!m_fieldNames.empty());
   m_nfiles_plane = amrex::max<int>(
     1, amrex::min<int>(amrex::ParallelDescriptor::NProcs(), 256));
   pp.query("n_files", m_nfiles_plane);
@@ -166,18 +181,9 @@ DiagFramePlane::prepare(
                        << ")\n";
       }
     }
-
-    int nOutFields = static_cast<int>(m_fieldIndices_d.size());
-    amrex::Vector<int> m_fieldIndices(nOutFields, 0);
-    for (int f{0}; f < nOutFields; ++f) {
-      m_fieldIndices[f] = getFieldIndex(m_fieldNames[f], a_varNames);
-    }
-    amrex::Gpu::copy(
-      amrex::Gpu::hostToDevice, m_fieldIndices.begin(), m_fieldIndices.end(),
-      m_fieldIndices_d.begin());
-
-    first_time = false;
   }
+  // Clears first_time
+  DiagBase::prepare(a_nlevels, a_geoms, a_grids, a_dmap, a_varNames);
 
   // Resize internal vectors
   m_intwgt.resize(a_nlevels);
@@ -218,7 +224,9 @@ DiagFramePlane::prepare(
       }
     }
 
-    if (k0 < a_geoms[lev].Domain().smallEnd(m_normal)) {
+    const amrex::Box& domain = a_geoms[lev].Domain();
+    const bool below = k0 < domain.smallEnd(m_normal);
+    if (below || k0 > domain.bigEnd(m_normal)) {
       if (!m_dump_ghost_if_OOB) {
         amrex::Error(
           "DiagFramePlane: Requested location is out of bounds (" + m_diagfile +
@@ -230,26 +238,10 @@ DiagFramePlane::prepare(
                             m_diagfile + ")"
                        << std::endl;
       }
-      k0 = a_geoms[lev].Domain().smallEnd(m_normal);
-      m_intwgt[lev][0] = 1.0;
+      k0 = below ? domain.smallEnd(m_normal) : domain.bigEnd(m_normal);
+      m_intwgt[lev][0] = below ? 1.0 : 0.0;
       m_intwgt[lev][1] = 0.0;
-      m_intwgt[lev][2] = 0.0;
-    } else if (k0 > a_geoms[lev].Domain().bigEnd(m_normal)) {
-      if (!m_dump_ghost_if_OOB) {
-        amrex::Error(
-          "DiagFramePlane: Requested location is out of bounds (" + m_diagfile +
-          ")");
-      } else if (lev == 0) {
-        amrex::Print() << "DiagFramePlane: Dumping ghost cells because "
-                          "requested location is "
-                          "of bounds (" +
-                            m_diagfile + ")"
-                       << std::endl;
-      }
-      k0 = a_geoms[lev].Domain().bigEnd(m_normal);
-      m_intwgt[lev][0] = 0.0;
-      m_intwgt[lev][1] = 0.0;
-      m_intwgt[lev][2] = 1.0;
+      m_intwgt[lev][2] = below ? 0.0 : 1.0;
     }
     m_k0[lev] = k0;
   }
@@ -282,8 +274,8 @@ DiagFramePlane::prepare(
         pmap.push_back(a_dmap[lev][i]);
         dmConvertLev.push_back(i);
       }
-      m_dmConvert[lev] = dmConvertLev;
     }
+    m_dmConvert[lev] = std::move(dmConvertLev);
     m_sliceBA[lev].define(bl);
     m_sliceDM[lev].define(pmap);
   }
@@ -294,9 +286,12 @@ DiagFramePlane::processDiag(
   int a_nstep,
   const amrex::Real& a_time,
   const amrex::Vector<const amrex::MultiFab*>& a_state,
-  const amrex::Vector<std::string>& /*a_stateVar*/)
+  const amrex::Vector<std::string>& a_varNames)
 {
   // Interpolate data to slice
+  const auto fieldIdx_d = fieldIndices(m_fieldNames, a_varNames);
+  const auto* idx_d_p = fieldIdx_d.dataPtr();
+  const int normal = m_normal;
   amrex::Vector<amrex::MultiFab> planeData(a_state.size());
   for (int lev = 0; lev < a_state.size(); ++lev) {
     planeData[lev].define(
@@ -312,35 +307,24 @@ DiagFramePlane::processDiag(
       auto const& state = a_state[lev]->const_array(state_idx, 0);
       auto const& plane = planeData[lev].array(mfi);
       auto const& intwgt = m_intwgt[lev];
-      auto* idx_d_p = m_fieldIndices_d.dataPtr();
-      if (m_normal == 0) {
-        amrex::ParallelFor(
-          bx, m_fieldNames.size(),
-          [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-            int stIdx = idx_d_p[n];
-            plane(i, j, k, n) = intwgt[0] * state(p0 - 1, i, j, stIdx) +
-                                intwgt[1] * state(p0, i, j, stIdx) +
-                                intwgt[2] * state(p0 + 1, i, j, stIdx);
-          });
-      } else if (m_normal == 1) {
-        amrex::ParallelFor(
-          bx, m_fieldNames.size(),
-          [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-            int stIdx = idx_d_p[n];
-            plane(i, j, k, n) = intwgt[0] * state(i, p0 - 1, j, stIdx) +
-                                intwgt[1] * state(i, p0, j, stIdx) +
-                                intwgt[2] * state(i, p0 + 1, j, stIdx);
-          });
-      } else if (m_normal == 2) {
-        amrex::ParallelFor(
-          bx, m_fieldNames.size(),
-          [=] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-            int stIdx = idx_d_p[n];
-            plane(i, j, k, n) = intwgt[0] * state(i, j, p0 - 1, stIdx) +
-                                intwgt[1] * state(i, j, p0, stIdx) +
-                                intwgt[2] * state(i, j, p0 + 1, stIdx);
-          });
-      }
+      // The slice box spans the two transverse directions (in order) as
+      // (i, j); the state is read at p0 - 1, p0, p0 + 1 along the normal.
+      const amrex::IntVect e = amrex::IntVect::TheDimensionVector(normal);
+      amrex::ParallelFor(
+        bx, static_cast<int>(m_fieldNames.size()),
+        [=] AMREX_GPU_DEVICE(int i, int j, int, int n) noexcept {
+          amrex::IntVect iv(AMREX_D_DECL(p0, p0, p0));
+          int t = 0;
+          for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            if (d != normal) {
+              iv[d] = (t++ == 0) ? i : j;
+            }
+          }
+          const int stIdx = idx_d_p[n];
+          plane(i, j, 0, n) = intwgt[0] * state(iv - e, stIdx) +
+                              intwgt[1] * state(iv, stIdx) +
+                              intwgt[2] * state(iv + e, stIdx);
+        });
     }
   }
 
@@ -357,20 +341,20 @@ DiagFramePlane::processDiag(
     amrex::Vector<amrex::Geometry> pltGeoms(nlevs);
     pltGeoms[0] = m_geomLev0;
     amrex::Vector<amrex::IntVect> ref_ratio;
-    amrex::IntVect rref(AMREX_D_DECL(2, 2, 1));
     for (int lev = 1; lev < nlevs; ++lev) {
+      // Transverse refinement ratios, 1 across the plane
+      amrex::IntVect rref(1);
+      int cdim = 0;
+      for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        if (idim != m_normal) {
+          rref[cdim++] = m_refRatio[lev - 1][idim];
+        }
+      }
       pltGeoms[lev] = amrex::refine(pltGeoms[lev - 1], rref);
       ref_ratio.push_back(rref);
     }
 
-    // File name based on tep or time
-    std::string diagfile;
-    if (m_interval > 0) {
-      diagfile = amrex::Concatenate(m_diagfile, a_nstep, 6);
-    }
-    if (m_per > 0.0) {
-      diagfile = m_diagfile + std::to_string(a_time);
-    }
+    const std::string diagfile = outputName(a_nstep, a_time);
     amrex::Vector<int> step_array(nlevs, a_nstep);
 
     if (m_dump_flat_3D_plotfile) {
@@ -623,19 +607,8 @@ DiagFramePlane::VisMF2D(
         hLength = static_cast<int>(hss.tellp());
         auto tstr = hss.str();
         std::memcpy(afPtr, tstr.c_str(), hLength); // ---- the fab header
-        amrex::Real const* fabdata = fab.dataPtr();
-#ifdef AMREX_USE_GPU
         std::unique_ptr<amrex::FArrayBox> hostfab;
-        if (fab.arena()->isManaged() || fab.arena()->isDevice()) {
-          hostfab = std::make_unique<amrex::FArrayBox>(
-            fab.box(), fab.nComp(), amrex::The_Pinned_Arena());
-          amrex::Gpu::dtoh_memcpy_async(
-            hostfab->dataPtr(), fab.dataPtr(),
-            fab.size() * sizeof(amrex::Real));
-          amrex::Gpu::streamSynchronize();
-          fabdata = hostfab->dataPtr();
-        }
-#endif
+        const amrex::Real* fabdata = hostData(fab, hostfab);
         memcpy(afPtr + hLength, fabdata, writeDataSize);
         writePosition += hLength + writeDataSize;
       }
@@ -654,19 +627,8 @@ DiagFramePlane::VisMF2D(
         auto tstr = hss.str();
         nfi.Stream().write(tstr.c_str(), hLength); // ---- the fab header
         nfi.Stream().flush();
-        amrex::Real const* fabdata = fab.dataPtr();
-#ifdef AMREX_USE_GPU
         std::unique_ptr<amrex::FArrayBox> hostfab;
-        if (fab.arena()->isManaged() || fab.arena()->isDevice()) {
-          hostfab = std::make_unique<amrex::FArrayBox>(
-            fab.box(), fab.nComp(), amrex::The_Pinned_Arena());
-          amrex::Gpu::dtoh_memcpy_async(
-            hostfab->dataPtr(), fab.dataPtr(),
-            fab.size() * sizeof(amrex::Real));
-          amrex::Gpu::streamSynchronize();
-          fabdata = hostfab->dataPtr();
-        }
-#endif
+        const amrex::Real* fabdata = hostData(fab, hostfab);
         nfi.Stream().write((char*)fabdata, writeDataSize);
         nfi.Stream().flush();
       }

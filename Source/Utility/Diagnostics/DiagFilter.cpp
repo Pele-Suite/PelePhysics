@@ -1,5 +1,22 @@
 #include "DiagFilter.H"
-#include "AMReX_ParmParse.H"
+#include "DiagBase.H"
+
+bool
+DiagFilter::queryRange(
+  const amrex::ParmParse& a_pp,
+  const std::string& a_key,
+  amrex::Real& a_low,
+  amrex::Real& a_high)
+{
+  if (a_pp.countval(a_key) == 0) {
+    return false;
+  }
+  amrex::Vector<amrex::Real> range;
+  a_pp.getarr(a_key, range, 0, 2);
+  a_low = amrex::min<amrex::Real>(range[0], range[1]);
+  a_high = amrex::max<amrex::Real>(range[0], range[1]);
+  return true;
+}
 
 void
 DiagFilter::init(const std::string& a_prefix)
@@ -11,23 +28,14 @@ DiagFilter::init(const std::string& a_prefix)
     amrex::Abort("filter: " + a_prefix + " is missing a field_name !");
   }
 
-  int definedRange = 0;
   if (pp.countval("value_greater") != 0) {
     pp.get("value_greater", m_fdata.m_low_val);
     m_fdata.m_high_val = AMREX_REAL_MAX;
-    definedRange = 1;
   } else if (pp.countval("value_less") != 0) {
     pp.get("value_less", m_fdata.m_high_val);
     m_fdata.m_low_val = AMREX_REAL_LOWEST;
-    definedRange = 1;
-  } else if (pp.countval("value_inrange") != 0) {
-    amrex::Vector<amrex::Real> range{0.0};
-    pp.getarr("value_inrange", range, 0, 2);
-    m_fdata.m_low_val = amrex::min<amrex::Real>(range[0], range[1]);
-    m_fdata.m_high_val = amrex::max<amrex::Real>(range[0], range[1]);
-    definedRange = 1;
-  }
-  if (definedRange == 0) {
+  } else if (!queryRange(
+               pp, "value_inrange", m_fdata.m_low_val, m_fdata.m_high_val)) {
     amrex::Abort("filter: " + a_prefix + " is missing a range definition !");
   }
 }
@@ -35,13 +43,5 @@ DiagFilter::init(const std::string& a_prefix)
 void
 DiagFilter::setup(const amrex::Vector<std::string>& a_varNames)
 {
-  m_fdata.m_filterVarIdx = -1;
-  for (int n{0}; n < a_varNames.size(); ++n) {
-    if (a_varNames[n] == m_filterVar) {
-      m_fdata.m_filterVarIdx = n;
-    }
-  }
-  if (m_fdata.m_filterVarIdx < 0) {
-    amrex::Abort("Couldn't find filter field: " + m_filterVar);
-  }
+  m_fdata.m_filterVarIdx = DiagBase::getFieldIndex(m_filterVar, a_varNames);
 }
