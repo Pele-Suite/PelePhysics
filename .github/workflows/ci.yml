@@ -71,16 +71,21 @@ jobs:
     defaults:
       run:
         working-directory: ${{github.workspace}}/Support/ceptr
-    env:
-      # The ruff in pyproject.toml's dev dependencies
-      RUFF: ruff==0.17.6
     steps:
       - uses: actions/checkout@v6
-      # pipx is on the runner images: no third-party action needed
+      - uses: ./.github/actions/setup-uv
+        id: uv
+      # The lint group holds only ruff, at the version in uv.lock
       - name: Formatting with ruff
-        run: pipx run ${RUFF} format --diff .
+        run: uv run --locked --only-group lint ruff format --diff .
       - name: Lint with ruff
-        run: pipx run ${RUFF} check .
+        run: uv run --locked --only-group lint ruff check .
+      - name: Save the uv cache
+        if: github.ref == 'refs/heads/development' && steps.uv.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/uv
+          key: ${{steps.uv.outputs.cache-key}}
 
   CEPTR:
     needs: Detect-Changes
@@ -95,12 +100,10 @@ jobs:
         working-directory: ${{github.workspace}}/Support/ceptr
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: ./.github/actions/setup-uv
+        id: uv
         with:
           python-version: ${{matrix.python-version}}
-          version-file: Support/ceptr/pyproject.toml
-          # Pull requests reuse the cache from development, without writing their own
-          save-cache: ${{github.ref == 'refs/heads/development'}}
       # The default install first: it must work without the plot extra
       - name: Install dependencies
         run: uv sync --locked
@@ -112,6 +115,13 @@ jobs:
         run: uv run convert -f ${{github.workspace}}/Mechanisms/air/mechanism.yaml
       - name: Convert LiDryer mechanism
         run: uv run convert -f ${{github.workspace}}/Mechanisms/LiDryer/mechanism.yaml
+      # Pull requests reuse the cache from development, without writing their own
+      - name: Save the uv cache
+        if: github.ref == 'refs/heads/development' && steps.uv.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/uv
+          key: ${{steps.uv.outputs.cache-key}}
 
   Transport-EOS-Reactions:
     needs: Detect-Changes
@@ -176,12 +186,11 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: ./.github/actions/setup-uv
+        id: uv
         if: env.HOST_BUILD == 'true'
         with:
           python-version: ${{matrix.python-version}}
-          version-file: Support/ceptr/pyproject.toml
-          save-cache: ${{github.ref == 'refs/heads/development'}}
       - name: Install Ccache
         # Outside the checkout: AMReX's script downloads into the current directory.
         working-directory: ${{runner.temp}}
@@ -363,6 +372,12 @@ jobs:
         with:
           path: ~/.cache/ccache
           key: ${{steps.ccache.outputs.cache-primary-key}}
+      - name: Save the uv cache
+        if: env.HOST_BUILD == 'true' && env.SAVE_CCACHE == 'true' && steps.uv.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/uv
+          key: ${{steps.uv.outputs.cache-key}}
 
   # The one check for branch protection to require. A job skipped by
   # its own `if:` (docs-only changes, scheduled runs) does not expand its

@@ -45,14 +45,18 @@ convert = "ceptr.ceptr:main"
 qssa = "ceptr.qssa:main"
 
 [dependency-groups]
+# Only ruff, so that CI can lint without installing CEPTR
+lint = [
+    "ruff>=0.17.6,<0.18",
+]
 dev = [
     "pytest>=8.4",
-    "ruff>=0.17.6,<0.18",
     "ipython>=8.30",
+    { include-group = "lint" },
 ]
 
 [tool.uv]
-# CI installs this version too, through setup-uv
+# CI installs this version too (.github/actions/setup-uv)
 required-version = "==0.13.9"
 
 [build-system]

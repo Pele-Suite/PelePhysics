@@ -73,6 +73,9 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+lint = [
+    { name = "ruff" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -95,6 +98,7 @@ dev = [
     { name = "pytest", specifier = ">=8.4" },
     { name = "ruff", specifier = ">=0.17.6,<0.18" },
 ]
+lint = [{ name = "ruff", specifier = ">=0.17.6,<0.18" }]
 
 [[package]]
 name = "clang-format"
