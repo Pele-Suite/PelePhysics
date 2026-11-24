@@ -107,7 +107,11 @@ jobs:
     env:
       BUILD_DIR: ${{ github.workspace }}/build-clang-tidy-${{ matrix.code }}
       CCACHE_COMPRESSLEVEL: 10
-      CCACHE_MAXSIZE: 100M
+      # Room for a whole build (PeleC makes ~5000 compiler calls, at roughly
+      # 100 kB each), with headroom: ccache evicts per subdirectory, before
+      # the total reaches the limit. Check trims the cache to what the run
+      # used, so the saved cache is one build's worth, not the limit.
+      CCACHE_MAXSIZE: 1G
       # clang-tidy-cache skips files whose preprocessed source, flags and
       # resolved clang-tidy config are unchanged. SAVE_OUTPUT/SAVE_ALL store
       # each file's diagnostics (clang-tidy's stdout) and exit code and replay
@@ -173,15 +177,19 @@ jobs:
         working-directory: ${{ env.BUILD_DIR }}
         run: |
           mkdir -p ${CTCACHE_DIR}
-          touch ${{ runner.temp }}/ctcache-start
+          # The restored caches carry earlier runs' counts: report this run's
+          ccache -z
+          clang-tidy-cache --zero-stats || true
+          touch ${{ runner.temp }}/cache-start
           build_status=0
           cmake --build . --parallel $(nproc) 2>&1 | tee clang-tidy-full-report.txt || build_status=$?
           # Hits refresh an entry's mtime: drop the ones this run did not use
-          # (and older clang-tidy versions) so the cache does not grow. Only
+          # (and older clang-tidy versions) so the caches do not grow. Only
           # after a complete build: a failed one never reached some files.
           if [ ${build_status} -eq 0 ]; then
-            find ${CTCACHE_DIR} -type f ! -newer ${{ runner.temp }}/ctcache-start -delete
+            find ${CTCACHE_DIR} -type f ! -newer ${{ runner.temp }}/cache-start -delete
             find ${HOME}/.cache/ctcache -mindepth 1 -maxdepth 1 ! -path ${CTCACHE_DIR} -exec rm -rf {} +
+            ccache --evict-older-than $(( $(date +%s) - $(stat -c %Y ${{ runner.temp }}/cache-start) + 60 ))s
           fi
           # Fail on a failed build: a replayed cache hit restores the exit
           # code but not clang-tidy's stderr, so the warning count alone can
@@ -194,8 +202,9 @@ jobs:
           # Entries are named by the rest of their sha1 digest (38 hex
           # characters); the per-directory stats files are not counted.
           echo "ctcache entries: $(find ${CTCACHE_DIR} -type f -regextype posix-extended -regex '.*/[0-9a-f]{38}' | wc -l)"
+          clang-tidy-cache --show-stats || true
           ccache -s
-      # Saved on PRs too (a cold run takes hours, and the cache is small),
+      # Saved on PRs too (a cold run takes hours; Check trims it to one build),
       # whenever Check completed the build, even if Short report then fails
       # on warnings.
       - name: Save Ccache
