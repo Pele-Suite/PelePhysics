@@ -19,7 +19,9 @@ To install CEPTR and its dependencies::
   $ cd ${PELE_PHYSICS_HOME}/Support/ceptr
   $ uv sync --locked
 
-This installs the exact versions recorded in ``Support/ceptr/uv.lock``, so that every user generates the same mechanisms. uv also installs a suitable Python version (given in ``Support/ceptr/.python-version``) if none is found on the system.
+This installs the exact versions recorded in ``Support/ceptr/uv.lock``, so that every user generates the same mechanisms.
+
+CEPTR supports Python 3.13 and 3.14. You do not need to install these yourself: if the system Python is older (e.g. 3.12 on Ubuntu 24.04), uv downloads and uses a managed Python 3.13 (set in ``Support/ceptr/.python-version``), leaving the system Python untouched. Only a ``pip`` install (see the note below) needs a 3.13 or 3.14 interpreter already present.
 
 The plotting packages (matplotlib, networkx and SciPy) are an optional ``plot`` extra: they are only needed for
 ``qssa --visualize`` and for the plotting scripts elsewhere in PelePhysics (``plotPMF.py``, ``gen_hit_ic.py``).
