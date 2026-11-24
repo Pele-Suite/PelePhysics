@@ -131,7 +131,10 @@ jobs:
             dependency_cmds: '.github/workflows/dependencies/dependencies_hip.sh'
             container: rocm/dev-ubuntu-24.04:7.2.4
           - comp: sycl
-            amrex_build_args: 'USE_SYCL=TRUE'
+            # Each link compiles the device code, which ccache cannot cache
+            # (~60 s per executable). Nothing runs on a device here, so link
+            # one device image rather than one per kernel, on all 4 cores.
+            amrex_build_args: 'USE_SYCL=TRUE SYCL_SPLIT_KERNEL=FALSE SYCL_PARALLEL_LINK_JOBS=4'
             amrex_build_flags: '--with-sycl=yes'
             dependency_cmds: '.github/workflows/dependencies/dependencies_dpcpp.sh'
             ccache_depend: 'true'
