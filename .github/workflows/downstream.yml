@@ -106,12 +106,18 @@ jobs:
             cmake_args: -DPELE_ENABLE_MASA:BOOL=OFF -DPELE_EXCLUDE_BUILD_IN_CI:BOOL=ON
     env:
       BUILD_DIR: ${{ github.workspace }}/build-clang-tidy-${{ matrix.code }}
-      CCACHE_COMPRESSLEVEL: 10
-      # Room for a whole build (PeleC makes ~5000 compiler calls, at roughly
-      # 100 kB each), with headroom: ccache evicts per subdirectory, before
-      # the total reaches the limit. Check trims the cache to what the run
-      # used, so the saved cache is one build's worth, not the limit.
-      CCACHE_MAXSIZE: 1G
+      # Only development saves the caches (the scheduled runs keep them from
+      # being evicted); PRs restore them.
+      SAVE_CCACHE: ${{ github.ref == 'refs/heads/development' }}
+      # Compress hard only when the cache is kept; a PR's new entries are
+      # discarded at the end of the job.
+      CCACHE_COMPRESSLEVEL: ${{ github.ref == 'refs/heads/development' && 10 || 1 }}
+      # Room for a whole build (~110 MB for PeleC, ~80 MB for PeleLMeX at
+      # level 10), with headroom: ccache evicts per subdirectory, before the
+      # total reaches the limit, and level 1 entries are larger. Check trims
+      # the cache to what the run used, so the saved cache is one build's
+      # worth, not the limit.
+      CCACHE_MAXSIZE: 300M
       # clang-tidy-cache skips files whose preprocessed source, flags and
       # resolved clang-tidy config are unchanged. SAVE_OUTPUT/SAVE_ALL store
       # each file's diagnostics (clang-tidy's stdout) and exit code and replay
@@ -204,11 +210,11 @@ jobs:
           echo "ctcache entries: $(find ${CTCACHE_DIR} -type f -regextype posix-extended -regex '.*/[0-9a-f]{38}' | wc -l)"
           clang-tidy-cache --show-stats || true
           ccache -s
-      # Saved on PRs too (a cold run takes hours; Check trims it to one build),
-      # whenever Check completed the build, even if Short report then fails
-      # on warnings.
+      # Saved from development only, whenever Check completed the build, even
+      # if Short report then fails on warnings. PRs restore development's
+      # cache and miss only on the files they change.
       - name: Save Ccache
-        if: ${{ !cancelled() && steps.check.outcome == 'success' }}
+        if: ${{ !cancelled() && env.SAVE_CCACHE == 'true' && steps.check.outcome == 'success' }}
         uses: actions/cache/save@v5
         with:
           path: |
