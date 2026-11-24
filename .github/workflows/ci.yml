@@ -43,7 +43,9 @@ jobs:
       - name: Check formatting
         shell: bash  # -eo pipefail: a failed git ls-files fails the step
         run: |
-          pipx install clang-format==20.1.8
+          # The version CEPTR formats the generated mechanisms with
+          # (Support/ceptr/pyproject.toml), so the two always agree
+          pipx install clang-format==20.1.5
           git ls-files -z -- '*.[Hh]' '*.cpp' | grep -zE '^(Source|Testing|Mechanisms)/' |
             xargs -0 -P "$(nproc)" -n 8 clang-format --dry-run --Werror
 
