@@ -63,6 +63,25 @@ jobs:
       - name: Run codespell
         run: codespell
 
+  CEPTR-Lint:
+    # ruff needs none of CEPTR's dependencies, nor a Python matrix
+    needs: Detect-Changes
+    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{github.workspace}}/Support/ceptr
+    env:
+      # The ruff in pyproject.toml's dev dependencies
+      RUFF: ruff==0.17.6
+    steps:
+      - uses: actions/checkout@v6
+      # pipx is on the runner images: no third-party action needed
+      - name: Formatting with ruff
+        run: pipx run ${RUFF} format --diff .
+      - name: Lint with ruff
+        run: pipx run ${RUFF} check .
+
   CEPTR:
     needs: Detect-Changes
     if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
@@ -86,12 +105,6 @@ jobs:
           poetry-version: ${{matrix.poetry-version}}
       - name: Install Dependencies using Poetry
         run: poetry install
-      - name: Formatting with black
-        run: poetry run black --check .
-      - name: Sort imports with isort
-        run: poetry run isort --check-only --diff .
-      - name: Lint with flake8
-        run: poetry run flake8 .
       - name: Run tests
         run: poetry run pytest
       - name: Convert air mechanism
@@ -356,7 +369,7 @@ jobs:
   # waits forever; skipped jobs pass here. It also fails when Detect-Changes
   # fails, which would otherwise skip every build.
   CI-Status:
-    needs: [Detect-Changes, Formatting, Codespell, CEPTR, Transport-EOS-Reactions]
+    needs: [Detect-Changes, Formatting, Codespell, CEPTR-Lint, CEPTR, Transport-EOS-Reactions]
     if: always()
     runs-on: ubuntu-latest
     steps:

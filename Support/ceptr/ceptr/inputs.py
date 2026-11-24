@@ -30,15 +30,12 @@ class Parameter:
 
     def set_value(self, value):
         """Set value of parameter."""
-        if type(value) == self.typer:
+        if type(value) is self.typer:
             self.value = value
         elif value is None:
             self.value = value
         else:
-            raise TypeError(
-                f"Type does not match for {self.name} ({self.typer} is not"
-                f" {type(value)})"
-            )
+            raise TypeError(f"Type does not match ({self.typer} is not {type(value)})")
 
         if (self.choices is not None) and (value not in self.choices):
             raise ValueError(
@@ -185,4 +182,11 @@ class Input:
         parsed = toml.load(fname)
         for section in parsed.keys():
             for key, value in parsed[section].items():
-                self.inputs[section][key].set_value(value)
+                try:
+                    self.inputs[section][key].set_value(value)
+                except KeyError:
+                    raise KeyError(
+                        f"{fname}: unknown parameter [{section}] {key}"
+                    ) from None
+                except (TypeError, ValueError) as err:
+                    raise type(err)(f"{fname}: [{section}] {key}: {err}") from None
