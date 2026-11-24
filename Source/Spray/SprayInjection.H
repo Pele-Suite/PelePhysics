@@ -171,9 +171,9 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
             spray_jet->get_override_injection_plane_loc();
         }
 
-        spray_jet->transform_to_new_cs(
-          part_vel); // Transforming the particle velocity to user-specified
-                     // coordinate system
+        // Rotating the particle velocity to the user-specified coordinate
+        // system
+        spray_jet->rotate_to_new_cs(part_vel);
         AMREX_D_TERM(p.rdata(SprayComps::pstateVel) = (part_vel[0] + pmov1);
                      , // Setting the particle velocities
                      p.rdata(SprayComps::pstateVel + 1) = (part_vel[1] + pmov1);
@@ -306,8 +306,9 @@ SprayParticleContainer::sprayInjection(
   amrex::Real dt = sim_dt;
   amrex::Real mdot = spray_jet->mass_flow_rate(time);
   amrex::Real inject_mass = mdot * sim_dt;
-  // See if there is uninjected mass from previous time steps
-  if (spray_jet->m_sumInjMass > 0.) {
+  // Mass carried from previous time steps: mass not yet injected, or
+  // (negative) mass injected beyond the target
+  if (spray_jet->m_sumInjTime >= 0.) {
     dt += spray_jet->m_sumInjTime;
     inject_mass += spray_jet->m_sumInjMass;
   }
@@ -430,7 +431,10 @@ SprayParticleContainer::sprayInjection(
       amrex::Gpu::hostToDevice, src_tile.begin(), src_tile.end(),
       dst_tile.GetArrayOfStructs().begin() + old_size);
   }
-  spray_jet->reset_sum();
+  // Carry the mass injected beyond the target to the next injection, so the
+  // injected mass follows the mass flow rate over time
+  spray_jet->m_sumInjMass = inject_mass - cur_mass;
+  spray_jet->m_sumInjTime = 0.;
 }
 
 amrex::IntVect
@@ -519,7 +523,8 @@ SprayParticleContainer::uniformSprayInit(
     p.id() = ParticleType::NextID();
     p.cpu() = amrex::ParallelDescriptor::MyProc();
     for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-      p.pos(dir) = (amrex::Real(indx[dir]) + 0.5) * dx_part[dir];
+      p.pos(dir) =
+        Geom(level).ProbLo(dir) + (amrex::Real(indx[dir]) + 0.5) * dx_part[dir];
     }
     for (int n = 0; n < NSR_SPR; ++n) {
       p.rdata(n) = part_vals[n];

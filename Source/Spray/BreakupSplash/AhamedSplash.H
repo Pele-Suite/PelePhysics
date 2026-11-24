@@ -186,6 +186,12 @@ splash_criteria(
       }
       // Do not allow mass to exceed one for now, should be fixed
       ms = amrex::min<amrex::Real>(ms, 1.);
+      // TODO: get_ms_theta splits a wet splash into negative masses (at
+      // normal impact the psi = 0 share is 3.35 ms, leaving 1 - 3.35 - 0.5
+      // ms at psi = pi), so the splashed drops are not created yet and the
+      // whole droplet joins the film rather than being lost
+      ms = 0.;
+      dm = 1.;
     } else {
       crit = splash_type::spread;
       // All mass becomes part of the wall film

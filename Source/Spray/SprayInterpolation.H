@@ -77,6 +77,7 @@ check_bounds(
   const amrex::IntVect bndry_hi,
   amrex::IntVect& bflags)
 {
+  bflags = amrex::IntVect::TheZeroVector();
   for (int hilo = 0; hilo < 2; ++hilo) {
     int fact = (hilo == 0) ? 1 : -1;
     for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {

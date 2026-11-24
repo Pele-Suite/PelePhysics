@@ -147,11 +147,13 @@ updateBreakupKHRT(
       }
       if (create_child_drops) {
         amrex::Real Utan = A1 * omega_KH * lam_KH;
+        // Unit vector along the droplet velocity, as for TAB
+        const amrex::Real part_vel_mag = vel_part.vectorLength();
         N_SB[pid] = splash_breakup::breakup_KH;
         for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
           rf.loc[AMREX_SPACEDIM * pid + dir] = p.pos(dir);
           rf.vel[AMREX_SPACEDIM * pid + dir] = vel_part[dir];
-          rf.norm[AMREX_SPACEDIM * pid + dir] = vel_part[dir] / vel_mag;
+          rf.norm[AMREX_SPACEDIM * pid + dir] = vel_part[dir] / part_vel_mag;
         }
         rf.num_dens[pid] = ns;
         rf.ref_dia[pid] = 2. * rs;

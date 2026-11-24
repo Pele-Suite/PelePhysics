@@ -203,12 +203,6 @@ public:
   void set_end_time(amrex::Real end_time) { m_endTime = end_time; }
   void set_num_ppp(amrex::Real num_ppp) { m_numPPP = num_ppp; }
 
-  void reset_sum()
-  {
-    m_sumInjMass = -1;
-    m_sumInjTime = -1;
-  }
-
   /**
      Function for creating new particle parameters based on jet location. Note
      all angles must be in radians.
@@ -308,29 +302,27 @@ public:
     return val1 + (val2 - val1) * invt;
   }
 
-  void transform_to_new_cs(amrex::Real vec[AMREX_SPACEDIM])
+  // Rotate vec (e.g. a velocity) into the user coordinate system
+  void rotate_to_new_cs(amrex::Real vec[AMREX_SPACEDIM]) const
   {
-    amrex::Real x, y, z;
-    if (AMREX_SPACEDIM == 2) {
-      x = vec[0];
-      y = vec[1];
-      vec[0] =
-        m_translation[0] + (m_trans_matrix[0] * x + m_trans_matrix[1] * y);
-      vec[1] =
-        m_translation[1] + (m_trans_matrix[2] * x + m_trans_matrix[3] * y);
-    } else if (AMREX_SPACEDIM == 3) {
-      x = vec[0];
-      y = vec[1];
-      z = vec[2];
-      vec[0] =
-        m_translation[0] +
-        (m_trans_matrix[0] * x + m_trans_matrix[1] * y + m_trans_matrix[2] * z);
-      vec[1] =
-        m_translation[1] +
-        (m_trans_matrix[3] * x + m_trans_matrix[4] * y + m_trans_matrix[5] * z);
-      vec[2] =
-        m_translation[2] +
-        (m_trans_matrix[6] * x + m_trans_matrix[7] * y + m_trans_matrix[8] * z);
+    amrex::Real old[AMREX_SPACEDIM];
+    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+      old[i] = vec[i];
+    }
+    for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+      vec[i] = 0.;
+      for (int j = 0; j < AMREX_SPACEDIM; ++j) {
+        vec[i] += m_trans_matrix[i * AMREX_SPACEDIM + j] * old[j];
+      }
+    }
+  }
+
+  // Rotate and translate the position vec into the user coordinate system
+  void transform_to_new_cs(amrex::Real vec[AMREX_SPACEDIM]) const
+  {
+    rotate_to_new_cs(vec);
+    for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+      vec[dir] += m_translation[dir];
     }
   }
 
