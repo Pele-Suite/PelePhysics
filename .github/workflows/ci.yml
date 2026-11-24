@@ -68,20 +68,19 @@ jobs:
     needs: Detect-Changes
     if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{github.workspace}}/Support/ceptr
+    env:
+      # The ruff in pyproject.toml's dev dependencies
+      RUFF: ruff==0.17.6
     steps:
       - uses: actions/checkout@v6
+      # pipx is on the runner images: no third-party action needed
       - name: Formatting with ruff
-        uses: astral-sh/ruff-action@v4.1.0
-        with:
-          src: Support/ceptr
-          version-file: Support/ceptr/pyproject.toml
-          args: format --diff
+        run: pipx run ${RUFF} format --diff .
       - name: Lint with ruff
-        uses: astral-sh/ruff-action@v4.1.0
-        with:
-          src: Support/ceptr
-          version-file: Support/ceptr/pyproject.toml
-          args: check
+        run: pipx run ${RUFF} check .
 
   CEPTR:
     needs: Detect-Changes
