@@ -171,9 +171,9 @@ SprayParticleContainer::sprayInjectionfromDPMFile(
             spray_jet->get_override_injection_plane_loc();
         }
 
-        spray_jet->transform_to_new_cs(
-          part_vel); // Transforming the particle velocity to user-specified
-                     // coordinate system
+        // Rotating the particle velocity to the user-specified coordinate
+        // system
+        spray_jet->rotate_to_new_cs(part_vel);
         AMREX_D_TERM(p.rdata(SprayComps::pstateVel) = (part_vel[0] + pmov1);
                      , // Setting the particle velocities
                      p.rdata(SprayComps::pstateVel + 1) = (part_vel[1] + pmov1);
@@ -519,7 +519,8 @@ SprayParticleContainer::uniformSprayInit(
     p.id() = ParticleType::NextID();
     p.cpu() = amrex::ParallelDescriptor::MyProc();
     for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
-      p.pos(dir) = (amrex::Real(indx[dir]) + 0.5) * dx_part[dir];
+      p.pos(dir) =
+        Geom(level).ProbLo(dir) + (amrex::Real(indx[dir]) + 0.5) * dx_part[dir];
     }
     for (int n = 0; n < NSR_SPR; ++n) {
       p.rdata(n) = part_vals[n];

@@ -84,9 +84,10 @@ SprayParticleContainer::computeDerivedVars(
         Real curvol = cell_vol;
         Real face_area = AMREX_D_TERM(1., *dx[0], *dx[0]);
 #ifdef AMREX_USE_EB
-        if (!flags_array(ijkc).isRegular()) {
-          curvol /= volfrac_fab(ijkc);
-          face_area = bar_fab(ijkc);
+        if (flags_array(ijkc).isSingleValued()) {
+          curvol *= volfrac_fab(ijkc);
+          // The boundary area is normalized by the regular face area
+          face_area *= bar_fab(ijkc);
         }
 #endif
         Real film_hght = p.rdata(SprayComps::pstateFilmHght);
@@ -114,7 +115,7 @@ SprayParticleContainer::computeDerivedVars(
             for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
               Gpu::Atomic::Add(
                 &vararr(ijkc, total_spec_indx + spf),
-                p.rdata(SprayComps::pstateY + spf) * pmass);
+                num_ppp * p.rdata(SprayComps::pstateY + spf) * pmass);
             }
           }
         } else {
