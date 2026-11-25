@@ -46,6 +46,8 @@ def plot_directed_graph(mechanism, links):
     """Plot directed graph of QSSA."""
     mechpath = pathlib.Path(mechanism.source)
     fname = mechpath.parents[0] / "qssa_directed_graph.png"
+    # A figure of its own: networkx draws on the current one
+    fig = plt.figure()
 
     # Make Graph
     graph = nx.DiGraph()
@@ -69,6 +71,7 @@ def plot_directed_graph(mechanism, links):
     nx.draw_networkx_edges(graph, pos, edgelist=black_edges, arrows=True)
     plt.tight_layout()
     plt.savefig(fname, dpi=300)
+    plt.close(fig)
 
 
 def qssa_quadratic_graph(mechanism, reaction_info, qssa_species):
@@ -133,6 +136,8 @@ def plot_quadratic_graph(mechanism, links, quadratic_reactions, problematic_spec
     """Plot QSSA quadratic graph."""
     mechpath = pathlib.Path(mechanism.source)
     fname = mechpath.parents[0] / "qssa_quadratic_graph.png"
+    # A figure of its own: networkx draws on the current one
+    fig = plt.figure()
 
     # Make Graph
     graph = nx.DiGraph()
@@ -221,3 +226,4 @@ def plot_quadratic_graph(mechanism, links, quadratic_reactions, problematic_spec
     nx.draw_networkx_edges(graph, pos, edgelist=black_edges, arrows=False)
     plt.tight_layout()
     plt.savefig(fname, dpi=300)
+    plt.close(fig)

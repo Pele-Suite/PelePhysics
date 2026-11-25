@@ -1,75 +1,83 @@
-[tool.poetry]
+[project]
 name = "ceptr"
 version = "0.1.0"
-description = ""
-authors = ["Marc Henry de Frahan <marc.henrydefrahan@nrel.gov>", "Lucas Esclapez", "Jon Rood", "Hari Sitaraman", "Marc Day", "Anne Felden", "Julia Ream", "Malik Hassanaly", "Nick Wimer"]
+description = "Converts Cantera mechanisms to C++ for the Pele codes"
+authors = [
+    { name = "Marc Henry de Frahan", email = "marc.henrydefrahan@nrel.gov" },
+    { name = "Lucas Esclapez" },
+    { name = "Jon Rood" },
+    { name = "Hari Sitaraman" },
+    { name = "Marc Day" },
+    { name = "Anne Felden" },
+    { name = "Julia Ream" },
+    { name = "Malik Hassanaly" },
+    { name = "Nick Wimer" },
+]
+# SPEC 0 (https://scientific-python.org/specs/spec-0000/): Python versions
+# released in the last 3 years, and the core scientific packages released in
+# the last 2. Cantera has no wheels for Python 3.15 yet.
+requires-python = ">=3.13,<3.15"
+dependencies = [
+    "cantera>=3.1",
+    "numpy>=2.2",
+    "pint>=0.25",
+    "pyyaml>=6.0.2",
+    # sympy and symengine shape the generated QSS Jacobians: they are pinned
+    # so that pip installs give the same mechanisms as uv.lock
+    "sympy==1.14.0",
+    "symengine==0.15.0",
+    # Formats the generated C++: pinned so that the mechanisms do not change
+    "clang-format==20.1.5",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<3.12"
-Cantera = ">=3.1.0"
-Pint = "^0.23"
-PyYAML = "^6.0.1"
-networkx = "^2.8.8"
-matplotlib = "^3.7.2"
-scipy = "^1.11.2"
-numpy = "^1.25.2"
-sympy = "==1.14"
-symengine = "^0.9.2"
-pandas = ">=2.0.3"
-toml = ">=0.10.2"
-pyarrow = "^15.0.0"
+[project.optional-dependencies]
+# qssa -v, and the plotting scripts the docs run in this environment
+# (plotPMF.py, gen_hit_ic.py)
+plot = [
+    "matplotlib>=3.10",
+    "networkx>=3.5",
+    # Used by networkx's kamada_kawai_layout, and by gen_hit_ic.py
+    "scipy>=1.15",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4.0"
-black = {version = "^24.3.0"}
-isort = "^5.12.0"
-ipython = "^8.14.0"
-flake8 = "^4.0.1"
-flake8-bugbear = "^22.12.6"
-pep8-naming = "^0.12.1"
-flake8-docstrings = "^1.7.0"
-flake8-use-fstring = "^1.4"
-flynt = "^0.77"
-clang-format = "==20.1.5"
-
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
+[project.scripts]
 convert = "ceptr.ceptr:main"
 qssa = "ceptr.qssa:main"
 
-[tool.black]
-line-length = 88
-target-version = ['py310']
-preview = true
-include = '\.pyi?$'
-exclude = '''
+[dependency-groups]
+# Only ruff, so that CI can lint without installing CEPTR
+lint = [
+    "ruff>=0.17.6,<0.18",
+]
+dev = [
+    "pytest>=8.4",
+    "ipython>=8.30",
+    { include-group = "lint" },
+]
 
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-  )/
-)
-'''
+[tool.uv]
+# CI installs this version too (.github/actions/setup-uv)
+required-version = "==0.13.9"
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-line_length = 88
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+# The rules of the former flake8 setup (pycodestyle, pyflakes, bugbear,
+# pep8-naming, docstrings), isort, and pyupgrade for the supported Python
+select = ["E", "W", "F", "B", "N", "D", "I", "UP"]
+
+[tool.ruff.lint.pycodestyle]
+# The formatter wraps code at 88; like flake8-bugbear's B950, only flag lines
+# (long strings or comments) more than 10% over
+max-line-length = 96
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
 
 [tool.pytest.ini_options]
 filterwarnings = [

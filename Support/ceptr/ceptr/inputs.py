@@ -1,6 +1,15 @@
 """Classes for toml input files."""
 
-import toml
+import tomllib
+
+
+def toml_value(value):
+    """Return a value as written in TOML."""
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, str):
+        return f'"{value}"'
+    return str(value)
 
 
 class Parameter:
@@ -30,15 +39,12 @@ class Parameter:
 
     def set_value(self, value):
         """Set value of parameter."""
-        if type(value) == self.typer:
+        if type(value) is self.typer:
             self.value = value
         elif value is None:
             self.value = value
         else:
-            raise TypeError(
-                f"Type does not match for {self.name} ({self.typer} is not"
-                f" {type(value)})"
-            )
+            raise TypeError(f"Type does not match ({self.typer} is not {type(value)})")
 
         if (self.choices is not None) and (value not in self.choices):
             raise ValueError(
@@ -165,24 +171,28 @@ class Input:
         for section in self.inputs.keys():
             print(f"""[{section}]""")
             for name, param in self.inputs[section].items():
-                if type(param.value) is str:
-                    print(f"""{name} = "{param.value}" """)
-                else:
-                    print(f"""{name} = {param.value}""")
+                print(f"""{name} = {toml_value(param.value)}""")
 
     def print_help(self):
         """Print the defaults and help."""
         for section in self.inputs.keys():
             print(f"""[{section}]""")
             for name, param in self.inputs[section].items():
-                if type(param.value) is str:
-                    print(f"""{name} = "{param.default}" \n\n # {param.helper} \n\n""")
-                else:
-                    print(f"""{name} = {param.default} \n\n # {param.helper} \n\n""")
+                print(
+                    f"""{name} = {toml_value(param.default)} \n\n # {param.helper} \n\n"""
+                )
 
     def from_toml(self, fname):
         """Read TOML file for inputs."""
-        parsed = toml.load(fname)
+        with open(fname, "rb") as f:
+            parsed = tomllib.load(f)
         for section in parsed.keys():
             for key, value in parsed[section].items():
-                self.inputs[section][key].set_value(value)
+                try:
+                    self.inputs[section][key].set_value(value)
+                except KeyError:
+                    raise KeyError(
+                        f"{fname}: unknown parameter [{section}] {key}"
+                    ) from None
+                except (TypeError, ValueError) as err:
+                    raise type(err)(f"{fname}: [{section}] {key}: {err}") from None

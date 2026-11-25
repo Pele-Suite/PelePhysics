@@ -2,8 +2,6 @@
 
 from collections import OrderedDict
 
-import pandas as pd
-
 import ceptr.qssa_info as cqi
 
 
@@ -181,143 +179,90 @@ class SpeciesInfo:
             self.dict_wdot_scqss[symbol] = qss_symb
             self.dict_wdot_sc[symbol] = sc_symb
 
-    def make_scqss_dataframe(self):
-        """Create lists for names, levels, and plus, mult."""
-        name_list = []
-        numb_list = []
-        symb_list = []
-        lev_list = []
+    def make_scqss_rows(self):
+        """Order the QSS species so each depends only on earlier ones.
 
-        # Loop over stopping terms first
-        for stp in self.sc_qss_chain_stop:
-            scqssnum = self.dict_qss_species[stp]
-            name_list.append(f"sc_qss[{scqssnum}]")
-            numb_list.append(scqssnum)
-            symb_list.append(stp)
-            lev_list.append(0)
+        Each entry of scqss_rows is a dict with the name, number and symbol of
+        a QSS species, its level (0 for the species that end a dependency
+        chain), and the sc and sc_qss it depends on.
+        """
+        rows = []
 
-        # Initialize the dataframe
-        scqss_df = pd.DataFrame(
-            {
-                "name": name_list,
-                "number": numb_list,
-                "symbol": symb_list,
-                "level": lev_list,
-            }
-        )
-
-        # Find the list of qss terms that have been filled
-        qss_filled = scqss_df["name"].unique()
-
-        # Loop until all qss terms have been filled
-        level = 1
-        while len(qss_filled) < len(self.qssa_species_list):
-            # Find the sc_qss that only depend upon filled terms
-            for symb in self.qssa_species_list:
-                scqssnum = self.dict_qss_species[symb]
-                if f"sc_qss[{scqssnum}]" in qss_filled:
-                    continue
-                else:
-                    qss_depend = self.dict_qssdepend_scqss[symb]
-
-                    # Determine if the qss species have been previously filled
-                    f_vec = []
-                    for qss_depend in self.dict_qssdepend_scqss[symb]:
-                        f_vec.append(str(qss_depend) in qss_filled)
-
-                    # Only depends upon previously filled entries
-                    if all(f_vec):
-                        name_list.append(f"sc_qss[{scqssnum}]")
-                        numb_list.append(scqssnum)
-                        symb_list.append(symb)
-                        lev_list.append(level)
-
-            scqss_df = pd.DataFrame(
+        def add_row(symb, level):
+            scqssnum = self.dict_qss_species[symb]
+            rows.append(
                 {
-                    "name": name_list,
-                    "number": numb_list,
-                    "symbol": symb_list,
-                    "level": lev_list,
+                    "name": f"sc_qss[{scqssnum}]",
+                    "number": scqssnum,
+                    "symbol": symb,
+                    "level": level,
+                    "sc_dep": self.dict_qssdepend_sc[symb],
+                    "scqss_dep": self.dict_qssdepend_scqss[symb],
                 }
             )
-            qss_filled = scqss_df["name"].unique()
 
+        # The terms that end a dependency chain come first
+        for stp in self.sc_qss_chain_stop:
+            add_row(stp, 0)
+        filled = {row["name"] for row in rows}
+
+        # Then, level by level, the terms that only depend on lower levels
+        level = 1
+        while len(filled) < len(self.qssa_species_list):
+            unfilled = [
+                symb
+                for symb in self.qssa_species_list
+                if f"sc_qss[{self.dict_qss_species[symb]}]" not in filled
+            ]
+            ready = [
+                symb
+                for symb in unfilled
+                if all(str(dep) in filled for dep in self.dict_qssdepend_scqss[symb])
+            ]
+            if not ready:
+                raise ValueError(
+                    "The QSS species cannot be ordered by their dependencies"
+                    f" (a dependency cycle?): {', '.join(unfilled)}"
+                )
+            for symb in ready:
+                add_row(symb, level)
+            filled = {row["name"] for row in rows}
             level += 1
 
-        # Columns that hold lists need object dtype: pandas 3 infers a string
-        # dtype for "" and then refuses to store a list in a cell.
-        scqss_df["sc_dep"] = pd.Series([None] * len(scqss_df), dtype=object)
-        scqss_df["scqss_dep"] = pd.Series([None] * len(scqss_df), dtype=object)
-        # Add in a few more attributes for easy of use
-        for idx, item in scqss_df.iterrows():
-            scqss_df.at[idx, "sc_dep"] = self.dict_qssdepend_sc[item["symbol"]]
-            scqss_df.at[idx, "scqss_dep"] = self.dict_qssdepend_scqss[item["symbol"]]
+        self.scqss_rows = rows
 
-        # Return a deepcopy to self
-        self.scqss_df = scqss_df.copy(deep=True)
-
-    def make_sc_dataframe(self):
-        """Make dataframe for sc species."""
-        name_list = []
-        numb_list = []
-        symb_list = []
-
+    def make_sc_rows(self):
+        """List the sc species and the QSS species that depend on each."""
+        self.sc_rows = []
         for idx in range(self.n_species):
-            name_list.append(f"sc[{idx}]")
-            numb_list.append(idx)
-            symb_list.append(self.nonqssa_species_list[idx])
+            name = f"sc[{idx}]"
+            self.sc_rows.append(
+                {
+                    "name": name,
+                    "number": idx,
+                    "symbol": self.nonqssa_species_list[idx],
+                    "scqss_rely": [
+                        scqss["name"]
+                        for scqss in self.scqss_rows
+                        if name in map(str, scqss["sc_dep"])
+                    ],
+                }
+            )
 
-        # Initialize the dataframe
-        sc_df = pd.DataFrame(
-            {
-                "name": name_list,
-                "number": numb_list,
-                "symbol": symb_list,
-            }
-        )
-
-        sc_df["scqss_rely"] = pd.Series([None] * len(sc_df), dtype=object)
-        # Loop over the scqss_df and add in scqss dependence upon sc terms
-        for sc_idx, sc in sc_df.iterrows():
-            scqss_list = []
-            for _, scqss in self.scqss_df.iterrows():
-                if sc["name"] in str(scqss["sc_dep"]):
-                    scqss_list.append(scqss["name"])
-
-            sc_df.at[sc_idx, "scqss_rely"] = scqss_list
-
-        # Return a deepcopy to self
-        self.sc_df = sc_df.copy(deep=True)
-
-    def make_wdot_dataframe(self):
-        """Create lists for names, levels, and plus, mult."""
-        name_list = []
-        numb_list = []
-        symb_list = []
-
+    def make_wdot_rows(self):
+        """List the wdot terms and the sc and sc_qss each depends on."""
+        self.wdot_rows = []
         for idx in range(self.n_species):
-            name_list.append(f"wdot[{idx}]")
-            numb_list.append(idx)
-            symb_list.append(self.nonqssa_species_list[idx])
-
-        # Initialize the dataframe
-        wdot_df = pd.DataFrame(
-            {
-                "name": name_list,
-                "number": numb_list,
-                "symbol": symb_list,
-            }
-        )
-
-        wdot_df["sc_dep"] = pd.Series([None] * len(wdot_df), dtype=object)
-        wdot_df["scqss_dep"] = pd.Series([None] * len(wdot_df), dtype=object)
-        # Add in a few more attributes for easy of use
-        for idx, item in wdot_df.iterrows():
-            wdot_df.at[idx, "sc_dep"] = self.dict_wdot_sc[item["symbol"]]
-            wdot_df.at[idx, "scqss_dep"] = self.dict_wdot_scqss[item["symbol"]]
-
-        # Return a deepcopy to self
-        self.wdot_df = wdot_df.copy(deep=True)
+            symbol = self.nonqssa_species_list[idx]
+            self.wdot_rows.append(
+                {
+                    "name": f"wdot[{idx}]",
+                    "number": idx,
+                    "symbol": symbol,
+                    "sc_dep": self.dict_wdot_sc[symbol],
+                    "scqss_dep": self.dict_wdot_scqss[symbol],
+                }
+            )
 
     def set_low_high_temperatures(self, mechanism):
         """Set low and high temperatures."""
@@ -327,3 +272,15 @@ class SpeciesInfo:
         self.high_temp = min(
             mechanism.species(s).thermo.max_temp for s in self.nonqssa_species_list
         )
+
+
+def print_rows(rows):
+    """Print the name, symbol and dependency counts of species rows."""
+    for row in rows:
+        fields = [f"{row['name']:>12}", f"{row['symbol']:<16}"]
+        if "level" in row:
+            fields.append(f"level {row['level']}")
+        for key in ("sc_dep", "scqss_dep", "scqss_rely"):
+            if key in row:
+                fields.append(f"{key} {len(row[key])}")
+        print("  ".join(fields))

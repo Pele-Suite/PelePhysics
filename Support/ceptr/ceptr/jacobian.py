@@ -110,7 +110,7 @@ def ajac(
             cw.writer(
                 fstream,
                 f"amrex::Real refC = {cc.Patm_pa:g} /"
-                f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:g} / T;",
+                f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:.15g} / T;",
             )
             cw.writer(fstream, "amrex::Real refCinv = 1.0 / refC;")
 
@@ -350,7 +350,7 @@ def ajac_symbolic(
         cw.writer(
             fstream,
             f"const amrex::Real refC = {cc.Patm_pa:g} /"
-            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:g} *"
+            f" {cc.R.to(cc.ureg.joule / (cc.ureg.mole / cc.ureg.kelvin)).m:.15g} *"
             " invT;",
         )
         cw.writer(fstream, "const amrex::Real refCinv = 1 / refC;")
@@ -855,25 +855,24 @@ def ajac_reaction_d(
         if low_beta == 0 and low_ae.m == 0:
             cw.writer(
                 fstream,
-                f"k_0 = {low_pef.m * 10 ** 3 ** dim:.15g};",
+                f"k_0 = {low_pef.m * 10**3**dim:.15g};",
             )
         elif low_ae.m == 0:
             cw.writer(
                 fstream,
-                f"k_0 = {low_pef.m * 10 ** 3 ** dim:.15g} *"
-                f" exp({low_beta:.15g} * logT);",
+                f"k_0 = {low_pef.m * 10**3**dim:.15g} * exp({low_beta:.15g} * logT);",
             )
         elif low_beta == 0:
             cw.writer(
                 fstream,
-                f"k_0 = {low_pef.m * 10 ** 3 ** dim:.15g} *"
+                f"k_0 = {low_pef.m * 10**3**dim:.15g} *"
                 f" exp(-({(1.0 / cc.Rc / cc.ureg.kelvin * low_ae).m:.15g})"
                 " * invT);",
             )
         else:
             cw.writer(
                 fstream,
-                f"k_0 = {low_pef.m * 10 ** 3 ** dim:.15g} *"
+                f"k_0 = {low_pef.m * 10**3**dim:.15g} *"
                 f" exp({low_beta:.15g} * logT -"
                 f" ({(1.0 / cc.Rc / cc.ureg.kelvin * low_ae).m:.15g}) *"
                 " invT);",

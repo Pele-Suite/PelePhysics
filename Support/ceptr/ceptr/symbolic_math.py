@@ -3,7 +3,6 @@
 import re
 from collections import OrderedDict
 
-import pandas as pd
 import symengine as sme
 import sympy as smp
 
@@ -198,9 +197,13 @@ class SymbolicMath:
             # Positive exponents
             user_functions["Pow"].append(
                 (
-                    lambda b, e: (e.is_Integer or e.is_Float)
-                    and (
-                        abs(e - 1) < 1e-16 or abs(e - 2) < 1e-16 or abs(e - 3) < 1e-16
+                    lambda b, e: (
+                        (e.is_Integer or e.is_Float)
+                        and (
+                            abs(e - 1) < 1e-16
+                            or abs(e - 2) < 1e-16
+                            or abs(e - 3) < 1e-16
+                        )
                     ),
                     lambda b, e: "(" + "*".join(["(" + b + ")"] * int(float(e))) + ")",
                 )
@@ -208,16 +211,22 @@ class SymbolicMath:
             # Negative exponents
             user_functions["Pow"].append(
                 (
-                    lambda b, e: (e.is_Integer or e.is_Float)
-                    and (
-                        abs(e + 1) < 1e-16 or abs(e + 2) < 1e-16 or abs(e + 3) < 1e-16
+                    lambda b, e: (
+                        (e.is_Integer or e.is_Float)
+                        and (
+                            abs(e + 1) < 1e-16
+                            or abs(e + 2) < 1e-16
+                            or abs(e + 3) < 1e-16
+                        )
                     ),
-                    lambda b, e: "("
-                    + "1.0/"
-                    + "("
-                    + "*".join(["(" + b + ")"] * int(-float(e)))
-                    + ")"
-                    + ")",
+                    lambda b, e: (
+                        "("
+                        + "1.0/"
+                        + "("
+                        + "*".join(["(" + b + ")"] * int(-float(e)))
+                        + ")"
+                        + ")"
+                    ),
                 )
             )
 
@@ -457,7 +466,9 @@ class SymbolicMath:
         final_expr_symbols = [expr.free_symbols for expr in final_expr]
 
         # Replacement loop
-        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs)):
+        for i, (lhs, rhs) in enumerate(
+            zip(common_expr_lhs, common_expr_rhs, strict=True)
+        ):
             op_count = sme.count_ops(rhs)
             is_float = True
             is_single_symbol = True
@@ -508,7 +519,9 @@ class SymbolicMath:
         final_expr_symbols = [expr.free_symbols for expr in final_expr]
 
         # Replacement loop
-        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs)):
+        for i, (lhs, rhs) in enumerate(
+            zip(common_expr_lhs, common_expr_rhs, strict=True)
+        ):
             op_count = sme.count_ops(rhs)
             # count how many times the expression is used later
             ind_rhs = [j + i for j, s in enumerate(common_expr_symbols[i:]) if lhs in s]
@@ -566,7 +579,9 @@ class SymbolicMath:
         final_expr_symbols = [expr.free_symbols for expr in final_expr]
 
         # Replacement loop
-        for i, (lhs, rhs) in enumerate(zip(common_expr_lhs, common_expr_rhs)):
+        for i, (lhs, rhs) in enumerate(
+            zip(common_expr_lhs, common_expr_rhs, strict=True)
+        ):
             op_count = sme.count_ops(rhs)
             is_float = True
             try:
@@ -614,7 +629,7 @@ class SymbolicMath:
 
         # Replacement loop
         for i, (lhs, rhs) in reversed(
-            list(enumerate(zip(common_expr_lhs, common_expr_rhs)))
+            list(enumerate(zip(common_expr_lhs, common_expr_rhs, strict=True)))
         ):
             op_count = sme.count_ops(rhs)
             is_float = True
@@ -805,7 +820,7 @@ class SymbolicMath:
         cw.writer(fstream, cw.comment("Write chain rule terms..."))
 
         # Now write the chain rule terms
-        for _, item in species_info.scqss_df.iterrows():
+        for item in species_info.scqss_rows:
             for scnum in range(species_info.n_species):
                 start_string = f"""dscqss{item["number"]}dsc{scnum}"""
                 chain_string = []
@@ -813,13 +828,13 @@ class SymbolicMath:
                     scqssdepnum = self.syms_to_specnum(scqss_dep)
                     chain_string.append(
                         f"""dscqss{item["number"]}dscqss{scqssdepnum} * """
-                        f"""dscqss_dsc[{species_info.n_species*scqssdepnum + scnum}]"""
+                        f"""dscqss_dsc[{species_info.n_species * scqssdepnum + scnum}]"""
                     )
 
                 if chain_string:
                     final_string = f"{start_string} + {chain_string[0]}"
                     for ics in range(len(chain_string) - 1):
-                        final_string += f" + {chain_string[ics+1]}"
+                        final_string += f" + {chain_string[ics + 1]}"
                 else:
                     final_string = start_string
 
@@ -935,7 +950,7 @@ class SymbolicMath:
         cw.writer(fstream, cw.comment("Write dscqss_dsc terms..."))
 
         # Now write the chain rule terms
-        for _, item in species_info.scqss_df.iterrows():
+        for item in species_info.scqss_rows:
             for scnum in range(species_info.n_species):
                 start_string = f"""dscqss{item["number"]}dsc{scnum}"""
                 chain_string = []
@@ -943,13 +958,13 @@ class SymbolicMath:
                     scqssdepnum = self.syms_to_specnum(scqss_dep)
                     chain_string.append(
                         f"""dscqss{item["number"]}dscqss{scqssdepnum} * """
-                        f"""dscqss_dsc[{species_info.n_species*scqssdepnum + scnum}]"""
+                        f"""dscqss_dsc[{species_info.n_species * scqssdepnum + scnum}]"""
                     )
 
                 if chain_string:
                     final_string = f"{start_string} + {chain_string[0]}"
                     for ics in range(len(chain_string) - 1):
-                        final_string += f" + {chain_string[ics+1]}"
+                        final_string += f" + {chain_string[ics + 1]}"
                 else:
                     final_string = start_string
 
@@ -962,19 +977,21 @@ class SymbolicMath:
         # Now write the full jacobian expression
         cw.writer(fstream, cw.comment("Write the full Jacobian expression..."))
 
-        for idx, item in species_info.wdot_df.iterrows():
+        for item in species_info.wdot_rows:
+            idx = item["number"]
             for scnum in range(species_info.n_species):
                 start_string = f"""dwdot{idx}dsc{scnum}"""
                 chain_string = []
-                for scqssnum in species_info.scqss_df["number"]:
+                for scqss_item in species_info.scqss_rows:
+                    scqssnum = scqss_item["number"]
                     chain_string.append(
                         f"""dwdot{idx}dscqss{scqssnum} * """
-                        f"""dscqss_dsc[{species_info.n_species*scqssnum + scnum}]"""
+                        f"""dscqss_dsc[{species_info.n_species * scqssnum + scnum}]"""
                     )
 
                 final_string = f"{start_string} + {chain_string[0]}"
                 for ics in range(len(chain_string) - 1):
-                    final_string += f" + {chain_string[ics+1]}"
+                    final_string += f" + {chain_string[ics + 1]}"
 
                 cw.writer(
                     fstream,
@@ -989,36 +1006,16 @@ class SymbolicMath:
         negatively affects readability.
         The memory efficiency makes the format useful for GPU.
         """
-        n_dscqssdscqss = len(self.dscqssdscqss)
-        n_dscqssdsc = len(self.dscqssdsc)
-        n_dwdotdscqss = len(self.dwdotdscqss)
-        n_dwdotdsc = len(self.dwdotdsc)
-
-        list_smp = (
-            list(self.dscqssdscqss.values())
-            + list(self.dscqssdsc.values())
-            + list(self.dwdotdscqss.values())
-            + list(self.dwdotdsc.values())
-        )
-
-        dscqssdscqss_tuples = list(self.dscqssdscqss.keys())
-        dscqssdsc_tuples = list(self.dscqssdsc.keys())
-        dwdotdscqss_tuples = list(self.dwdotdscqss.keys())
-        dwdotdsc_tuples = list(self.dwdotdsc.keys())
-        tuple_list = (
-            dscqssdscqss_tuples
-            + dscqssdsc_tuples
-            + dwdotdscqss_tuples
-            + dwdotdsc_tuples
-        )
-        # Create Pandas dataframe to store CSE information
-        term_type = (
-            ["dscqssdscqss"] * n_dscqssdscqss
-            + ["dscqssdsc"] * n_dscqssdsc
-            + ["dwdotdscqss"] * n_dwdotdscqss
-            + ["dwdotdsc"] * n_dwdotdsc
-        )
-        jac_df = pd.DataFrame({"tuples": tuple_list, "type": term_type})
+        terms = {
+            "dscqssdscqss": self.dscqssdscqss,
+            "dscqssdsc": self.dscqssdsc,
+            "dwdotdscqss": self.dwdotdscqss,
+            "dwdotdsc": self.dwdotdsc,
+        }
+        list_smp = [expr for exprs in terms.values() for expr in exprs.values()]
+        # Position of each (term type, indices) in the CSE arrays
+        term_keys = [(name, key) for name, exprs in terms.items() for key in exprs]
+        cse_positions = {term: pos for pos, term in enumerate(term_keys)}
 
         # Write common expressions
         print("Starting jacobian common subexpressions", end="...", flush=True)
@@ -1060,18 +1057,16 @@ class SymbolicMath:
         # Compute dscqss_dsc strings from CSEs
         dscqss_dsc = [""] * (species_info.n_species * species_info.n_qssa_species)
 
-        for _, scqss_item in species_info.scqss_df.iterrows():
-            for _, sc_item in species_info.sc_df.iterrows():
+        for scqss_item in species_info.scqss_rows:
+            for sc_item in species_info.sc_rows:
                 dscqss_dsc_idx = (
                     species_info.n_species * scqss_item["number"] + sc_item["number"]
                 )
 
                 # Identify the CSE index of dscqssdsc term
-                dscqssdsc_cse_idx = self.get_cse_idx(
-                    jac_df,
-                    "dscqssdsc",
-                    (scqss_item["number"], sc_item["number"]),
-                )
+                dscqssdsc_cse_idx = cse_positions[
+                    ("dscqssdsc", (scqss_item["number"], sc_item["number"]))
+                ]
 
                 # Get the dscqssdsc CSE string to start
                 start_string = (
@@ -1083,11 +1078,9 @@ class SymbolicMath:
                     scqssdepnum = self.syms_to_specnum(scqss_dep)
 
                     # Identify the CSE index of the dscqssdscqss term
-                    dscqssdscqss_cse_idx = self.get_cse_idx(
-                        jac_df,
-                        "dscqssdscqss",
-                        (scqss_item["number"], scqssdepnum),
-                    )
+                    dscqssdscqss_cse_idx = cse_positions[
+                        ("dscqssdscqss", (scqss_item["number"], scqssdepnum))
+                    ]
                     # Append the dscqssdscqss CSE to chain list
                     cse_string = self.convert_to_cpp(final_expr[dscqssdscqss_cse_idx])
                     dscqssdsc_string = dscqss_dsc[
@@ -1103,21 +1096,19 @@ class SymbolicMath:
                 if chain_string:
                     final_string = f"""{start_string} + {chain_string[0]}"""
                     for ics in range(len(chain_string) - 1):
-                        final_string += f""" + {chain_string[ics+1]}"""
+                        final_string += f""" + {chain_string[ics + 1]}"""
                 else:
                     final_string = start_string
                 dscqss_dsc[dscqss_dsc_idx] = final_string
 
         # Now write the full jacobian expression
         cw.writer(fstream, cw.comment("Write the full Jacobian expression..."))
-        for _, wdot_item in species_info.wdot_df.iterrows():
-            for _, sc_item in species_info.sc_df.iterrows():
+        for wdot_item in species_info.wdot_rows:
+            for sc_item in species_info.sc_rows:
                 # Find the CSE index for dwdotdsc
-                dwdotdsc_cse_idx = self.get_cse_idx(
-                    jac_df,
-                    "dwdotdsc",
-                    (wdot_item["number"], sc_item["number"]),
-                )
+                dwdotdsc_cse_idx = cse_positions[
+                    ("dwdotdsc", (wdot_item["number"], sc_item["number"]))
+                ]
 
                 # Get the dwdotdsc CSE string to start
                 start_string = (
@@ -1129,9 +1120,9 @@ class SymbolicMath:
                     scqssnum = self.syms_to_specnum(scqss)
 
                     # Find the CSE index for dwdotdscqss
-                    dwdotdscqss_cse_idx = self.get_cse_idx(
-                        jac_df, "dwdotdscqss", (wdot_item["number"], scqssnum)
-                    )
+                    dwdotdscqss_cse_idx = cse_positions[
+                        ("dwdotdscqss", (wdot_item["number"], scqssnum))
+                    ]
                     # Append the dwdotdscqss * dscqssdsc term to the chain lise
                     cse_string = self.convert_to_cpp(final_expr[dwdotdscqss_cse_idx])
                     dscqssdsc_string = dscqss_dsc[
@@ -1143,7 +1134,7 @@ class SymbolicMath:
                 if chain_string:
                     final_string = f"""{start_string}+{chain_string[0]}"""
                     for ics in range(len(chain_string) - 1):
-                        final_string += f"""+{chain_string[ics+1]}"""
+                        final_string += f"""+{chain_string[ics + 1]}"""
                 else:
                     final_string = start_string
 
@@ -1183,13 +1174,6 @@ class SymbolicMath:
                     f"{array_str}[{str(index_list[i])}] = {cpp_str};",
                 )
 
-    def get_cse_idx(self, df, type_name, tuple_val):
-        """Extract id of common expression from the symengine array."""
-        tmp_df = df[df.type == type_name]
-        cse_idx = tmp_df.index[tmp_df.tuples == tuple_val].tolist()[0]
-
-        return cse_idx
-
     def compute_spec_dependencies(self, sym_smp):
         """Routine to compute the sc and sc_qss dependencies."""
         free_symb = sym_smp.free_symbols
@@ -1207,8 +1191,8 @@ class SymbolicMath:
 
     def compute_dscqss_dscqss(self, species_info):
         """Routine that computes the dscqss i / dscqss j."""
-        # Loop over the species info dataframe and compute dependencies
-        for _, item in species_info.scqss_df.iterrows():
+        # Loop over the species info rows and compute dependencies
+        for item in species_info.scqss_rows:
             # Loop over the dependencies of scqss
             for scqss in item["scqss_dep"]:
                 scqssnum = self.syms_to_specnum(scqss)
@@ -1217,18 +1201,10 @@ class SymbolicMath:
                     sme.symbols(f"sc_qss[{scqssnum}]"),
                 )
 
-            # # Loop over the dependencies of scqss
-            # for scqssnum in species_info.scqss_df["number"]:
-            #     # scqssnum = self.syms_to_specnum(scqss)
-            #     self.dscqssdscqss[(item["number"], scqssnum)] = sme.diff(
-            #         self.sc_qss_smp[item["number"]],
-            #         sme.symbols(f"sc_qss[{scqssnum}]"),
-            #     )
-
     def compute_dscqss_dsc(self, species_info):
         """Routine that computes the dscqss i / dsc j."""
-        # Loop over the species info dataframe and compute all dsc derivatives
-        for _, item in species_info.scqss_df.iterrows():
+        # Loop over the species info rows and compute all dsc derivatives
+        for item in species_info.scqss_rows:
             # Loop over all sc terms
             for scnum in range(species_info.n_species):
                 self.dscqssdsc[(item["number"], scnum)] = sme.diff(
@@ -1248,7 +1224,7 @@ class SymbolicMath:
     def compute_dwdot_dsc(self, species_info):
         """Routine that computes the dwdot i / dsc j."""
         # Loop over all wdots and sc terms
-        for wdot_idx, _ in species_info.wdot_df.iterrows():
+        for wdot_idx in range(species_info.n_species):
             # Loop over all sc terms
             for sc_idx in range(species_info.n_species):
                 self.dwdotdsc[(wdot_idx, sc_idx)] = sme.diff(
@@ -1258,10 +1234,10 @@ class SymbolicMath:
     def compute_dwdot_dscqss(self, species_info):
         """Routine that computes the dwdot i / dscqss j."""
         # Loop over all wdots and sc terms
-        for wdot_idx, _ in species_info.wdot_df.iterrows():
+        for wdot_idx in range(species_info.n_species):
             # Loop over all scqss terms
-            for scqss in species_info.scqss_df["name"]:
-                scqssnum = self.syms_to_specnum(scqss)
+            for scqss_item in species_info.scqss_rows:
+                scqssnum = scqss_item["number"]
                 self.dwdotdscqss[(wdot_idx, scqssnum)] = sme.diff(
                     self.wdot_smp[wdot_idx], sme.symbols(f"sc_qss[{scqssnum}]")
                 )
@@ -1271,8 +1247,8 @@ class SymbolicMath:
         # Create intermediate vectors
         dscqss_dsc = [0.0] * (species_info.n_species * species_info.n_qssa_species)
 
-        for _, scqss_item in species_info.scqss_df.iterrows():
-            for _, sc_item in species_info.sc_df.iterrows():
+        for scqss_item in species_info.scqss_rows:
+            for sc_item in species_info.sc_rows:
                 dscqss_dsc_idx = (
                     species_info.n_species * scqss_item["number"] + sc_item["number"]
                 )
@@ -1291,12 +1267,14 @@ class SymbolicMath:
                 ]
 
         # Loop over all wdots and sc terms
-        for wdot_idx, _ in species_info.wdot_df.iterrows():
+        for wdot_idx in range(species_info.n_species):
             # Loop over all sc terms
-            for sc_idx, sc_item in species_info.sc_df.iterrows():
+            for sc_item in species_info.sc_rows:
+                sc_idx = sc_item["number"]
                 self.jacobian[(wdot_idx, sc_idx)] = 0.0
 
-                for scqssnum in species_info.scqss_df["number"]:
+                for scqss_item in species_info.scqss_rows:
+                    scqssnum = scqss_item["number"]
                     self.jacobian[(wdot_idx, sc_idx)] += (
                         self.dwdotdscqss[(wdot_idx, scqssnum)]
                         * dscqss_dsc[

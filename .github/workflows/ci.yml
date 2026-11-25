@@ -57,11 +57,35 @@ jobs:
       - name: Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.13'
       - name: Dependencies
         run: pip install codespell
       - name: Run codespell
         run: codespell
+
+  CEPTR-Lint:
+    # ruff needs none of CEPTR's dependencies, nor a Python matrix
+    needs: Detect-Changes
+    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{github.workspace}}/Support/ceptr
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-uv
+        id: uv
+      # The lint group holds only ruff, at the version in uv.lock
+      - name: Formatting with ruff
+        run: uv run --locked --only-group lint ruff format --diff .
+      - name: Lint with ruff
+        run: uv run --locked --only-group lint ruff check .
+      - name: Save the uv cache
+        if: github.ref == 'refs/heads/development' && steps.uv.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/uv
+          key: ${{steps.uv.outputs.cache-key}}
 
   CEPTR:
     needs: Detect-Changes
@@ -70,34 +94,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11']
-        poetry-version: ['1.4.2']
+        python-version: ['3.13', '3.14']
     defaults:
       run:
         working-directory: ${{github.workspace}}/Support/ceptr
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: ./.github/actions/setup-uv
+        id: uv
         with:
           python-version: ${{matrix.python-version}}
-      - name: Run image
-        uses: abatilo/actions-poetry@v4.0.0
-        with:
-          poetry-version: ${{matrix.poetry-version}}
-      - name: Install Dependencies using Poetry
-        run: poetry install
-      - name: Formatting with black
-        run: poetry run black --check .
-      - name: Sort imports with isort
-        run: poetry run isort --check-only --diff .
-      - name: Lint with flake8
-        run: poetry run flake8 .
+      # The default install first: it must work without the plot extra
+      - name: Install dependencies
+        run: uv sync --locked
       - name: Run tests
-        run: poetry run pytest
+        run: uv run pytest
+      - name: Run tests with the plot extra
+        run: uv run --locked --extra plot pytest
       - name: Convert air mechanism
-        run: poetry run convert -f ${{github.workspace}}/Mechanisms/air/mechanism.yaml
+        run: uv run convert -f ${{github.workspace}}/Mechanisms/air/mechanism.yaml
       - name: Convert LiDryer mechanism
-        run: poetry run convert -f ${{github.workspace}}/Mechanisms/LiDryer/mechanism.yaml
+        run: uv run convert -f ${{github.workspace}}/Mechanisms/LiDryer/mechanism.yaml
+      # Pull requests reuse the cache from development, without writing their own
+      - name: Save the uv cache
+        if: github.ref == 'refs/heads/development' && steps.uv.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/uv
+          key: ${{steps.uv.outputs.cache-key}}
 
   Transport-EOS-Reactions:
     needs: Detect-Changes
@@ -109,8 +133,7 @@ jobs:
       fail-fast: false
       matrix:
         comp: [gnu, llvm, cuda, hip, sycl]
-        python-version: ['3.11']
-        poetry-version: ['1.4.2']
+        python-version: ['3.13']
         include:
           - comp: gnu
             amrex_build_args: 'COMP=gnu'
@@ -159,15 +182,15 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{matrix.python-version}}
-      - name: Run image
-        if: env.HOST_BUILD == 'true'
-        uses: abatilo/actions-poetry@v4.0.0
-        with:
-          poetry-version: ${{matrix.poetry-version}}
       - name: Clone PelePhysics
         uses: actions/checkout@v6
         with:
           submodules: recursive
+      - uses: ./.github/actions/setup-uv
+        id: uv
+        if: env.HOST_BUILD == 'true'
+        with:
+          python-version: ${{matrix.python-version}}
       - name: Install Ccache
         # Outside the checkout: AMReX's script downloads into the current directory.
         working-directory: ${{runner.temp}}
@@ -318,9 +341,9 @@ jobs:
           MECH=${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss
           (
             cd ${PELE_PHYSICS_HOME}/Support/ceptr
-            poetry install
-            poetry run qssa -f ${MECH}/skeletal.yaml -n ${MECH}/non_qssa_list.yaml
-            poetry run convert -f ${MECH}/qssa.yaml --qss_format_input ${MECH}/qssa_input_non_optimized.toml --qss_symbolic_jacobian
+            uv sync --locked
+            uv run qssa -f ${MECH}/skeletal.yaml -n ${MECH}/non_qssa_list.yaml
+            uv run convert -f ${MECH}/qssa.yaml --qss_format_input ${MECH}/qssa_input_non_optimized.toml --qss_symbolic_jacobian
           )
           make TPL DEBUG=TRUE TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}
           make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu_qss DEBUG=TRUE TINY_PROFILE=TRUE USE_CCACHE=TRUE ${{matrix.amrex_build_args}}
@@ -349,6 +372,12 @@ jobs:
         with:
           path: ~/.cache/ccache
           key: ${{steps.ccache.outputs.cache-primary-key}}
+      - name: Save the uv cache
+        if: env.HOST_BUILD == 'true' && env.SAVE_CCACHE == 'true' && steps.uv.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/uv
+          key: ${{steps.uv.outputs.cache-key}}
 
   # The one check for branch protection to require. A job skipped by
   # its own `if:` (docs-only changes, scheduled runs) does not expand its
@@ -356,7 +385,7 @@ jobs:
   # waits forever; skipped jobs pass here. It also fails when Detect-Changes
   # fails, which would otherwise skip every build.
   CI-Status:
-    needs: [Detect-Changes, Formatting, Codespell, CEPTR, Transport-EOS-Reactions]
+    needs: [Detect-Changes, Formatting, Codespell, CEPTR-Lint, CEPTR, Transport-EOS-Reactions]
     if: always()
     runs-on: ubuntu-latest
     steps:

@@ -78,15 +78,11 @@ class Converter:
                 "WARNING: The compiled mechanism will only be valid for the given "
                 "constant pressure. It is not applicable for compressible solvers.\n\n"
             )
-            # The pressure necessary for the plog evaluation is either provided via
-            # the command line argument or during runtime
-            if plog_pressure is None:  # runtime option
-                plog_pressure = float(
-                    input(
-                        "Please specify the pressure, at which you want to evaluate"
-                        f" the rates in Pascal (1 atm = {cc.Patm_pa} Pa, 1 bar = 1e5"
-                        " Pa):\n"
-                    )
+            # The pressure for the PLOG evaluation, from the command line
+            if plog_pressure is None:
+                raise ValueError(
+                    "The mechanism has PLOG reactions: give the pressure with"
+                    " -p/--plog_pressure, or with --plog= in a list file."
                 )
             print(
                 f"plog_pressure set to {plog_pressure} Pa /"
@@ -98,7 +94,7 @@ class Converter:
                 raise ValueError("Provided plog_pressure too low.")
 
             # Now, create the pressure-specific folder
-            plog_folder = f"{plog_pressure/cc.Patm_pa:0.3f}atm".replace(".", "_")
+            plog_folder = f"{plog_pressure / cc.Patm_pa:0.3f}atm".replace(".", "_")
             if not os.path.isdir(self.mechpath.parents[0] / plog_folder):
                 os.makedirs(self.mechpath.parents[0] / plog_folder)
                 # Copy the Make.package file into the new folder
@@ -409,11 +405,11 @@ class Converter:
                 # self.species_info.create_dicts()
                 self.species_info.identify_qss_dependencies(self.syms)
                 self.species_info.identify_nonqss_dependencies(self.syms)
-                self.species_info.make_scqss_dataframe()
-                self.species_info.make_sc_dataframe()
+                self.species_info.make_scqss_rows()
+                self.species_info.make_sc_rows()
 
-                print(self.species_info.scqss_df)
-                print(self.species_info.sc_df)
+                csi.print_rows(self.species_info.scqss_rows)
+                csi.print_rows(self.species_info.sc_rows)
 
                 # prod rate related
                 cp.production_rate(
@@ -432,8 +428,8 @@ class Converter:
 
                 # if self.species_info.n_qssa_species > 0:
                 self.species_info.identify_wdot_dependencies(self.syms)
-                self.species_info.make_wdot_dataframe()
-                print(self.species_info.wdot_df)
+                self.species_info.make_wdot_rows()
+                csi.print_rows(self.species_info.wdot_rows)
 
                 # Evaluate the dscqss_dscqss values for later
                 self.syms.compute_dscqss_dscqss(species_info=self.species_info)
@@ -734,7 +730,8 @@ class Converter:
         n_hom_reactions = self.mechanism.n_reactions
         site_density = n_het_b_elem = n_het_species = n_het_reactions = 0
 
-        all_species_list = self.species_info.nonqssa_species_list
+        # A copy: the surface species must not join the gas-phase list
+        all_species_list = list(self.species_info.nonqssa_species_list)
 
         cw.writer(fstream)
         cw.writer(fstream, "#include <AMReX_Gpu.H>")
@@ -751,7 +748,7 @@ class Converter:
             all_species_list += self.interface.species_names
             for elem in self.interface.element_names:
                 if elem not in self.mechanism.element_names:
-                    cw.writer(fstream, f"{n_hom_b_elem+n_het_b_elem}  {elem}")
+                    cw.writer(fstream, f"{n_hom_b_elem + n_het_b_elem}  {elem}")
                     n_het_b_elem += 1
         cw.writer(fstream, "*/")
         cw.writer(fstream)

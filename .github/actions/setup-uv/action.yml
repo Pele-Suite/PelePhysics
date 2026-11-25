@@ -1,0 +1,43 @@
+name: Set up uv
+description: >-
+  Install the uv that Support/ceptr/pyproject.toml requires and restore its
+  cache. A composite action cannot save the cache when the job ends: jobs save
+  it themselves, from development only, with actions/cache/save, the
+  cache-key output, and `if: steps.<id>.outputs.cache-hit != 'true'`.
+inputs:
+  python-version:
+    description: Python for uv to use (sets UV_PYTHON); default .python-version
+    required: false
+    default: ''
+outputs:
+  cache-key:
+    description: Key to save the uv cache under
+    value: ${{steps.restore.outputs.cache-primary-key}}
+  cache-hit:
+    description: Whether the cache was restored from that exact key
+    value: ${{steps.restore.outputs.cache-hit}}
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      shell: bash
+      run: |
+        # [tool.uv] required-version, e.g. ==0.13.9; pipx is on the runner images
+        version=$(python3 -c "import tomllib; print(tomllib.load(open('${{github.workspace}}/Support/ceptr/pyproject.toml', 'rb'))['tool']['uv']['required-version'])")
+        pipx install "uv${version}"
+        uv --version
+        echo "UV_CACHE_DIR=${HOME}/.cache/uv" >> "${GITHUB_ENV}"
+        if [ -n "${{inputs.python-version}}" ]; then
+          echo "UV_PYTHON=${{inputs.python-version}}" >> "${GITHUB_ENV}"
+        fi
+    # One cache per job and Python: jobs install different extras. A new
+    # uv.lock falls back to the previous cache, so only changed packages
+    # are downloaded.
+    - name: Restore the uv cache
+      id: restore
+      uses: actions/cache/restore@v5
+      with:
+        path: ~/.cache/uv
+        key: uv-${{runner.os}}-${{github.job}}-py${{inputs.python-version || 'default'}}-${{hashFiles('Support/ceptr/uv.lock')}}
+        restore-keys: |
+          uv-${{runner.os}}-${{github.job}}-py${{inputs.python-version || 'default'}}-

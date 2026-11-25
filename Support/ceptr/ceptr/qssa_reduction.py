@@ -2,7 +2,6 @@
 
 import itertools
 
-import ceptr.qssa_graphs as cqg
 import ceptr.utilities as cu
 
 
@@ -171,6 +170,14 @@ def identify_qssa_coupling(mechanism, qssa_species):
 
 def visualize_qssa(mechanism, reaction_info, qssa_species):
     """Visualize quadratic coupling and QSSA dependencies."""
+    try:
+        import ceptr.qssa_graphs as cqg
+    except ImportError as err:
+        raise ImportError(
+            "Visualizing needs the plot extra: run 'uv sync --locked --extra plot'"
+            " (or pip install 'ceptr[plot]')"
+        ) from err
+
     links = cqg.directed_graph(mechanism, qssa_species)
     cqg.plot_directed_graph(mechanism, links)
     links, quadratic_reactions, problematic_species = cqg.qssa_quadratic_graph(
