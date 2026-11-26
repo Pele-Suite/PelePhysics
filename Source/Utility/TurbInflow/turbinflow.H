@@ -49,9 +49,15 @@ AMREX_ENUM(TurbInterpType, linear, quadratic);
  *
  * Obtained from TurbInflow::file_sampler() right before use: it points at the
  * plane chunk currently loaded in memory and holds the through-plane weights
- * for the requested position, so it is invalidated by the next load of that
- * file's planes.  Trivially copyable, so it can be captured by value in a
- * kernel or a boundary-fill functor.
+ * for the requested position.  Trivially copyable, so it can be captured by
+ * value in a kernel or a boundary-fill functor.
+ *
+ * It is only valid until that file's planes are next loaded: any later
+ * file_sampler() call on the same TurbParm may reload them, and a sampler
+ * kept across it then reads the new planes with its old weights, which
+ * gives wrong values without any error.  Get the sampler, launch the
+ * kernels that use it, and get a new one for the next position; on the
+ * host, TurbInflow::sampler_is_current() tells whether one is still valid.
  */
 struct TurbFileSampler
 {
@@ -70,6 +76,9 @@ struct TurbFileSampler
   // Through-plane stencil: planes k0, k0+1, k0+2 with weights cz
   int k0 = 0;
   amrex::GpuArray<amrex::Real, 3> cz = {{0.0, 0.0, 0.0}};
+
+  //! TurbParm::chunk_generation of the chunk this sampler points at
+  int generation = -1;
 
   bool has_map = false;
   pele::physics::MeshMapEvaluator map{};
@@ -194,6 +203,15 @@ struct TurbFileSampler
 
 struct TurbParm
 {
+  // Move-only: copies would share one plane chunk (sdata) but track its
+  // loaded planes separately
+  TurbParm() = default;
+  TurbParm(const TurbParm&) = delete;
+  TurbParm& operator=(const TurbParm&) = delete;
+  TurbParm(TurbParm&&) = default;
+  TurbParm& operator=(TurbParm&&) = default;
+  ~TurbParm() = default;
+
   // Turbulence data file
   std::string m_turb_file;
 
@@ -212,12 +230,13 @@ struct TurbParm
     0.0; // Enable to offset the location in the turb file
 
   int nplane = 32; // Number of turb planes stored at once in memory
-  std::unique_ptr<amrex::FArrayBox>
-    sdata;                    // Currently loaded chunk of turb data
+  // Currently loaded chunk of turb data; shared only for make_plane_chunk()
+  std::shared_ptr<amrex::FArrayBox> sdata;
   int izlo = -1;              // Currently loaded low plane
   int izhi = -1;              // Currently loaded high plane
   amrex::Real szlo = -1.0e12; // Position of the current chunk low plane
   amrex::Real szhi = -1.0e11; // Position of the current chunk high plane
+  int chunk_generation = 0;   // Changed whenever the chunk is reloaded
 
   amrex::IntVect periodicity{AMREX_D_DECL(1, 1, 1)};
   bool istimeplanes = false; // false indicates turb data is periodic normal to
@@ -270,18 +289,6 @@ struct TurbInflow
 {
 public:
   TurbInflow() = default;
-
-  // The plane chunks live in an AMReX arena.  A TurbInflow that outlives
-  // amrex::Finalize (e.g. PeleC's static member) must not free them then:
-  // release them instead, as the memory is gone with the arena anyway.
-  ~TurbInflow()
-  {
-    if (!amrex::Initialized()) {
-      for (auto& t : tp) {
-        [[maybe_unused]] auto* leaked = t.sdata.release();
-      }
-    }
-  }
 
   TurbInflow(const TurbInflow&) = delete;
   TurbInflow& operator=(const TurbInflow&) = delete;
@@ -420,6 +427,9 @@ public:
     }
   }
 
+  //! Load the chunk of planes around \p z, which for a time_periodic file
+  //! must already be wrapped into the file's period (prepare_planes() does
+  //! so).
   static void read_turb_planes(TurbParm& a_tp, amrex::Real z);
 
   static void read_one_turb_plane(TurbParm& a_tp, int iplane, int k);
@@ -437,8 +447,18 @@ public:
     int& k0);
 
   //! Load the planes around through-plane position \p z and return the
-  //! sampler of \p a_tp's file there.  Host only; used on the device.
+  //! sampler of \p a_tp's file there.  Host only; used on the device.  The
+  //! sampler is invalidated by the next reload of \p a_tp's planes (see
+  //! TurbFileSampler).
   static TurbFileSampler file_sampler(TurbParm& a_tp, amrex::Real z);
+
+  //! Whether \p s still points at the plane chunk loaded in \p a_tp, i.e.
+  //! no reload has happened since file_sampler() returned it.
+  static bool
+  sampler_is_current(const TurbParm& a_tp, const TurbFileSampler& s) noexcept
+  {
+    return s.generation == a_tp.chunk_generation;
+  }
 
   static void fill_turb_plane(
     const TurbParm& a_tp,
@@ -461,6 +481,18 @@ public:
     const int dcomp);
 
 private:
+  /**
+   * \brief Allocate an arena-backed buffer of a TurbParm (the plane chunk).
+   *
+   * A TurbInflow may outlive amrex::Finalize (PeleC holds a static one), so
+   * the buffer is freed at Finalize, while its arena still exists, if it is
+   * alive then.  Its owner is left with an empty FArrayBox, which is safe to
+   * destroy, move or replace afterwards.  Every arena-backed member of
+   * TurbParm must be allocated through here.
+   */
+  static std::shared_ptr<amrex::FArrayBox>
+  make_plane_chunk(const amrex::Box& bx, int ncomp);
+
   //! The TurbParm acting on the (\p dir, \p side) face, or nullptr.
   const TurbParm*
   find_turbparm(const int dir, const amrex::Orientation::Side& side) const;
