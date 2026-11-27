@@ -29,6 +29,13 @@ defaults:
 # appended to it (Tools/GNUMake/Make.defs).
 env:
   XTRA_CXXFLAGS: "-Werror -Wshadow -Woverloaded-virtual -Wunreachable-code"
+  # SUNDIALS writes its configure time into sundials_config.h (SUN_JOB_ID,
+  # SUN_JOB_START_TIME) unless these are set, which changes the header on
+  # every run, so ccache's direct mode misses on every file including it and
+  # falls back to preprocessing. Non-zero: SUNDIALS tests them with
+  # if($ENV{...}), and 0 is false.
+  CI_JOB_ID: 1
+  CI_JOB_STARTED_AT: 1
 
 jobs:
   Detect-Changes:
