@@ -169,7 +169,7 @@ jobs:
         if: matrix.container
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git wget xz-utils cmake
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git wget xz-utils cmake zstd
       - uses: actions/setup-python@v6
         with:
           python-version: ${{matrix.python-version}}
