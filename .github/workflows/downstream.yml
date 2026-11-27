@@ -2,11 +2,6 @@ name: Downstream-CI
 
 on:
    workflow_dispatch:
-   schedule:
-     # Twice a week, so the ccaches are refreshed before GitHub evicts them
-     # after 7 days without access, with a margin for late scheduled starts.
-     # Jobs without a cache skip the scheduled runs (run-checks).
-     - cron: '0 3 * * 1,4'
    push:
      branches: [development]
    pull_request:
@@ -14,8 +9,8 @@ on:
 
 concurrency:
   # Only PR runs cancel an older run: on development a cancelled run would
-  # not save its caches, so runs (pushes and scheduled) queue, one at a time
-  # (GitHub keeps only the newest pending one).
+  # not save its caches, so runs queue, one at a time (GitHub keeps only the
+  # newest pending one).
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -29,6 +24,13 @@ defaults:
 # appended to it (Tools/GNUMake/Make.defs).
 env:
   XTRA_CXXFLAGS: "-Werror -Wshadow -Woverloaded-virtual -Wunreachable-code"
+  # SUNDIALS writes its configure time into sundials_config.h (SUN_JOB_ID,
+  # SUN_JOB_START_TIME) unless these are set, which changes the header on
+  # every run, so ccache's direct mode misses on every file including it and
+  # falls back to preprocessing. Non-zero: SUNDIALS tests them with
+  # if($ENV{...}), and 0 is false.
+  CI_JOB_ID: 1
+  CI_JOB_STARTED_AT: 1
 
 jobs:
   Detect-Changes:
@@ -41,7 +43,7 @@ jobs:
 
   Run:
     needs: Detect-Changes
-    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     name: ${{ matrix.code }} GNU MPI Run [${{ matrix.case }}]
     runs-on: ubuntu-24.04
     strategy:
@@ -92,8 +94,7 @@ jobs:
 
   clang-tidy:
     needs: [Detect-Changes, Run]
-    # !failure(): after Run, or without it on the scheduled runs, which skip it.
-    if: ${{ !failure() && !cancelled() && needs['Detect-Changes'].outputs['has-source-changes'] == 'true' }}
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     name: ${{ matrix.code }} clang-tidy
     runs-on: ubuntu-24.04
     strategy:
@@ -106,8 +107,18 @@ jobs:
             cmake_args: -DPELE_ENABLE_MASA:BOOL=OFF -DPELE_EXCLUDE_BUILD_IN_CI:BOOL=ON
     env:
       BUILD_DIR: ${{ github.workspace }}/build-clang-tidy-${{ matrix.code }}
-      CCACHE_COMPRESSLEVEL: 10
-      CCACHE_MAXSIZE: 100M
+      # Only development saves the caches (keep-caches.yml keeps them from
+      # being evicted); PRs restore them.
+      SAVE_CCACHE: ${{ github.ref == 'refs/heads/development' }}
+      # Compress hard only when the cache is kept; a PR's new entries are
+      # discarded at the end of the job.
+      CCACHE_COMPRESSLEVEL: ${{ github.ref == 'refs/heads/development' && 10 || 1 }}
+      # Room for a whole build (~110 MB for PeleC, ~80 MB for PeleLMeX at
+      # level 10), with headroom: ccache evicts per subdirectory, before the
+      # total reaches the limit, and level 1 entries are larger. Check trims
+      # the cache to what the run used, so the saved cache is one build's
+      # worth, not the limit.
+      CCACHE_MAXSIZE: 300M
       # clang-tidy-cache skips files whose preprocessed source, flags and
       # resolved clang-tidy config are unchanged. SAVE_OUTPUT/SAVE_ALL store
       # each file's diagnostics (clang-tidy's stdout) and exit code and replay
@@ -152,8 +163,17 @@ jobs:
           # default) the clang++ 18.1.3 optimizer has crashed (SIGSEGV) on
           # some AMReX files (AMReX_EB_STL_utils.cpp, AMReX_EB2_Level_STL.cpp).
           # CMAKE_BUILD_TYPE=Release keeps NDEBUG consistent with other builds.
+          #
+          # -dD: clang-tidy-cache hashes the preprocessed source (-E -P -C), in
+          # which macro definitions leave no trace unless they are used, so a
+          # new or changed but unused macro (a bugprone-macro-parentheses case)
+          # would hit a stale entry. -dD keeps the #define lines in the -E
+          # output and is ignored when compiling. It needs CI_JOB_ID and
+          # CI_JOB_STARTED_AT set (above), or SUNDIALS' configure time would
+          # change every file's hash.
           cmake -B${BUILD_DIR} \
           -DCMAKE_BUILD_TYPE:STRING=Release \
+          -DCMAKE_CXX_FLAGS:STRING="-dD" \
           -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
           -DCMAKE_CXX_COMPILER:STRING=clang++ \
           -DCMAKE_C_COMPILER:STRING=clang \
@@ -173,15 +193,19 @@ jobs:
         working-directory: ${{ env.BUILD_DIR }}
         run: |
           mkdir -p ${CTCACHE_DIR}
-          touch ${{ runner.temp }}/ctcache-start
+          # The restored caches carry earlier runs' counts: report this run's
+          ccache -z
+          clang-tidy-cache --zero-stats || true
+          touch ${{ runner.temp }}/cache-start
           build_status=0
           cmake --build . --parallel $(nproc) 2>&1 | tee clang-tidy-full-report.txt || build_status=$?
           # Hits refresh an entry's mtime: drop the ones this run did not use
-          # (and older clang-tidy versions) so the cache does not grow. Only
+          # (and older clang-tidy versions) so the caches do not grow. Only
           # after a complete build: a failed one never reached some files.
           if [ ${build_status} -eq 0 ]; then
-            find ${CTCACHE_DIR} -type f ! -newer ${{ runner.temp }}/ctcache-start -delete
+            find ${CTCACHE_DIR} -type f ! -newer ${{ runner.temp }}/cache-start -delete
             find ${HOME}/.cache/ctcache -mindepth 1 -maxdepth 1 ! -path ${CTCACHE_DIR} -exec rm -rf {} +
+            ccache --evict-older-than $(( $(date +%s) - $(stat -c %Y ${{ runner.temp }}/cache-start) + 60 ))s
           fi
           # Fail on a failed build: a replayed cache hit restores the exit
           # code but not clang-tidy's stderr, so the warning count alone can
@@ -194,12 +218,13 @@ jobs:
           # Entries are named by the rest of their sha1 digest (38 hex
           # characters); the per-directory stats files are not counted.
           echo "ctcache entries: $(find ${CTCACHE_DIR} -type f -regextype posix-extended -regex '.*/[0-9a-f]{38}' | wc -l)"
+          clang-tidy-cache --show-stats || true
           ccache -s
-      # Saved on PRs too (a cold run takes hours, and the cache is small),
-      # whenever Check completed the build, even if Short report then fails
-      # on warnings.
+      # Saved from development only, whenever Check completed the build, even
+      # if Short report then fails on warnings. PRs restore development's
+      # cache and miss only on the files they change.
       - name: Save Ccache
-        if: ${{ !cancelled() && steps.check.outcome == 'success' }}
+        if: ${{ !cancelled() && env.SAVE_CCACHE == 'true' && steps.check.outcome == 'success' }}
         uses: actions/cache/save@v5
         with:
           path: |
@@ -212,10 +237,10 @@ jobs:
         run: ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt
 
   # The one check for branch protection to require in Downstream-CI. A job
-  # skipped by its own `if:` (docs-only changes, scheduled runs) does not
-  # expand its matrix, so its per-entry checks never report and a PR
-  # requiring them waits forever; skipped jobs pass here. It also fails when Detect-Changes
-  # fails, which would otherwise skip every build.
+  # skipped by its own `if:` (docs-only changes) does not expand its matrix,
+  # so its per-entry checks never report and a PR requiring them waits
+  # forever; skipped jobs pass here. It also fails when Detect-Changes fails,
+  # which would otherwise skip every build.
   Downstream-Status:
     needs: [Detect-Changes, Run, clang-tidy]
     if: always()

@@ -50,7 +50,7 @@ jobs:
 
           # Keys are <job id>-git-<sha>-<run id>-<attempt> (e.g. the job id
           # ccache-PelePhysics-CI-Transport-EOS-Reactions-gnu). The run id and
-          # attempt let a scheduled run on an unchanged commit,
+          # attempt let a manual run on an unchanged commit,
           # or a re-run, save a fresh cache.
           # Keep the most recently created key of each job and delete the others.
           # Not the most recently used: PRs restore development's cache, so one
