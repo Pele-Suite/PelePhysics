@@ -2,11 +2,6 @@ name: Downstream-CI
 
 on:
    workflow_dispatch:
-   schedule:
-     # Twice a week, so the ccaches are refreshed before GitHub evicts them
-     # after 7 days without access, with a margin for late scheduled starts.
-     # Jobs without a cache skip the scheduled runs (run-checks).
-     - cron: '0 3 * * 1,4'
    push:
      branches: [development]
    pull_request:
@@ -14,7 +9,7 @@ on:
 
 concurrency:
   # Only PR runs cancel an older run: on development a cancelled run would
-  # not save its caches, so runs (pushes and scheduled) queue, one at a time
+  # not save its caches, so runs queue, one at a time
   # (GitHub keeps only the newest pending one).
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -48,7 +43,7 @@ jobs:
 
   Run:
     needs: Detect-Changes
-    if: needs['Detect-Changes'].outputs['run-checks'] == 'true'
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     name: ${{ matrix.code }} GNU MPI Run [${{ matrix.case }}]
     runs-on: ubuntu-24.04
     strategy:
@@ -99,8 +94,7 @@ jobs:
 
   clang-tidy:
     needs: [Detect-Changes, Run]
-    # !failure(): after Run, or without it on the scheduled runs, which skip it.
-    if: ${{ !failure() && !cancelled() && needs['Detect-Changes'].outputs['has-source-changes'] == 'true' }}
+    if: needs['Detect-Changes'].outputs['has-source-changes'] == 'true'
     name: ${{ matrix.code }} clang-tidy
     runs-on: ubuntu-24.04
     strategy:
@@ -113,7 +107,7 @@ jobs:
             cmake_args: -DPELE_ENABLE_MASA:BOOL=OFF -DPELE_EXCLUDE_BUILD_IN_CI:BOOL=ON
     env:
       BUILD_DIR: ${{ github.workspace }}/build-clang-tidy-${{ matrix.code }}
-      # Only development saves the caches (the scheduled runs keep them from
+      # Only development saves the caches (keep-caches.yml keeps them from
       # being evicted); PRs restore them.
       SAVE_CCACHE: ${{ github.ref == 'refs/heads/development' }}
       # Compress hard only when the cache is kept; a PR's new entries are
@@ -243,7 +237,7 @@ jobs:
         run: ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt
 
   # The one check for branch protection to require in Downstream-CI. A job
-  # skipped by its own `if:` (docs-only changes, scheduled runs) does not
+  # skipped by its own `if:` (docs-only changes) does not
   # expand its matrix, so its per-entry checks never report and a PR
   # requiring them waits forever; skipped jobs pass here. It also fails when Detect-Changes
   # fails, which would otherwise skip every build.
