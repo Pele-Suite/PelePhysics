@@ -9,8 +9,8 @@ on:
 
 concurrency:
   # Only PR runs cancel an older run: on development a cancelled run would
-  # not save its caches, so runs queue, one at a time
-  # (GitHub keeps only the newest pending one).
+  # not save its caches, so runs queue, one at a time (GitHub keeps only the
+  # newest pending one).
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -237,10 +237,10 @@ jobs:
         run: ${{ github.workspace }}/pelephysics-pr/.github/scripts/count_warnings.sh clang-tidy-full-report.txt
 
   # The one check for branch protection to require in Downstream-CI. A job
-  # skipped by its own `if:` (docs-only changes) does not
-  # expand its matrix, so its per-entry checks never report and a PR
-  # requiring them waits forever; skipped jobs pass here. It also fails when Detect-Changes
-  # fails, which would otherwise skip every build.
+  # skipped by its own `if:` (docs-only changes) does not expand its matrix,
+  # so its per-entry checks never report and a PR requiring them waits
+  # forever; skipped jobs pass here. It also fails when Detect-Changes fails,
+  # which would otherwise skip every build.
   Downstream-Status:
     needs: [Detect-Changes, Run, clang-tidy]
     if: always()

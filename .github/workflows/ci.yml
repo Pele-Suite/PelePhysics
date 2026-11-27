@@ -9,8 +9,8 @@ on:
 
 concurrency:
   # Only PR runs cancel an older run: on development a cancelled run would
-  # not save its caches, so runs queue, one at a time
-  # (GitHub keeps only the newest pending one).
+  # not save its caches, so runs queue, one at a time (GitHub keeps only the
+  # newest pending one).
   group: ${{github.ref}}-${{github.head_ref}}-ci
   cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
@@ -18,6 +18,12 @@ concurrency:
 defaults:
   run:
     shell: bash
+
+env:
+  # Keep SUNDIALS' configure time out of sundials_config.h, so ccache's direct
+  # mode hits on the files including it (see Downstream-CI).
+  CI_JOB_ID: 1
+  CI_JOB_STARTED_AT: 1
 
 jobs:
   Detect-Changes:
@@ -336,11 +342,11 @@ jobs:
           path: ~/.cache/ccache
           key: ${{steps.ccache.outputs.cache-primary-key}}
 
-  # The one check for branch protection to require. A job skipped by
-  # its own `if:` (docs-only changes) does not expand its
-  # matrix, so its per-entry checks never report and a PR requiring them
-  # waits forever; skipped jobs pass here. It also fails when Detect-Changes
-  # fails, which would otherwise skip every build.
+  # The one check for branch protection to require. A job skipped by its own
+  # `if:` (docs-only changes) does not expand its matrix, so its per-entry
+  # checks never report and a PR requiring them waits forever; skipped jobs
+  # pass here. It also fails when Detect-Changes fails, which would otherwise
+  # skip every build.
   CI-Status:
     needs: [Detect-Changes, Formatting, Codespell, CEPTR, Transport-EOS-Reactions]
     if: always()

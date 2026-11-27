@@ -31,15 +31,12 @@ jobs:
         # bash -e alone lets a failing gh hide behind jq's exit status.
         shell: bash
         run: |
-          # Each cache with the runner and path its job saved it with: a
-          # restore must give the same path, or it misses. Keep these in step
-          # with the Save Ccache steps (Downstream-CI's clang-tidy saves its
-          # ccache and ctcache, PelePhysics-CI its ccache).
-          caches=$(gh cache list -L 100 --ref refs/heads/development --key ccache- --json key | jq -c '[.[].key |
-            if test("^ccache-Downstream-CI-clang-tidy-") then {key: ., os: "ubuntu-24.04", path: "~/.cache/ccache\n~/.cache/ctcache"}
-            else {key: ., os: "ubuntu-24.04", path: "~/.cache/ccache"} end]')
-          # jq turns empty input into empty output, not [].
-          if [ -z "${caches}" ]; then echo "::error::No cache list"; exit 1; fi
+          # Each cache with the path its job saved it with: a restore must
+          # give the same path, or it misses. Keep these in step with the Save
+          # Ccache steps (Downstream-CI's clang-tidy saves its ccache and
+          # ctcache, PelePhysics-CI its ccache).
+          caches=$(gh cache list -L 100 --ref refs/heads/development --key ccache- --json key | jq -c '[.[].key | {key: .,
+            path: (if test("^ccache-Downstream-CI-clang-tidy-") then "~/.cache/ccache\n~/.cache/ctcache" else "~/.cache/ccache" end)}]')
           echo "${caches}" | jq .
           echo "caches=${caches}" >> "$GITHUB_OUTPUT"
   Restore:
@@ -50,7 +47,7 @@ jobs:
       matrix:
         cache: ${{fromJSON(needs.List.outputs.caches)}}
     name: Restore ${{matrix.cache.key}}
-    runs-on: ${{matrix.cache.os}}
+    runs-on: ubuntu-24.04
     steps:
       # Fails on a miss, which means the path here no longer matches the one
       # the cache was saved with.
