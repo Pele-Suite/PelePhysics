@@ -287,19 +287,15 @@ jobs:
         if: env.HOST_BUILD == 'true'
         working-directory: Testing/Exec/IgnitionDelay
         run: |
-          if [ ${HOST_BUILD} = true ]; then pip install numpy; fi
+          pip install numpy
           make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu ${MAKE_ARGS}
-          if [ ${HOST_BUILD} = true ]; then
-            bash exec_ignDelay.sh firstpass
-            python check_ignDelay.py
-            rm log PPreaction.txt inputs/inputs.0d_refine
-          fi
+          bash exec_ignDelay.sh firstpass
+          python check_ignDelay.py
+          rm log PPreaction.txt inputs/inputs.0d_refine
           make realclean
           make -j $(nproc) Eos_Model=Manifold Transport_Model=Manifold Manifold_Dim=1 Chemistry_Model=Null ${MAKE_ARGS}
-          if [ ${HOST_BUILD} = true ]; then
-            bash exec_ignDelay.sh manifold
-            python check_ignDelay.py 0.0766 10
-          fi
+          bash exec_ignDelay.sh manifold
+          python check_ignDelay.py 0.0766 10
           make realclean
       - name: Test Jacobian
         if: env.HOST_BUILD == 'true'
@@ -314,7 +310,7 @@ jobs:
           )
           make TPL DEBUG=TRUE TINY_PROFILE=TRUE ${{matrix.amrex_build_args}}
           make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu_qss DEBUG=TRUE TINY_PROFILE=TRUE USE_CCACHE=TRUE ${{matrix.amrex_build_args}}
-          if [ ${HOST_BUILD} = true ]; then ./Pele3d.${{matrix.comp}}.DEBUG.TPROF.ex; fi
+          ./Pele3d.${{matrix.comp}}.DEBUG.TPROF.ex
           make realclean
       - name: Ccache Report
         if: always()

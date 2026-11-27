@@ -28,6 +28,8 @@ jobs:
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
           # gh reads the repository from here, so no checkout is needed.
           GH_REPO: ${{github.repository}}
+        # bash -e alone lets a failing gh hide behind jq's exit status.
+        shell: bash
         run: |
           # Each cache with the runner and path its job saved it with: a
           # restore must give the same path, or it misses. Keep these in step
@@ -36,6 +38,8 @@ jobs:
           caches=$(gh cache list -L 100 --ref refs/heads/development --key ccache- --json key | jq -c '[.[].key |
             if test("^ccache-Downstream-CI-clang-tidy-") then {key: ., os: "ubuntu-24.04", path: "~/.cache/ccache\n~/.cache/ctcache"}
             else {key: ., os: "ubuntu-24.04", path: "~/.cache/ccache"} end]')
+          # jq turns empty input into empty output, not [].
+          if [ -z "${caches}" ]; then echo "::error::No cache list"; exit 1; fi
           echo "${caches}" | jq .
           echo "caches=${caches}" >> "$GITHUB_OUTPUT"
   Restore:
