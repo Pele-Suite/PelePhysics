@@ -7,12 +7,13 @@ CUDA_VERSION=12-6
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
 sudo dpkg -i cuda-keyring_1.1-1_all.deb
 sudo apt-get update
+# What the builds use: nvcc and the runtime, NVTX (AMReX's TinyProfiler),
+# cuRAND and cuSPARSE (AMReX), cuSOLVER and cuBLAS (the CVODE GPU solvers),
+# nvJitLink (cuSPARSE). AMReX's own list also has CUPTI, NVML and the
+# command-line tools, which its builds use only with USE_CUPTI or NVML_PATH.
 sudo apt-get install -y \
-    cuda-command-line-tools-${CUDA_VERSION} \
     cuda-compiler-${CUDA_VERSION}           \
-    cuda-cupti-dev-${CUDA_VERSION}          \
     cuda-minimal-build-${CUDA_VERSION}      \
-    cuda-nvml-dev-${CUDA_VERSION}           \
     cuda-nvtx-${CUDA_VERSION}               \
     libcurand-dev-${CUDA_VERSION}           \
     libcusolver-dev-${CUDA_VERSION}         \
