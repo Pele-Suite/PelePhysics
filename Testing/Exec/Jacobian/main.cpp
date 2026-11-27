@@ -18,10 +18,6 @@
 #include <ReactorBase.H>
 #include <random>
 
-namespace {
-const std::string level_prefix{"Level_"};
-}
-
 void
 GotoNextLine(std::istream& is)
 {
@@ -54,14 +50,14 @@ amrex::Real
 frobenius(amrex::Real* J, size_t size)
 {
   amrex::Real norm = 0;
-  for (int i = 0; i < size; ++i) {
+  for (size_t i = 0; i < size; ++i) {
     norm += J[i] * J[i];
   }
   return norm;
 }
 
 int
-main(int argc, char* argv[])
+main()
 {
 
   int NUM_JAC_ENTRIES = (NUM_SPECIES + 1) * (NUM_SPECIES + 1);

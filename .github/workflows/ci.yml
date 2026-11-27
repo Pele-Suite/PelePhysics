@@ -155,6 +155,17 @@ jobs:
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CMAKE_CUDA_COMPILER_LAUNCHER: ccache
       CMAKE_HIP_COMPILER_LAUNCHER: ccache
+      # Strict warnings for the host builds, counted in Warnings Report.
+      # AMReX's comps/gnu.mak assigns CXXFLAGS, which overrides a CXXFLAGS
+      # environment variable; XTRA_CXXFLAGS is appended to it
+      # (Tools/GNUmake/Make.defs). No -Werror: the report lists every
+      # warning outside the submodules at once instead of stopping at the
+      # first, and leaves out AMReX's own.
+      XTRA_CXXFLAGS: ${{(matrix.comp == 'gnu' || matrix.comp == 'llvm') && '-Wshadow -Woverloaded-virtual -Wunreachable-code' || ''}}
+      # The build steps' make output, for Warnings Report. Only make's: the
+      # test runs print lines such as "Manifold EOS: Warning: ..." that the
+      # report would count.
+      BUILD_LOG: ${{github.workspace}}/build-output.txt
     steps:
       - uses: actions/setup-python@v6
         with:
@@ -198,7 +209,9 @@ jobs:
       - name: SUNDIALS and AMReX
         working-directory: Testing/Exec/TranEval
         run: |
-          echo "::add-matcher::${{github.workspace}}/.github/problem-matchers/gcc.json"
+          # Not logged for Warnings Report: AMReX builds from its own
+          # directory, so its warnings name Src/... and the report's
+          # Submodules/amrex exclusion would not catch them.
           ccache -z
           make TPL ${{matrix.amrex_build_args}}
           cd ${PELE_PHYSICS_HOME}/Submodules/amrex
@@ -208,12 +221,16 @@ jobs:
       - name: Unit Test Utilities
         working-directory: Testing/Exec/UtilityUnitTest
         run: |
+          # Copies make's output to BUILD_LOG for Warnings Report; the same line
+          # starts each build step below. pipefail keeps make's exit status.
+          make() { command make "$@" 2>&1 | tee -a "${BUILD_LOG}"; }
           make -j $(nproc) ${MAKE_ARGS}
           if [ ${RUN_TESTS} = true ]; then ${EXE} input; fi
           make realclean
       - name: Test Transport
         working-directory: Testing/Exec/TranEval
         run: |
+          make() { command make "$@" 2>&1 | tee -a "${BUILD_LOG}"; }
           run_simple() {
             ${EXE} inputs.2d_Simple_Matrix
             ${EXE} inputs.2d_Simple_Matrix transport.matrix_diffusion_niter=1
@@ -256,6 +273,7 @@ jobs:
       - name: Test EOS
         working-directory: Testing/Exec/EosEval
         run: |
+          make() { command make "$@" 2>&1 | tee -a "${BUILD_LOG}"; }
           for TYPE in Fuego GammaLaw Soave-Redlich-Kwong Manifold; do
             printf "\n-------- ${TYPE} --------\n"
             case ${TYPE} in
@@ -278,6 +296,7 @@ jobs:
       - name: Test Integration
         working-directory: Testing/Exec/ReactEval
         run: |
+          make() { command make "$@" 2>&1 | tee -a "${BUILD_LOG}"; }
           # Mechanism, then any extra run arguments
           for SPEC in "drm19" "LiDryer fuel_name=H2"; do
             read -r CHEMISTRY EXTRA <<< "${SPEC}"
@@ -297,6 +316,7 @@ jobs:
         if: env.HOST_BUILD == 'true'
         working-directory: Testing/Exec/IgnitionDelay
         run: |
+          make() { command make "$@" 2>&1 | tee -a "${BUILD_LOG}"; }
           if [ ${RUN_TESTS} = true ]; then pip install numpy; fi
           make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu ${MAKE_ARGS}
           if [ ${RUN_TESTS} = true ]; then
@@ -315,6 +335,7 @@ jobs:
         if: env.HOST_BUILD == 'true'
         working-directory: Testing/Exec/Jacobian
         run: |
+          make() { command make "$@" 2>&1 | tee -a "${BUILD_LOG}"; }
           MECH=${PELE_PHYSICS_HOME}/Mechanisms/dodecane_lu_qss
           (
             cd ${PELE_PHYSICS_HOME}/Support/ceptr
@@ -326,6 +347,14 @@ jobs:
           make -j $(nproc) Eos_Model=Fuego Chemistry_Model=dodecane_lu_qss DEBUG=TRUE TINY_PROFILE=TRUE USE_CCACHE=TRUE ${{matrix.amrex_build_args}}
           if [ ${RUN_TESTS} = true ]; then ./Pele3d.${{matrix.comp}}.DEBUG.TPROF.ex; fi
           make realclean
+      # Warnings in the host builds outside the submodules and ThirdParty fail
+      # the job (count_warnings.sh, the same script as PeleC and PeleLMeX).
+      # Also left out, as in PeleC: the SUNDIALS TPL's CMake warnings and GNU
+      # make's own (ThirdParty GNUmakefile recipe overrides). The GPU
+      # compilers' warnings are not counted.
+      - name: Warnings Report
+        if: env.HOST_BUILD == 'true'
+        run: ${{github.workspace}}/.github/scripts/count_warnings.sh "${BUILD_LOG}" "ThirdParty|GNUmakefile|CMake Warning"
       - name: Ccache Report
         if: always()
         run: |
